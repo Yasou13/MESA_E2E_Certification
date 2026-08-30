@@ -94,3 +94,8 @@ The checksum file is external to the Markdown documents to avoid circular/self-h
   isolation, complete contract freeze, deterministic environment manifest,
   scorer canaries, pre/post health snapshots, supply-chain rules and safe
   finalization/teardown.
+
+- `32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md` — official Profile B MESA
+  runtime semantics: Mode 0, model-enabled extraction, NVIDIA Nemotron
+  embeddings, GPT-OSS extraction/final answer, runtime/Compose parity and
+  pre-TEST effective-value proof.

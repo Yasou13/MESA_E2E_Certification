@@ -155,3 +155,18 @@ requirements in:
 
 Ground truth is a scoring oracle only and must never leak into MESA, retrieval,
 extraction or final-answer requests.
+
+## Canonical MESA runtime lock
+
+Before provider/runtime preflight and before official TEST, execute:
+
+`32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`
+
+The official Profile B runtime is not agent-selected:
+
+```text
+MESA_MODEL_ENABLED=true
+MESA_TIER3_MODE=0
+```
+
+with the canonical NVIDIA Nemotron/GPT-OSS identities defined in document 32.

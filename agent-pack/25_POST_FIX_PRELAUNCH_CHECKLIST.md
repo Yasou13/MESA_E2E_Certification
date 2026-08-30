@@ -125,3 +125,18 @@ Before official TEST:
 - [ ] Scorer canaries PASS.
 - [ ] `health-pre-test.json` is healthy.
 - [ ] No TEST result has been used for tuning.
+
+## Canonical MESA runtime lock gate
+
+Before TEST verify:
+
+- [ ] `MESA_MODEL_ENABLED=true` is effective.
+- [ ] `MESA_TIER3_MODE=0` is effective.
+- [ ] External NVIDIA-compatible provider path is effective.
+- [ ] Nemotron model/dimension are correct.
+- [ ] passage/query asymmetry is proven.
+- [ ] GPT-OSS extraction model is correct.
+- [ ] Turkish extraction is effective.
+- [ ] extraction output budget is at least 4096.
+- [ ] Docker/container config matches intended config.
+- [ ] `mesa-runtime-lock.json` exists.

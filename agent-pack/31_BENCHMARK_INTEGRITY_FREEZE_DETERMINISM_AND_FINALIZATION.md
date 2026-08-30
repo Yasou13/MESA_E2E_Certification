@@ -665,3 +665,13 @@ Benchmark-integrity PASS requires:
 
 Failure of any integrity condition invalidates or blocks the run rather than
 being hidden inside product metrics.
+
+## Canonical MESA runtime semantics
+
+The official RUN must freeze the semantic runtime contract from
+`32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`.
+
+Mode/model/provider settings are not tunable from TEST results.
+
+Operational parameters such as timeout/concurrency may be discovered before
+freeze, but become immutable for the official RUN once frozen.

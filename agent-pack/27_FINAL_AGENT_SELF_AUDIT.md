@@ -189,3 +189,16 @@ Before final PASS verify:
 - Was evidence sealed before teardown?
 
 Any unresolved false-PASS risk prevents `PROFILE_B_PASS_NATIVE`.
+
+## Canonical MESA runtime lock self-audit
+
+Before `PROFILE_B_PASS_NATIVE` verify:
+
+- Was official scoring performed with effective Tier-3 Mode 0?
+- Was `MESA_MODEL_ENABLED=true` effective?
+- Did extraction still use real GPT-OSS?
+- Did embeddings use real Nemotron with passage/query semantics?
+- Did Docker/container runtime match the frozen host intent?
+- Did any model/mode/provider setting change after TEST began?
+
+Any unexplained runtime drift prevents PASS_NATIVE.

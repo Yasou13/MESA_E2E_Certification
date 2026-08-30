@@ -108,3 +108,18 @@ Write `runs/<RUN_ID>/contract-freeze.json` before the first official TEST
 query.
 
 Any material change after this point invalidates the run.
+
+## Canonical MESA runtime lock fields
+
+The contract freeze must contain the effective values from
+`32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`, including:
+
+- model enabled state,
+- Tier-3 mode,
+- external-provider enabled state,
+- embedding identity/dimension/input semantics,
+- extraction identity/language/output budget,
+- final-answer model identity,
+- exact current config key mapping.
+
+A change to any of these after freeze invalidates the RUN.

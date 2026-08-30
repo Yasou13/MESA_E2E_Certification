@@ -109,3 +109,25 @@ The canary may use a dedicated certification tenant/dataset and is covered by th
 
 Do not interpret one remote timeout as a product bug. Provider call limits and retry rules are in `20_RESOURCE_AND_PROVIDER_BUDGETS.md`. If 60 seconds is empirically insufficient for a real structured reasoning call, a bounded value such as 120 seconds may be selected during DEV/preflight and frozen before TEST. Do not tune timeout based on TEST outputs.
 
+
+## Profile B canonical runtime values
+
+The official Profile B run MUST use the semantics in
+`32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`.
+
+At minimum prove the effective runtime has:
+
+```text
+MESA_MODEL_ENABLED=true
+MESA_TIER3_MODE=0
+external provider enabled
+nvidia/nemotron-3-embed-1b
+embedding dimension 2048
+document input_type=passage
+query input_type=query
+openai/gpt-oss-20b extraction
+Turkish extraction
+extraction max tokens >= 4096
+```
+
+Do not rely on host exports alone; verify effective container/runtime values.

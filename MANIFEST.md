@@ -101,3 +101,11 @@ Official TEST execution is protected by:
 
 This prevents ground-truth leakage, post-result methodology changes, scorer
 drift and non-reproducible PASS results.
+
+## Canonical MESA runtime lock
+
+Official Profile B MESA runtime semantics are fixed by:
+
+`agent-pack/32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`
+
+This prevents accidental Mode 2 fallback or provider/model drift.
