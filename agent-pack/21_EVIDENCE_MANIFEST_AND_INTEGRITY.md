@@ -1,0 +1,102 @@
+> **Profile B Autonomous Agent Pack v3.0**  
+> Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
+> Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
+
+# 21 — EVIDENCE, MANIFEST AND INTEGRITY
+
+## Run directory
+
+Use:
+
+```text
+<CERT_ROOT>/evidence/<RUN_ID>/
+```
+
+Recommended immutable structure:
+
+```text
+00_manifest/
+01_baseline/
+02_provider/
+03_runtime/
+04_data/
+05_h1/
+06_ground_truth/
+07_config_freeze/
+08_native_publish/
+09_restart_idempotency/
+10_isolation/
+11_retrieval/
+12_graph/
+13_answers/
+14_resources/
+15_failures/
+16_ci/
+17_final/
+```
+
+## RUN_ID
+
+Use UTC and a short baseline fingerprint, e.g.:
+
+```text
+B-20260830T203000Z-fde363-cd5407
+```
+
+Do not reuse an invalidated RUN_ID.
+
+## Evidence handling
+
+- Raw responses/logs are append-only once a phase closes.
+- Redact secrets at capture time; do not store then “clean up later.”
+- Preserve HTTP status, bounded response body, UTC, latency and request shape with secrets removed.
+- Preserve exact GT/config/source/release hashes.
+- Failure evidence remains after repairs.
+
+## Manifest
+
+`run_manifest.json` should include:
+
+```text
+run_id
+created_utc
+status
+Certification repo SHA/version/branch
+MESA SHA/version/branch
+MESA_Data SHA/version/branch
+OS/Python/uv/Docker/Compose
+container image digest
+provider labels/endpoints/SDK version/probe times
+corpus/release/GT/config hashes
+H1 approval hash
+phase statuses
+invalidated_by (if applicable)
+next_run_id (if applicable)
+```
+
+## Final hash design — avoid self-hash paradox
+
+Do **not** write the final report's SHA-256 inside the final report itself. That would change the file being hashed.
+
+Correct design:
+
+```text
+17_final/final-report.md
+17_final/SHA256SUMS.txt
+```
+
+`SHA256SUMS.txt` contains hashes of the final report and all selected immutable evidence files/directories via a deterministic file list. The final report may state that integrity is defined by the sibling checksum file, but must not embed its own checksum value.
+
+For this documentation pack, `SHA256SUMS.txt` similarly hashes the Markdown files; it does not hash itself.
+
+## Integrity verification
+
+At finalization:
+
+1. generate sorted file list excluding transient sockets/DB WAL files and `SHA256SUMS.txt` itself;
+2. SHA-256 every included file;
+3. write sorted checksum file;
+4. run `sha256sum -c SHA256SUMS.txt` from the correct root;
+5. save verification output;
+6. only then assign final verdict.
+

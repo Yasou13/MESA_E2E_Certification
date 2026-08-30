@@ -1,7 +1,4 @@
-# --------------------------------------------------
-# SECRETS
-# --------------------------------------------------
-
+# Secrets
 .env
 .env.*
 !.env.example
@@ -9,24 +6,21 @@ secrets/
 *.key
 *.pem
 
-# --------------------------------------------------
-# RUNTIME / GENERATED DATA
-# --------------------------------------------------
-
+# Per-run generated evidence/state
 runs/*
 !runs/.gitkeep
+!runs/README.md
 
 evidence/*
 !evidence/.gitkeep
+!evidence/README.md
 
+# Mutable/bulk runtime data
 datasets/runtime/
 reports/generated/
 tmp/
 
-# --------------------------------------------------
-# PYTHON
-# --------------------------------------------------
-
+# Python
 __pycache__/
 *.py[cod]
 .venv/
@@ -34,16 +28,11 @@ __pycache__/
 .ruff_cache/
 .mypy_cache/
 
-# --------------------------------------------------
-# LOGS
-# --------------------------------------------------
-
+# Logs / local artifacts
 *.log
 
-# --------------------------------------------------
 # IDE / OS
-# --------------------------------------------------
-
 .DS_Store
 .idea/
 .vscode/
+
