@@ -81,3 +81,7 @@ sha256sum -c SHA256SUMS.txt
 
 The checksum file is external to the Markdown documents to avoid circular/self-hash designs.
 
+
+- `29_WORKSPACE_HYGIENE_AND_ISOLATION.md` — Phase -1 VM/workspace inventory,
+  historical-state isolation, Docker hygiene, clean RUN_ID runtime and
+  non-destructive cleanup policy.

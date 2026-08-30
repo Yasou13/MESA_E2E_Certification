@@ -135,3 +135,13 @@ Phase 0 restart
 
 Never copy PASS evidence from an invalidated run into the new run as if it were newly produced.
 
+
+## VM runtime hygiene
+
+Git cleanliness and runtime cleanliness are separate requirements.
+
+A clean Git worktree does not prove that SQLite, LanceDB, Kùzu, MESA_Data,
+Docker volumes, previous datasets, logs, or previous run state are clean.
+
+Execute the Phase -1 workspace hygiene contract before creating the active
+certification run baseline.

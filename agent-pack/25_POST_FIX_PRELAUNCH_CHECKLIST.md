@@ -77,3 +77,20 @@ If any hard item fails, do not start the scored benchmark.
 - [ ] decision journal path writable and schema known
 - [ ] `reports/releases/` tracked final-promotion location available
 - [ ] ambiguous answer policy cannot create a second human gate
+
+## Workspace hygiene gate
+
+Before Phase 0 verify:
+
+- [ ] Phase -1 completed.
+- [ ] Fresh RUN_ID exists.
+- [ ] `workspace-baseline.json` exists.
+- [ ] MESA mutable storage is clean for this RUN_ID.
+- [ ] MESA_Data mutable data root is clean for this RUN_ID.
+- [ ] Old runtime state is not reused.
+- [ ] Docker state was inventoried.
+- [ ] Current-run Docker state is isolated.
+- [ ] No unknown user data was deleted.
+- [ ] No secret value was printed.
+- [ ] Three repositories were safely updated from `origin/main`.
+- [ ] Exact repository SHAs were recorded/frozen.

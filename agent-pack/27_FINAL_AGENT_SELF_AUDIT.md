@@ -141,3 +141,18 @@ If any item fails, H1 must be reacquired.
 - [ ] promoted bundle contains no secrets or bulky raw corpus/runtime state;
 - [ ] promoted checksum verification passes;
 - [ ] raw evidence remains referenced by hash/path and was not falsely replaced by summaries.
+
+## Workspace hygiene self-audit
+
+Before any final PASS ask:
+
+- Did this run start with Phase -1?
+- Does `workspace-baseline.json` exist and match the final RUN_ID?
+- Was any previous mutable MESA storage reused?
+- Was any previous mutable MESA_Data root reused?
+- Could a stale Docker volume/container/network have affected results?
+- Was any unknown user file deleted or modified?
+- Were secret values exposed in logs/evidence?
+- Do the frozen repository SHAs match the repositories actually tested?
+
+Any unexplained contamination risk prevents `PROFILE_B_PASS_NATIVE`.

@@ -146,3 +146,16 @@ Rules:
 - `reports/releases/<RUN_ID>/` is intended to be Git-tracked so the certification verdict remains auditable if the VM is lost;
 - secrets, full raw legal corpora, provider payload dumps, databases and bulky runtime artifacts must not be promoted;
 - the report still must not contain its own SHA.
+
+## Workspace baseline evidence
+
+Every run MUST contain:
+
+```text
+runs/<RUN_ID>/workspace-baseline.json
+```
+
+The final evidence index must reference this file and its SHA-256.
+
+The workspace baseline proves that the run did not inherit mutable state from
+older manual tests or certification runs.

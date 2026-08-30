@@ -119,3 +119,14 @@ Do not delete failed evidence to make the final directory look clean.
 Before creating or reusing `cert/profile-b-e2e`, synchronize **all three** repositories with their remote `main` using the clean-baseline procedure in `04_WORKSPACE_BRANCH_GIT_POLICY.md`. Record the resulting `origin/main` SHAs.
 
 Once a `RUN_ID` is created, do **not** pull, merge, rebase, or otherwise absorb newer remote commits into that active run. A desired upstream update requires preserving/invalidation of the current run, resynchronizing from `main`, creating a new coherent baseline, and starting with a new `RUN_ID`.
+
+## Phase -1 workspace hygiene
+
+Before Phase 0, the agent MUST execute
+`29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
+
+The agent must inventory historical VM state, isolate a fresh RUN_ID runtime,
+prove that old MESA/MESA_Data state is not reused, inventory Docker state, and
+write `runs/<RUN_ID>/workspace-baseline.json`.
+
+Unknown or user-owned files must not be deleted.

@@ -126,3 +126,23 @@ Do not modify product data or TEST config for ablation.
 
 Apply hard gates mechanically. Do not average failures away. Emit exactly one allowed verdict plus gate table and limitations.
 
+
+## Phase -1 — Workspace hygiene and isolation
+
+This phase runs before Phase 0.
+
+Follow `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
+
+Required outcome:
+
+- historical state inventoried,
+- fresh RUN_ID namespace selected,
+- clean MESA mutable storage,
+- clean MESA_Data mutable data root,
+- Docker state isolated,
+- no unknown user data deleted,
+- repositories safely updated from `origin/main`,
+- exact repository SHAs frozen,
+- `runs/<RUN_ID>/workspace-baseline.json` recorded.
+
+If Phase -1 does not PASS, Phase 0 MUST NOT start.

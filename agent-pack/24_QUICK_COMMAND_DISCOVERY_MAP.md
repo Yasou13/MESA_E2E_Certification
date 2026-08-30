@@ -81,3 +81,20 @@ rg 'Windows-1254|cp1254|ParsingCoverage|coverage_ratio' src tests
 
 Do not paste giant source files into the agent context when a focused `rg`/`sed` range is enough.
 
+
+## Workspace hygiene discovery
+
+Safe discovery examples:
+
+```bash
+find ~/mesa-cert -maxdepth 3 -mindepth 1 -type d -print 2>/dev/null
+du -sh ~/mesa-cert/* 2>/dev/null || true
+docker ps -a
+docker volume ls
+docker network ls
+```
+
+These are inventory commands, not permission to delete anything.
+
+Do not use broad `rm -rf`, `git clean -fdx`, `docker system prune -a`,
+`docker volume prune`, or equivalent destructive cleanup as a shortcut.

@@ -127,3 +127,13 @@ Before assigning the verdict, execute every applicable check in `27_FINAL_AGENT_
 
 Finish only when the run reaches a valid final verdict or a documented stop condition.
 
+
+## Mandatory Phase -1
+
+Before Phase 0, execute `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
+
+Do not begin provider, data, ingestion, retrieval, graph, answer, or isolation
+tests until workspace hygiene has PASSed.
+
+Prefer fresh isolated runtime directories over deleting historical state.
+Never use broad destructive cleanup commands on unknown VM state.

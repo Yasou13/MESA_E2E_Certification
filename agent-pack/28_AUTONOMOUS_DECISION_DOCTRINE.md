@@ -104,3 +104,17 @@ If documents conflict, use this precedence:
 5. convenience.
 
 Record the conflict and resolution in the decision log.
+
+## Workspace cleanup decisions
+
+For historical VM artifacts, the default decision is **do not delete**.
+
+Prefer:
+
+1. isolation,
+2. leaving non-contaminating state untouched,
+3. quarantine/archive of clearly certification-owned state when necessary,
+4. deletion only when ownership and necessity are both proven.
+
+Material cleanup/isolation decisions must be written to
+`runs/<RUN_ID>/decision_log.jsonl`.

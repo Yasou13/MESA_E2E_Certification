@@ -73,3 +73,11 @@ A report must never contain its own SHA-256. Hash the completed report from a si
 - H1 reuse across restarted runs is allowed only as a hash-bound referenced external authorization artifact;
 - ambiguous answer cases cannot trigger a hidden second human gate and count non-PASS unless deterministically resolved by pre-frozen rules;
 - a sanitized final audit bundle is promoted to Git-tracked `reports/releases/<RUN_ID>/`.
+
+## Workspace hygiene
+
+Profile B begins with Phase -1 workspace hygiene and isolation.
+
+The certification run must not inherit mutable state from previous manual
+tests, old MESA storage, old MESA_Data roots or stale Docker resources.
+See `agent-pack/29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
