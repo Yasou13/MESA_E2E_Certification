@@ -80,3 +80,13 @@ Never provide expected answers, required facts, forbidden claims, gold
 evidence IDs or grader rubric to the answer model.
 
 Persist the raw answer first; only then load ground truth for grading.
+
+## Source-linked required facts
+
+The grader must evaluate source-linked `required_facts` from document 33.
+
+A required fact without exact frozen evidence linkage is invalid GT.
+
+Answer normalization must use the frozen scoring-normalization version.
+Semantically ambiguous grading remains `UNRESOLVED` and non-PASS; do not add a
+post-TEST hidden human judge.

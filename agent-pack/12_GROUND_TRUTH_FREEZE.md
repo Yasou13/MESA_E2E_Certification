@@ -150,3 +150,20 @@ Requirements:
 - the scorer normalizes MESA returned provenance through this map back to source IDs before qrel comparison.
 
 The mapping artifact is not allowed to alter GT semantics; it only reconciles identifier namespaces.
+
+## Semantic GT verification gate
+
+Before GT freeze, apply
+`33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md`.
+
+Structural schema validation is insufficient.
+
+Every `required_fact` must link to exact approved source evidence.
+Every expected answer must be derivable from the linked evidence.
+Ambiguous items become `GT_AMBIGUOUS` and must be replaced from the
+predeclared candidate pool before freeze.
+
+Every NO_ANSWER item requires a frozen-corpus negative-evidence audit that does
+not use MESA retrieval as the authority.
+
+Freeze the semantic-validation result together with GT.

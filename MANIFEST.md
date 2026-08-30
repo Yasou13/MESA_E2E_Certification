@@ -109,3 +109,13 @@ Official Profile B MESA runtime semantics are fixed by:
 `agent-pack/32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`
 
 This prevents accidental Mode 2 fallback or provider/model drift.
+
+## Executable harness and semantic ground truth
+
+Profile B requires the executable harness and semantic ground-truth validation
+contract in:
+
+`agent-pack/33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md`
+
+Official TEST is blocked until Phase H0 proves the harness, qrels, normalization
+and oracle barrier are correct.

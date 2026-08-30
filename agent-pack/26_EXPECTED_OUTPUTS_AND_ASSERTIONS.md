@@ -215,3 +215,18 @@ no code changes after final run start
 SHA256SUMS verification PASS
 ```
 
+
+## Harness readiness outputs
+
+Expected pre-TEST artifacts now include:
+
+```text
+config/scoring-normalization.json
+ground-truth/no-answer-audit.jsonl
+runs/<RUN_ID>/harness-self-test.json
+runs/<RUN_ID>/harness-readiness.json
+runs/<RUN_ID>/identity-map-validation.json
+runs/<RUN_ID>/oracle-leakage-audit.json
+```
+
+Official TEST must not start if any mandatory readiness assertion is false.

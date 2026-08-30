@@ -14,7 +14,7 @@ Profile B is not a unit-test exercise and it is not a README compliance exercise
 
 ## Read order — mandatory
 
-Before running commands, read every file in this order:
+Before running commands, read every numbered contract file in this exact order:
 
 1. `01_MASTER_AGENT_PROMPT.md`
 2. `02_SYSTEM_MODEL_AND_NON_NEGOTIABLES.md`
@@ -44,9 +44,16 @@ Before running commands, read every file in this order:
 26. `26_EXPECTED_OUTPUTS_AND_ASSERTIONS.md`
 27. `27_FINAL_AGENT_SELF_AUDIT.md`
 28. `28_AUTONOMOUS_DECISION_DOCTRINE.md`
-29. `MANIFEST.md`
+29. `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`
+30. `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`
+31. `31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md`
+32. `32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`
+33. `33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md`
+34. `MANIFEST.md`
 
-Do not start the benchmark after reading only the master prompt.
+Do not start execution after reading only the master prompt.
+Do not skip later-numbered contracts because an earlier file already mentions
+their topic.
 
 ## Working directories
 

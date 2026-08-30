@@ -675,3 +675,19 @@ Mode/model/provider settings are not tunable from TEST results.
 
 Operational parameters such as timeout/concurrency may be discovered before
 freeze, but become immutable for the official RUN once frozen.
+
+## Executable harness and semantic GT lock
+
+Document 33 is mandatory before official TEST.
+
+Freeze:
+
+- executable harness/scorer source hashes,
+- scoring-normalization version/hash,
+- GT semantic-validation result,
+- NO_ANSWER negative-evidence audit,
+- identity-map validation result,
+- oracle-leakage audit,
+- harness self-test/readiness artifacts.
+
+A changed harness/scorer/normalizer after freeze invalidates the RUN.

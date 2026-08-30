@@ -99,3 +99,8 @@ The checksum file is external to the Markdown documents to avoid circular/self-h
   runtime semantics: Mode 0, model-enabled extraction, NVIDIA Nemotron
   embeddings, GPT-OSS extraction/final answer, runtime/Compose parity and
   pre-TEST effective-value proof.
+
+- `33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md` —
+  mandatory executable harness bootstrap/self-test, source-linked semantic
+  ground-truth verification, NO_ANSWER corpus audit, deterministic scoring
+  normalization and oracle-separation evidence.

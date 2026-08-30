@@ -140,3 +140,21 @@ Before TEST verify:
 - [ ] extraction output budget is at least 4096.
 - [ ] Docker/container config matches intended config.
 - [ ] `mesa-runtime-lock.json` exists.
+
+## Harness and GT semantic gate
+
+Before official TEST:
+
+- [ ] Phase H0 completed.
+- [ ] Executable harness exists.
+- [ ] Harness automated tests PASS.
+- [ ] Synthetic harness self-test PASS.
+- [ ] Scorer canaries PASS.
+- [ ] Every required fact links to exact source evidence.
+- [ ] GT semantic validation PASS.
+- [ ] Ambiguous GT items were replaced before freeze only.
+- [ ] NO_ANSWER corpus-wide negative-evidence audit PASS.
+- [ ] Identity-map validation PASS.
+- [ ] Scoring normalization spec/version is frozen.
+- [ ] Oracle-leakage audit PASS.
+- [ ] `harness-readiness.json` permits official TEST.

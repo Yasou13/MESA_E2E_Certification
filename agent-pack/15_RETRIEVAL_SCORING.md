@@ -118,3 +118,15 @@ identity mapping, malformed provenance, infrastructure failure, and an
 intentionally wrong-provenance MISS.
 
 Canaries are harness validation and are excluded from product metrics.
+
+## Versioned normalization contract
+
+Official scoring must use the frozen, versioned normalization specification
+defined by document 33.
+
+The scorer may normalize only explicitly defined syntactic equivalences.
+
+It must not invent semantic equivalence, silently paraphrase answers, or use
+MESA/GPT output to repair qrels.
+
+The normalization version/hash is part of the contract freeze.

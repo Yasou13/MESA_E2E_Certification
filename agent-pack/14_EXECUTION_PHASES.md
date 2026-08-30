@@ -6,6 +6,32 @@
 
 The agent maintains `status.md` from the template and transitions phases explicitly.
 
+## Bootstrap — VM/canonical workspace
+
+On VM start/restore, execute
+`30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.
+
+Exit:
+
+- canonical `$HOME/mesa-cert` root resolved,
+- authoritative repository paths resolved,
+- safe non-destructive normalization completed,
+- runtime/evidence/archive/cache/secrets separation available,
+- required tool inventory completed.
+
+## Phase -1 — Workspace hygiene and isolation
+
+Execute `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
+
+Exit:
+
+- historical state inventoried,
+- old mutable MESA/MESA_Data state cannot contaminate the new run,
+- Docker state inventoried/isolated,
+- no unknown user data deleted,
+- repository worktrees safe,
+- workspace baseline evidence written.
+
 ## Phase 0 — Baseline
 
 - read full pack;
@@ -17,6 +43,22 @@ The agent maintains `status.md` from the template and transitions phases explici
 - repair confirmed pre-benchmark blockers; if repaired, commit and create a fresh RUN_ID before continuing.
 
 Exit: clean branch heads, baseline local tests pass, no known P0 contract defect left unresolved.
+
+## Phase H0 — Certification harness bootstrap and self-test
+
+Execute
+`33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md`.
+
+- implement/verify executable harness;
+- run automated harness unit tests;
+- run synthetic harness self-test;
+- validate scorer canaries;
+- establish versioned scoring normalization;
+- verify GT validator and identity-map validator capabilities;
+- establish oracle-leakage guard.
+
+Exit: harness implementation is executable, tested and safe to use on official
+Profile B data. Real TEST scoring is forbidden until H0 passes.
 
 ## Phase 1 — Provider + production runtime preflight
 
@@ -126,44 +168,6 @@ Do not modify product data or TEST config for ablation.
 
 Apply hard gates mechanically. Do not average failures away. Emit exactly one allowed verdict plus gate table and limitations.
 
-
-## Phase -1 — Workspace hygiene and isolation
-
-This phase runs before Phase 0.
-
-Follow `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
-
-Required outcome:
-
-- historical state inventoried,
-- fresh RUN_ID namespace selected,
-- clean MESA mutable storage,
-- clean MESA_Data mutable data root,
-- Docker state isolated,
-- no unknown user data deleted,
-- repositories safely updated from `origin/main`,
-- exact repository SHAs frozen,
-- `runs/<RUN_ID>/workspace-baseline.json` recorded.
-
-If Phase -1 does not PASS, Phase 0 MUST NOT start.
-
-## Bootstrap — before Phase -1
-
-On VM start/restore, execute
-`30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.
-
-Required result:
-
-- canonical `$HOME/mesa-cert` root,
-- authoritative canonical repository paths,
-- safe normalization of any pre-existing non-canonical layout,
-- runtime/evidence/archive/cache/secrets separation,
-- tool/dependency inventory,
-- ability to create RUN_ID-scoped mutable storage.
-
-Then execute Phase -1 workspace hygiene and isolation.
-
-Bootstrap is not optional on a fresh/restored VM.
 
 ## Integrity checkpoints around TEST
 

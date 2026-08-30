@@ -193,3 +193,20 @@ scorer-canary-results.json
 Finalization must complete before teardown.
 
 Do not modify sealed/hash-listed artifacts silently.
+
+## Harness and GT verification evidence
+
+The evidence index must include hashes/references for:
+
+```text
+harness-self-test.json
+harness-readiness.json
+identity-map-validation.json
+oracle-leakage-audit.json
+scoring-normalization.json
+no-answer-audit.jsonl
+GT semantic-validation output
+```
+
+Executable harness/scorer source hashes are part of the official contract
+freeze.

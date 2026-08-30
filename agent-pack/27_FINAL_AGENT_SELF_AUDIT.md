@@ -202,3 +202,19 @@ Before `PROFILE_B_PASS_NATIVE` verify:
 - Did any model/mode/provider setting change after TEST began?
 
 Any unexplained runtime drift prevents PASS_NATIVE.
+
+## Harness/GT false-result audit
+
+Before final PASS ask:
+
+- Did every required fact have exact source evidence?
+- Could any GT item be materially ambiguous?
+- Was every NO_ANSWER item audited against the whole frozen corpus?
+- Did the scorer use exactly the frozen normalization version?
+- Did executable harness tests/self-tests pass before official scoring?
+- Did identity-map validation pass before retrieval scoring?
+- Could oracle data have entered request construction?
+- Did any scorer/harness semantic change occur after TEST began?
+
+Any unresolved risk of harness-caused false PASS/false FAIL prevents
+`PROFILE_B_PASS_NATIVE`.
