@@ -92,3 +92,12 @@ The canonical Profile B workspace is `$HOME/mesa-cert`.
 
 Existing non-canonical MESA/MESA_Data/certification checkouts are discovered
 and normalized safely without destroying unknown user data.
+
+## Benchmark integrity and finalization
+
+Official TEST execution is protected by:
+
+`agent-pack/31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md`
+
+This prevents ground-truth leakage, post-result methodology changes, scorer
+drift and non-reproducible PASS results.

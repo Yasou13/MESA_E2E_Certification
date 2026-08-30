@@ -111,3 +111,17 @@ Before Phase -1/Phase 0 verify:
 - [ ] Mutable databases are outside Git repositories.
 - [ ] Docker namespace isolation is available or equivalent isolation is proven.
 - [ ] `bootstrap-layout.json` will be/has been written.
+
+## Benchmark integrity preflight
+
+Before official TEST:
+
+- [ ] No ground-truth/qrel data can flow into product requests.
+- [ ] Certification repo SHA is frozen.
+- [ ] Harness/scorer hashes are frozen.
+- [ ] Query/GT/identity-map hashes are frozen.
+- [ ] `contract-freeze.json` exists.
+- [ ] `determinism-manifest.json` exists.
+- [ ] Scorer canaries PASS.
+- [ ] `health-pre-test.json` is healthy.
+- [ ] No TEST result has been used for tuning.

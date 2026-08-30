@@ -131,3 +131,12 @@ When the VM does not match the canonical workspace layout:
 6. stop instead of overwriting uncertain data.
 
 See `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.
+
+## Methodology authority boundary
+
+The agent may choose reasonable implementation details and make minimal bug
+fixes, but may not autonomously weaken or redefine the certification after
+seeing results.
+
+A proposed methodology change must be logged, the active run invalidated, and
+human approval obtained before the changed methodology can become authoritative.

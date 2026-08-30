@@ -643,3 +643,13 @@ Document `30` establishes the canonical workspace.
 Document `29` proves historical state cannot contaminate the run.
 
 Both are mandatory for a fresh or restored VM.
+
+## Supply-chain bootstrap boundary
+
+Bootstrap should prefer project lockfiles and documented tooling.
+
+Do not globally upgrade unrelated dependencies or install arbitrary latest
+packages to make certification proceed.
+
+Any necessary new certification dependency must be pinned/locked in the proper
+repository and causes refreeze/new RUN if added after contract freeze.

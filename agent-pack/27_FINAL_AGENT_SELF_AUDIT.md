@@ -171,3 +171,21 @@ Before final PASS ask:
 
 Any unexplained bootstrap/layout ambiguity prevents
 `PROFILE_B_PASS_NATIVE`.
+
+## Benchmark integrity self-audit
+
+Before final PASS verify:
+
+- Did any oracle/qrel/expected answer leak into a product/model request?
+- Did TEST results influence tuning?
+- Does certification SHA match the contract freeze?
+- Do harness/scorer hashes match the freeze?
+- Did all scorer canaries PASS?
+- Were infra errors separated from ordinary misses?
+- Was the runtime healthy before and after TEST?
+- Were seeds/orderings/environment versions recorded?
+- Did any dependency change after freeze?
+- Did methodology semantics change after seeing results?
+- Was evidence sealed before teardown?
+
+Any unresolved false-PASS risk prevents `PROFILE_B_PASS_NATIVE`.

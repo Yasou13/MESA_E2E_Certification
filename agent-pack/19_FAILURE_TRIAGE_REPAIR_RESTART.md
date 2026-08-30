@@ -118,3 +118,13 @@ old run invalidation reason
 next RUN_ID
 ```
 
+
+## Post-freeze change rule
+
+After the official contract freeze, any material product/config/harness/scorer
+fix makes the current run `INVALIDATED_CODE_CHANGE`.
+
+Preserve evidence, make the minimal fix, test/commit it, create a new RUN_ID
+and restart from bootstrap/Phase -1/Phase 0.
+
+Do not continue the official TEST from the failure point.

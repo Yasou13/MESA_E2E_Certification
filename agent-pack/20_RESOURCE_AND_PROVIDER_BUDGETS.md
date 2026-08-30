@@ -64,3 +64,14 @@ Profile B is not the 24-hour soak, so there is no hard memory-leak slope gate. H
 
 Timeouts may be validated on provider preflight/DEV. Once TEST config freezes, timeout changes invalidate the run. A timeout must be high enough for the chosen reasoning model but finite; never use infinite waits.
 
+
+## Pre/post health and provider observability
+
+Capture `health-pre-test.json` immediately before TEST and
+`health-post-test.json` immediately after TEST.
+
+Record provider model/endpoint/SDK/request metadata where available, but never
+secrets.
+
+A numerically passing run with an unexplained crash, OOM, dead worker or broken
+required backend is not PASS_NATIVE.

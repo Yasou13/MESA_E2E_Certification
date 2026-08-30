@@ -70,3 +70,13 @@ If retrieval misses required evidence but GPT-OSS happens to know the law and ou
 
 Save raw answer records, deterministic grader records and summaries separately. Include per-query links from final report to retrieval evidence, answer evidence and GT entry.
 
+
+## Final-answer oracle barrier
+
+The answer-generation model receives only allowed retrieved context and normal
+answer instructions.
+
+Never provide expected answers, required facts, forbidden claims, gold
+evidence IDs or grader rubric to the answer model.
+
+Persist the raw answer first; only then load ground truth for grading.

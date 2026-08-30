@@ -106,3 +106,12 @@ H1 approval was rejected or not provided. No full corpus delivery occurs.
 
 Never say “MVP ready” from Profile B alone. Overall MVP certification requires the other designated profiles and final combined decision.
 
+
+## Integrity is a hard prerequisite
+
+Numerical thresholds cannot produce `PROFILE_B_PASS_NATIVE` unless benchmark
+integrity also passes.
+
+Oracle leakage, post-TEST methodology changes, untracked scorer changes,
+unhealthy post-test runtime, or failed scorer canaries invalidate/block the run
+even if numerical metrics exceed thresholds.

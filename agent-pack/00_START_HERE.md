@@ -145,3 +145,13 @@ Then execute `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`, followed by Phase 0.
 
 If an existing workspace does not match the canonical layout, do not destroy
 it. Prefer a fresh canonical checkout/runtime and preserve historical/user data.
+
+## Benchmark integrity lock
+
+Before official TEST execution, the agent MUST execute the integrity/freeze
+requirements in:
+
+`31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md`
+
+Ground truth is a scoring oracle only and must never leak into MESA, retrieval,
+extraction or final-answer requests.

@@ -164,3 +164,25 @@ Required result:
 Then execute Phase -1 workspace hygiene and isolation.
 
 Bootstrap is not optional on a fresh/restored VM.
+
+## Integrity checkpoints around TEST
+
+Before official TEST:
+
+1. complete bootstrap/Phase -1/Phase 0,
+2. freeze contract/config/ground truth,
+3. write determinism manifest,
+4. run scorer canaries,
+5. capture `health-pre-test.json`,
+6. execute TEST without oracle leakage.
+
+After TEST:
+
+1. capture `health-post-test.json`,
+2. score only from persisted raw responses,
+3. perform final self-audit,
+4. seal/promote evidence,
+5. verify checksums,
+6. only then perform safe teardown.
+
+See document 31.

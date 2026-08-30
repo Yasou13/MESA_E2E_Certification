@@ -89,3 +89,8 @@ The checksum file is external to the Markdown documents to avoid circular/self-h
 - `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md` — mandatory fresh/restored
   VM bootstrap, canonical `$HOME/mesa-cert` filesystem, repository normalization,
   RUN_ID storage layout and bootstrap evidence.
+
+- `31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md` — oracle
+  isolation, complete contract freeze, deterministic environment manifest,
+  scorer canaries, pre/post health snapshots, supply-chain rules and safe
+  finalization/teardown.

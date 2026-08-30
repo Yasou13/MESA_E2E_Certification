@@ -102,3 +102,19 @@ returned unknown MESA chunk IDs are surfaced explicitly, never silently treated 
 ```
 
 Add scorer unit fixtures where source and MESA chunk IDs intentionally differ; a correct mapped hit must score as a hit, and an unmapped returned ID must raise/flag mapping integrity rather than become a false miss.
+
+## Scoring oracle barrier
+
+Ground truth must not influence product request construction.
+
+For every TEST query:
+
+```text
+send query -> persist raw response -> then load qrel -> score
+```
+
+At minimum, scorer canaries must cover rank-1/rank-5/no-hit, REL groups,
+identity mapping, malformed provenance, infrastructure failure, and an
+intentionally wrong-provenance MISS.
+
+Canaries are harness validation and are excluded from product metrics.

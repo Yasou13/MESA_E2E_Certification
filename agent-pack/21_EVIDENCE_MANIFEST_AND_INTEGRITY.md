@@ -177,3 +177,19 @@ run.
 
 Both must be associated with the final RUN_ID and included by SHA-256 in the
 evidence index.
+
+## Benchmark integrity artifacts
+
+The evidence index must include SHA-256 references for:
+
+```text
+contract-freeze.json
+determinism-manifest.json
+health-pre-test.json
+health-post-test.json
+scorer-canary-results.json
+```
+
+Finalization must complete before teardown.
+
+Do not modify sealed/hash-listed artifacts silently.

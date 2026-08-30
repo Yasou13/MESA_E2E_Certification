@@ -90,3 +90,21 @@ If a genuine bug requires one of these changes, fix it, invalidate the run, crea
 ## Identity mapping freeze boundary
 
 The benchmark config freeze must include the **identity-mapping algorithm/version and publisher mapping contract**. The concrete `identity_map.jsonl` cannot be complete until native delivery creates/reconciles MESA identities, so its SHA is frozen separately immediately after Phase 6 and before any TEST retrieval. Record that SHA in the run manifest and final config/evidence index. No TEST scoring may begin without a valid frozen map.
+
+## Complete certification contract freeze
+
+The freeze must include not only runtime/model config but also:
+
+- certification Git SHA,
+- agent-pack checksum manifest,
+- harness/scorer hashes,
+- TEST/DEV query hashes,
+- ground-truth/qrel hashes,
+- identity-map hash,
+- corpus/release hash,
+- verdict/threshold rules.
+
+Write `runs/<RUN_ID>/contract-freeze.json` before the first official TEST
+query.
+
+Any material change after this point invalidates the run.

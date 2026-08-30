@@ -149,3 +149,16 @@ checkouts safely, and bind all mutable runtime state to a new RUN_ID.
 
 Never make Profile B depend on arbitrary Desktop/Downloads paths when a
 canonical checkout can be created safely.
+
+## Oracle and methodology boundary
+
+You may repair product/integration/harness implementation bugs, but you may not
+change certification semantics to obtain a PASS.
+
+Never expose TEST ground truth, qrels, required facts, expected answers or gold
+evidence identifiers to product/runtime/model requests.
+
+Freeze the complete certification contract before TEST and invalidate the run
+after any material post-freeze change.
+
+Follow `31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md`.
