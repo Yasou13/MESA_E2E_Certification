@@ -145,3 +145,18 @@ Docker volumes, previous datasets, logs, or previous run state are clean.
 
 Execute the Phase -1 workspace hygiene contract before creating the active
 certification run baseline.
+
+## Canonical checkout paths
+
+Profile B authoritative checkouts SHOULD live at:
+
+```text
+$HOME/mesa-cert/repos/MESA
+$HOME/mesa-cert/repos/MESA_Data
+$HOME/mesa-cert/repos/MESA_E2E_Certification
+```
+
+If older checkouts exist elsewhere, preserve them and prefer fresh canonical
+clones rather than moving dirty/user-owned repositories.
+
+See `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.

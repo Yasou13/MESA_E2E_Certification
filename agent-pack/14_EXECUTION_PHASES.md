@@ -146,3 +146,21 @@ Required outcome:
 - `runs/<RUN_ID>/workspace-baseline.json` recorded.
 
 If Phase -1 does not PASS, Phase 0 MUST NOT start.
+
+## Bootstrap — before Phase -1
+
+On VM start/restore, execute
+`30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.
+
+Required result:
+
+- canonical `$HOME/mesa-cert` root,
+- authoritative canonical repository paths,
+- safe normalization of any pre-existing non-canonical layout,
+- runtime/evidence/archive/cache/secrets separation,
+- tool/dependency inventory,
+- ability to create RUN_ID-scoped mutable storage.
+
+Then execute Phase -1 workspace hygiene and isolation.
+
+Bootstrap is not optional on a fresh/restored VM.

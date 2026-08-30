@@ -118,3 +118,16 @@ Prefer:
 
 Material cleanup/isolation decisions must be written to
 `runs/<RUN_ID>/decision_log.jsonl`.
+
+## Filesystem normalization decisions
+
+When the VM does not match the canonical workspace layout:
+
+1. verify repository/data identity,
+2. preserve user-owned/unknown state,
+3. prefer fresh canonical clones over moving dirty repositories,
+4. prefer new RUN_ID storage over migrating old mutable storage,
+5. record material normalization decisions,
+6. stop instead of overwriting uncertain data.
+
+See `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.

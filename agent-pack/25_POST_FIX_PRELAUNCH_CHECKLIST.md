@@ -94,3 +94,20 @@ Before Phase 0 verify:
 - [ ] No secret value was printed.
 - [ ] Three repositories were safely updated from `origin/main`.
 - [ ] Exact repository SHAs were recorded/frozen.
+
+## VM bootstrap gate
+
+Before Phase -1/Phase 0 verify:
+
+- [ ] `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md` executed.
+- [ ] Canonical root resolved.
+- [ ] Canonical MESA checkout resolved.
+- [ ] Canonical MESA_Data checkout resolved.
+- [ ] Canonical certification checkout resolved.
+- [ ] All three Git origins verified.
+- [ ] Old non-canonical checkouts preserved unless proven safe to relocate.
+- [ ] No arbitrary Desktop/Downloads checkout is being used as accidental runtime authority.
+- [ ] RUN_ID-scoped runtime can be created.
+- [ ] Mutable databases are outside Git repositories.
+- [ ] Docker namespace isolation is available or equivalent isolation is proven.
+- [ ] `bootstrap-layout.json` will be/has been written.

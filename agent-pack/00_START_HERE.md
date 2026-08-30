@@ -130,3 +130,18 @@ prove that old MESA/MESA_Data state is not reused, inventory Docker state, and
 write `runs/<RUN_ID>/workspace-baseline.json`.
 
 Unknown or user-owned files must not be deleted.
+
+## VM bootstrap comes first
+
+On a fresh/restored VM, the first mandatory document is:
+
+`30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`
+
+It establishes the canonical `$HOME/mesa-cert` layout, authoritative repository
+paths, safe normalization behavior, runtime namespace rules and bootstrap
+evidence.
+
+Then execute `29_WORKSPACE_HYGIENE_AND_ISOLATION.md`, followed by Phase 0.
+
+If an existing workspace does not match the canonical layout, do not destroy
+it. Prefer a fresh canonical checkout/runtime and preserve historical/user data.

@@ -137,3 +137,15 @@ tests until workspace hygiene has PASSed.
 
 Prefer fresh isolated runtime directories over deleting historical state.
 Never use broad destructive cleanup commands on unknown VM state.
+
+## Mandatory VM bootstrap
+
+Before Phase -1 and Phase 0, execute
+`30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`.
+
+Resolve or create the canonical workspace under `$HOME/mesa-cert`, verify the
+three authoritative Git repositories, normalize non-canonical existing
+checkouts safely, and bind all mutable runtime state to a new RUN_ID.
+
+Never make Profile B depend on arbitrary Desktop/Downloads paths when a
+canonical checkout can be created safely.

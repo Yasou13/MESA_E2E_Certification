@@ -346,3 +346,16 @@ Phase -1 PASS requires all of the following:
 - material autonomous decisions logged.
 
 If any condition cannot be established, do not start Phase 0.
+
+## Relationship to VM bootstrap
+
+`30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md` executes before this
+document.
+
+Document 30 establishes the canonical workspace and safely normalizes any
+existing non-canonical layout.
+
+This document then inventories historical state and proves that none of that
+state contaminates the new RUN_ID.
+
+Do not reverse these responsibilities.

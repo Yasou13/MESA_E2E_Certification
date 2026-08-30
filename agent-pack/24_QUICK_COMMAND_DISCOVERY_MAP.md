@@ -98,3 +98,29 @@ These are inventory commands, not permission to delete anything.
 
 Do not use broad `rm -rf`, `git clean -fdx`, `docker system prune -a`,
 `docker volume prune`, or equivalent destructive cleanup as a shortcut.
+
+## Canonical workspace discovery
+
+Preferred canonical paths:
+
+```text
+$HOME/mesa-cert/repos/MESA
+$HOME/mesa-cert/repos/MESA_Data
+$HOME/mesa-cert/repos/MESA_E2E_Certification
+$HOME/mesa-cert/runtime
+$HOME/mesa-cert/evidence
+$HOME/mesa-cert/archive
+$HOME/mesa-cert/cache
+$HOME/mesa-cert/secrets
+```
+
+Safe repository discovery examples:
+
+```bash
+find "$HOME" -maxdepth 4 -type d -name .git -print 2>/dev/null
+git -C <candidate> remote -v
+git -C <candidate> status --porcelain=v1
+```
+
+A folder name is not proof of repository identity.
+Verify the Git remote.

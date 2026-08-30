@@ -159,3 +159,21 @@ The final evidence index must reference this file and its SHA-256.
 
 The workspace baseline proves that the run did not inherit mutable state from
 older manual tests or certification runs.
+
+## Bootstrap layout evidence
+
+Every final run evidence index must reference:
+
+```text
+runs/<RUN_ID>/bootstrap-layout.json
+runs/<RUN_ID>/workspace-baseline.json
+```
+
+`bootstrap-layout.json` records the canonical filesystem/repository/runtime
+mapping.
+
+`workspace-baseline.json` records that historical state cannot contaminate the
+run.
+
+Both must be associated with the final RUN_ID and included by SHA-256 in the
+evidence index.

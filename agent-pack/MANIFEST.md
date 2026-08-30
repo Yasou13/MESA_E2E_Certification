@@ -85,3 +85,7 @@ The checksum file is external to the Markdown documents to avoid circular/self-h
 - `29_WORKSPACE_HYGIENE_AND_ISOLATION.md` — Phase -1 VM/workspace inventory,
   historical-state isolation, Docker hygiene, clean RUN_ID runtime and
   non-destructive cleanup policy.
+
+- `30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md` — mandatory fresh/restored
+  VM bootstrap, canonical `$HOME/mesa-cert` filesystem, repository normalization,
+  RUN_ID storage layout and bootstrap evidence.

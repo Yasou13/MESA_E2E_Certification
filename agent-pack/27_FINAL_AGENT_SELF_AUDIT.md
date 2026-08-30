@@ -156,3 +156,18 @@ Before any final PASS ask:
 - Do the frozen repository SHAs match the repositories actually tested?
 
 Any unexplained contamination risk prevents `PROFILE_B_PASS_NATIVE`.
+
+## VM bootstrap self-audit
+
+Before final PASS ask:
+
+- Did the final run use the canonical/recorded authoritative repository paths?
+- Were all three origins verified?
+- Was a non-canonical old checkout accidentally treated as authoritative?
+- Did mutable SQLite/LanceDB/Kùzu/MESA_Data state live outside the Git repos?
+- Does `bootstrap-layout.json` match the actual final RUN_ID paths?
+- Was any unknown user data overwritten during normalization?
+- If the canonical path was occupied, was the decision safely logged?
+
+Any unexplained bootstrap/layout ambiguity prevents
+`PROFILE_B_PASS_NATIVE`.

@@ -81,3 +81,14 @@ Profile B begins with Phase -1 workspace hygiene and isolation.
 The certification run must not inherit mutable state from previous manual
 tests, old MESA storage, old MESA_Data roots or stale Docker resources.
 See `agent-pack/29_WORKSPACE_HYGIENE_AND_ISOLATION.md`.
+
+## VM bootstrap and canonical workspace
+
+Fresh/restored VM execution begins with:
+
+`agent-pack/30_VM_BOOTSTRAP_AND_CANONICAL_WORKSPACE_LAYOUT.md`
+
+The canonical Profile B workspace is `$HOME/mesa-cert`.
+
+Existing non-canonical MESA/MESA_Data/certification checkouts are discovered
+and normalized safely without destroying unknown user data.
