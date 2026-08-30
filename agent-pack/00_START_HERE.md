@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -43,7 +43,8 @@ Before running commands, read every file in this order:
 25. `25_POST_FIX_PRELAUNCH_CHECKLIST.md`
 26. `26_EXPECTED_OUTPUTS_AND_ASSERTIONS.md`
 27. `27_FINAL_AGENT_SELF_AUDIT.md`
-28. `MANIFEST.md`
+28. `28_AUTONOMOUS_DECISION_DOCTRINE.md`
+29. `MANIFEST.md`
 
 Do not start the benchmark after reading only the master prompt.
 
@@ -87,7 +88,7 @@ Runtime/generated content is intentionally not product source code. Do not silen
 
 ## Dedicated branch
 
-Use the same branch name in both repositories:
+Use the same branch name in all three repositories (certification repository, MESA, and MESA_Data):
 
 ```text
 cert/profile-b-e2e
@@ -111,3 +112,10 @@ Any product, harness, dependency, Compose, benchmark logic, or scoring code chan
 
 Do not delete failed evidence to make the final directory look clean.
 
+
+<!-- V3.1_FRESH_MAIN_LOCK -->
+## Fresh-main lock before autonomous work
+
+Before creating or reusing `cert/profile-b-e2e`, synchronize **all three** repositories with their remote `main` using the clean-baseline procedure in `04_WORKSPACE_BRANCH_GIT_POLICY.md`. Record the resulting `origin/main` SHAs.
+
+Once a `RUN_ID` is created, do **not** pull, merge, rebase, or otherwise absorb newer remote commits into that active run. A desired upstream update requires preserving/invalidation of the current run, resynchronizing from `main`, creating a new coherent baseline, and starting with a new `RUN_ID`.

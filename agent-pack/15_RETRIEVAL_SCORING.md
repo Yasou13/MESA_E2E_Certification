@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -8,13 +8,13 @@
 
 A retrieval hit is based on **MESA returned provenance**, not entity text similarity or the LLM's answer.
 
-For each search result, collect all provenance chunk IDs/document/revision IDs exposed by the current public V4 response. A result is relevant when its provenance intersects the qrel's expected evidence according to the rules below.
+For each search result, collect all provenance chunk IDs/document/revision IDs exposed by the current public V4 response. Normalize returned MESA chunk IDs through the frozen `identity_map.jsonl` into MESA_Data `source_chunk_id` values. A result is relevant only when the normalized source provenance intersects the qrel's expected source evidence according to the rules below. Never compare unverified identifier namespaces directly.
 
 ## Single-hop scoring
 
 For `SINGLE_DIRECT` and `SINGLE_PARAPHRASE`:
 
-- relevant result = any result whose provenance contains an expected chunk ID;
+- relevant result = any result whose normalized source provenance contains an `expected_source_chunk_id`;
 - rank = first relevant result rank;
 - Recall@1 = 1 if rank 1 else 0;
 - Recall@5 = 1 if rank <=5 else 0;
@@ -87,3 +87,18 @@ The scorer must be deterministic and unit-tested with synthetic fixtures coverin
 
 If scorer code changes after TEST begins, invalidate and rerun from Phase 0 per policy.
 
+
+<!-- V3.1_MAPPING_ASSERTIONS -->
+## Identity-mapping scorer assertions
+
+Before scoring the first TEST query, the scorer must assert:
+
+```text
+identity_map SHA == frozen run-manifest SHA
+all answerable expected_source_chunk_ids resolve
+no mapping row was derived from retrieval output
+no duplicate conflicting source->MESA mapping exists
+returned unknown MESA chunk IDs are surfaced explicitly, never silently treated as ordinary misses
+```
+
+Add scorer unit fixtures where source and MESA chunk IDs intentionally differ; a correct mapped hit must score as a hit, and an unmapped returned ID must raise/flag mapping integrity rather than become a false miss.

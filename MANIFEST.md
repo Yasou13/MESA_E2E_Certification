@@ -62,3 +62,14 @@ The final run must preserve at minimum:
 
 A report must never contain its own SHA-256. Hash the completed report from a sibling checksum file.
 
+
+<!-- V3.1_REPOSITORY_EDITION -->
+## v3.1 repository-edition guarantees
+
+- startup synchronizes and records all three repositories before certification branches/run creation;
+- unspecified cases follow `agent-pack/28_AUTONOMOUS_DECISION_DOCTRINE.md` and are logged;
+- source acquisition expands deterministically without MESA-result leakage;
+- qrels are source-ID based and MESA provenance is reconciled through a frozen native identity map;
+- H1 reuse across restarted runs is allowed only as a hash-bound referenced external authorization artifact;
+- ambiguous answer cases cannot trigger a hidden second human gate and count non-PASS unless deterministically resolved by pre-frozen rules;
+- a sanitized final audit bundle is promoted to Git-tracked `reports/releases/<RUN_ID>/`.

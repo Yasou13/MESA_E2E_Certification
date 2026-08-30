@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -8,7 +8,7 @@ Before assigning a final verdict, run this adversarial self-review. The purpose 
 
 ## A. Coherent-run check
 
-- [ ] Every hard-gate PASS belongs to the same final RUN_ID.
+- [ ] Every hard-gate PASS belongs to the same final RUN_ID, except a prior H1 authorization may be referenced only under the explicit hash-bound reuse rule below.
 - [ ] MESA SHA did not change during that run.
 - [ ] MESA_Data SHA did not change during that run.
 - [ ] Harness/scorer/config-generation code did not change during that run.
@@ -104,3 +104,40 @@ Investigate that possibility. If unresolved and material to a hard gate, do not 
 
 Only after all applicable items pass may the agent mechanically apply the verdict rules.
 
+
+<!-- V3.1_SELF_AUDIT_ADDITIONS -->
+## M. H1 reuse exception audit
+
+If H1 approval originated in a prior run:
+
+- [ ] `h1_origin_run_id` is recorded;
+- [ ] selected/corpus/review/release/chunk-plan hashes are bit-identical;
+- [ ] canonical bytes are identical;
+- [ ] no relevant MESA_Data code changed;
+- [ ] original literal approval authorized the exact delivered release hash;
+- [ ] the final run references the prior artifact/hash and does not misrepresent it as newly generated.
+
+If any item fails, H1 must be reacquired.
+
+## N. Autonomous-decision audit
+
+- [ ] every material unspecified-case decision appears in `decision_log.jsonl`;
+- [ ] chosen actions were minimal, reversible where possible, architecture-consistent, and did not weaken gates;
+- [ ] no decision modified TEST/GT/corpus/thresholds after freeze to improve results;
+- [ ] irreversible/security-sensitive/benchmark-definition decisions were not taken without authorization.
+
+## O. Identity-namespace audit
+
+- [ ] qrels use MESA_Data source chunk IDs;
+- [ ] frozen identity-map SHA predates first TEST request;
+- [ ] mapping came only from native publisher/ingestion/commit metadata, not retrieval;
+- [ ] scorer fixtures prove differing source/MESA IDs normalize correctly;
+- [ ] unmapped/conflicting IDs were treated as mapping integrity issues, not silent misses.
+
+## P. Final evidence promotion audit
+
+- [ ] final sanitized bundle exists under `reports/releases/<RUN_ID>/`;
+- [ ] bundle contains final report, manifest, gate/metric summaries, decision/repair summaries, evidence index and checksum file;
+- [ ] promoted bundle contains no secrets or bulky raw corpus/runtime state;
+- [ ] promoted checksum verification passes;
+- [ ] raw evidence remains referenced by hash/path and was not falsely replaced by summaries.

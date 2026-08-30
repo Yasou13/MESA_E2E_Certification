@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -100,3 +100,49 @@ At finalization:
 5. save verification output;
 6. only then assign final verdict.
 
+
+<!-- V3.1_DECISION_AND_PROMOTION -->
+## Autonomous decision journal
+
+Every material action not explicitly prescribed by this pack must be appended to:
+
+```text
+<CERT_ROOT>/evidence/<RUN_ID>/00_manifest/decision_log.jsonl
+```
+
+Each record contains at minimum `decision_id`, `run_id`, `phase`, `utc`, `situation`, `options_considered`, `selected_option`, `reason`, `evidence_paths`, `impact_on_test`, `changes_hard_gate`, `reversible`, and `requires_human_authorization`. The full decision doctrine is `28_AUTONOMOUS_DECISION_DOCTRINE.md`.
+
+## Final evidence promotion to tracked Git history
+
+Large raw run evidence remains in ignored `evidence/<RUN_ID>/` and `runs/<RUN_ID>/`. After a valid final verdict, create a **small sanitized immutable certification release bundle** under:
+
+```text
+<CERT_ROOT>/reports/releases/<RUN_ID>/
+```
+
+At minimum promote/copy generated summaries (without secrets or bulky raw payloads):
+
+```text
+final-report.md
+run_manifest.json
+gate-results.json
+retrieval-summary.json
+answer-summary.json
+graph-summary.json
+resource-provider-summary.json
+frozen-identities.json
+identity-map-summary.json
+decision-summary.json
+repair-summary.json
+evidence-index.json
+SHA256SUMS.txt
+```
+
+Rules:
+
+- every promoted item must identify the originating evidence path/hash and final RUN_ID;
+- do not claim promoted summaries are the raw source evidence;
+- verify checksums after promotion;
+- `reports/releases/<RUN_ID>/` is intended to be Git-tracked so the certification verdict remains auditable if the VM is lost;
+- secrets, full raw legal corpora, provider payload dumps, databases and bulky runtime artifacts must not be promoted;
+- the report still must not contain its own SHA.

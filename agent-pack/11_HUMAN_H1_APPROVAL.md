@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -36,7 +36,7 @@ No full legal corpus delivery occurs before H1B.
 
 The agent must create a human-readable bundle containing:
 
-### Summary
+### H1A summary
 
 - RUN_ID;
 - MESA_Data SHA;
@@ -44,9 +44,20 @@ The agent must create a human-readable bundle containing:
 - quality PASS/REVIEW/BLOCK counts;
 - encoding distribution;
 - coverage distribution/min/median;
-- release ID and release manifest SHA;
-- planned chunk count;
+- selected-versions manifest SHA;
+- corpus/review-bundle hashes;
 - warnings/blockers list.
+
+H1A occurs **before** release construction, so do not require or invent a release ID, release manifest SHA, or final chunk count at H1A.
+
+### H1B summary extension
+
+After H1A eligibility decisions and deterministic release construction, add:
+
+- exact release ID;
+- release manifest SHA;
+- planned chunk manifest SHA;
+- final planned chunk count.
 
 ### Deterministic sample
 
@@ -107,3 +118,26 @@ H1 expires if any covered input changes, including:
 
 A MESA-only downstream bug fix does not alter the approved legal release bytes, but because the certification run restarts, the agent must verify the exact approved release hash is unchanged. It may reuse the same human approval only if the package bytes and all H1-bound hashes are bit-identical and the approval explicitly authorized delivery of that hash; otherwise ask again. Any MESA_Data product fix requires new H1.
 
+
+<!-- V3.1_H1_REUSE -->
+## Hash-bound H1 reuse across a restarted run
+
+H1 approval is an **external authorization artifact bound to immutable hashes**, not ordinary run-generated PASS evidence. A later run may reference a prior H1 approval only when all H1-bound inputs are bit-identical.
+
+Reuse is allowed only when the new run proves all of the following before delivery:
+
+```text
+selected_versions_manifest_sha256 identical
+corpus_manifest_sha256 identical
+review_bundle_sha256 identical
+release_id/package contents identical
+release_manifest_sha256 identical
+planned_chunk_manifest_sha256 identical
+canonical bytes/hashes identical
+all MESA_Data code affecting collection/parse/quality/release/chunk mapping unchanged
+human approval explicitly authorized delivery of that exact release hash
+```
+
+A MESA-only downstream fix may therefore reuse H1 if every condition above is proven. The new run manifest must record `h1_origin_run_id`, original approval artifact path/hash, and the revalidation evidence. Do not copy the artifact and pretend it was newly produced by the new run.
+
+Any MESA_Data change that can affect an H1-bound input, any corpus/canonical/release/chunk change, or any uncertainty about byte identity invalidates reuse and requires a new H1 decision.

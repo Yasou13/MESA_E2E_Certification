@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -90,8 +90,11 @@ Every hard gate passed using native MESA_Data→MESA delivery on one final run.
 ### `PROFILE_B_FAIL`
 The run completed enough to evaluate and at least one hard product/quality/metric gate failed.
 
+### `PROFILE_B_BLOCKED_PRECONDITION`
+Certification cannot validly start or continue because a local prerequisite is unmet and the agent is not authorized to repair it safely, for example: unexplained dirty worktree, unsafe branch collision, insufficient RAM/disk, unavailable Docker/runtime dependency, missing local credential material, or another non-product local prerequisite. Preserve evidence and state the exact remediation required. This is not a product FAIL.
+
 ### `PROFILE_B_BLOCKED_EXTERNAL`
-Certification cannot validly continue due to external infrastructure outside the repositories, e.g. persistent NVIDIA outage, official-source outage, GitHub CI unavailable, or environment limitation that the agent is not authorized to change. Include exact evidence and do not score missing calls as failures.
+Certification cannot validly continue due to external infrastructure outside the repositories, e.g. persistent NVIDIA outage, official-source outage, GitHub CI unavailable, or remote provider/service unavailability outside agent control. Include exact evidence and do not score missing calls as failures.
 
 ### `PROFILE_B_DIAGNOSTIC_BRIDGE_ONLY`
 A non-native bridge/harness path can demonstrate downstream MESA behavior, but the native MESA_Data publisher gate did not pass. **This is not a Profile B pass.**

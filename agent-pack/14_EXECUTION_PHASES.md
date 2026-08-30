@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -78,7 +78,9 @@ Use native MESA_Data publisher against real MESA in a dedicated small scope. Pro
 - poll all mutations;
 - reconcile MESA_Data ledger vs MESA state;
 - require zero unexplained failed/rejected items;
-- preserve mapping and commit evidence.
+- preserve mapping and commit evidence;
+- build/validate `identity_map.jsonl` from native publisher/commit metadata only;
+- hash/freeze the identity map before any TEST retrieval.
 
 ## Phase 7 — Persistence/idempotency/isolation
 

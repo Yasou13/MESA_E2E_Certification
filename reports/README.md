@@ -16,3 +16,8 @@ The authoritative final-report structure is defined in `../agent-pack/23_FINAL_R
 
 Generated reports may live under `reports/generated/<RUN_ID>/`.
 
+
+<!-- V3.1_REPORT_PROMOTION -->
+## Tracked final certification releases
+
+`reports/generated/<RUN_ID>/` remains mutable/generated working output. After finalization, promote the small sanitized immutable audit bundle to `reports/releases/<RUN_ID>/` as defined by `../agent-pack/21_EVIDENCE_MANIFEST_AND_INTEGRITY.md`. `reports/releases/` is intentionally Git-tracked.

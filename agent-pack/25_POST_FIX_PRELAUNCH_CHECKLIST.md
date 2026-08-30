@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -56,7 +56,7 @@ Run this after the user's pending MESA and MESA_Data fixes are merged to `main`,
 
 ## Agent pack
 
-- [ ] read all v2 files
+- [ ] read all v3.1 files, including `28_AUTONOMOUS_DECISION_DOCTRINE.md`
 - [ ] `SHA256SUMS.txt` verifies
 - [ ] no v1 master prompt accidentally used
 - [ ] result root writable
@@ -64,3 +64,16 @@ Run this after the user's pending MESA and MESA_Data fixes are merged to `main`,
 
 If any hard item fails, do not start the scored benchmark.
 
+
+<!-- V3.1_PRELAUNCH_ADDITIONS -->
+## v3.1 additional prelaunch checks
+
+- [ ] certification repository clean, exact `main` fetched, cert branch clean
+- [ ] exact `origin/main` SHAs for all three repositories recorded before RUN_ID creation
+- [ ] no active-run repository will auto-pull/merge upstream changes
+- [ ] deterministic acquisition expansion policy configured/recorded
+- [ ] GT uses `expected_source_chunk_ids`, not an assumed MESA ID namespace
+- [ ] identity-mapping algorithm/contract frozen before TEST
+- [ ] decision journal path writable and schema known
+- [ ] `reports/releases/` tracked final-promotion location available
+- [ ] ambiguous answer policy cannot create a second human gate

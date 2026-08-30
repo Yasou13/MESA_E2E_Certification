@@ -1,8 +1,8 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
-# MANIFEST — PROFILE B AUTONOMOUS AGENT PACK v3.0
+# MANIFEST — PROFILE B AUTONOMOUS AGENT PACK v3.1
 
 ## Purpose
 
@@ -38,6 +38,7 @@ This package is the repository-integrated operating contract for autonomous Prof
 - `25_POST_FIX_PRELAUNCH_CHECKLIST.md` — final readiness checklist
 - `26_EXPECTED_OUTPUTS_AND_ASSERTIONS.md` — semantic expected outputs per hard gate
 - `27_FINAL_AGENT_SELF_AUDIT.md` — adversarial false-PASS audit before verdict
+- `28_AUTONOMOUS_DECISION_DOCTRINE.md` — safe autonomous choice policy and decision journal for unspecified cases
 - `MANIFEST.md` — this file
 - `SHA256SUMS.txt` — generated integrity list for Markdown files; intentionally does not hash itself
 
@@ -56,7 +57,11 @@ This package is the repository-integrated operating contract for autonomous Prof
 11. bounded provider calls/retries and resource tracking;
 12. broader tenant/principal negative ACL tests;
 13. remote model identity/revision limitation explicitly recorded;
-14. one coherent final-run rule and full restart after code/harness/config changes.
+14. one coherent final-run rule and full restart after code/harness/config changes;
+15. autonomous unspecified-case decisions are bounded by a logged minimal/reversible decision doctrine;
+16. qrels use source chunk IDs plus a frozen native identity map before TEST;
+17. hash-bound H1 reuse is explicit and auditable;
+18. final sanitized evidence bundles are promoted to Git-tracked `reports/releases/`.
 
 ## Repository integration
 

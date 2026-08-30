@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -85,3 +85,8 @@ During TEST, forbidden changes include:
 
 If a genuine bug requires one of these changes, fix it, invalidate the run, create a new RUN_ID, repeat DEV/freeze, then run TEST again. The old failed TEST remains evidence.
 
+
+<!-- V3.1_IDENTITY_MAP_FREEZE -->
+## Identity mapping freeze boundary
+
+The benchmark config freeze must include the **identity-mapping algorithm/version and publisher mapping contract**. The concrete `identity_map.jsonl` cannot be complete until native delivery creates/reconciles MESA identities, so its SHA is frozen separately immediately after Phase 6 and before any TEST retrieval. Record that SHA in the run manifest and final config/evidence index. No TEST scoring may begin without a valid frozen map.

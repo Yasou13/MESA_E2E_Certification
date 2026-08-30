@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -49,7 +49,7 @@ For answerable qrels, a grounded PASS requires all:
 5. no forbidden material claim is present;
 6. every material claim used for PASS is supported by cited context.
 
-Items 4–6 should be made as deterministic as practical via normalized required facts/patterns and explicit prohibited claims. Ambiguous semantic cases are reported separately for human audit; they must not be silently marked PASS by an LLM self-judge.
+Items 4–6 should be made as deterministic as practical via normalized required facts/patterns and explicit prohibited claims. An ambiguous semantic case is recorded as `UNRESOLVED` and counts as **non-PASS** in the hard grounded-answer denominator. It is reported for later audit, but the agent must not create a second human checkpoint during Profile B and must never let an LLM self-judge convert ambiguity into PASS.
 
 ## NO_ANSWER grading
 

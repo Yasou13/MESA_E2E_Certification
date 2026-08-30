@@ -1,4 +1,4 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
@@ -69,3 +69,21 @@ Hash the final corpus manifest before GT generation.
 
 MESA receives the MESA_Data canonical/planned chunk content and provenance. Do not manually rewrite chunks, add explanatory synthetic paragraphs, or insert answer text solely to increase retrieval scores.
 
+
+<!-- V3.1_ACQUISITION_EXPANSION -->
+## Deterministic acquisition expansion policy
+
+The agent must not improvise corpus membership when the first acquisition pass yields too few eligible documents.
+
+Use this source-first order:
+
+1. include the predefined eligible core seed legislation from official sources;
+2. collect the configured fixed recent Resmî Gazete acquisition window;
+3. run the normal MESA_Data raw/canonical/quality pipeline;
+4. if fewer than the target 60 eligible selected candidates remain, expand the same official acquisition window **backward in deterministic 30-day blocks**;
+5. after each block, rerun the same eligibility/quality rules and deterministic ranking;
+6. stop expansion once at least 60 eligible candidates exist, or when the predeclared source/window safety limit is reached;
+7. never select more than 80 for Profile B without explicit pre-run user authorization;
+8. never add documents because MESA retrieves them well, and never use MESA outputs to decide expansion or membership.
+
+Record every acquisition window, source, candidate count, eligibility count, exclusion reason, and the exact deterministic selection key in the corpus manifest. If official sources cannot provide the hard minimum 50 under the fixed policy, end truthfully rather than lowering quality requirements.

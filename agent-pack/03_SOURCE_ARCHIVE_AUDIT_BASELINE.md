@@ -1,10 +1,10 @@
-> **Profile B Autonomous Agent Pack v3.0**  
+> **Profile B Autonomous Agent Pack v3.1**
 > Scope: MESA + MESA_Data native legal E2E certification on a dedicated certification branch.  
 > Authority rule: the live checked-out repositories and runtime behavior outrank this document when code has changed. Never guess an API, CLI, schema, path, or capability: discover and record it first.
 
 # 03 — SOURCE ARCHIVE AUDIT BASELINE
 
-This is a static audit of the two source archives supplied when v3.0 of this pack was created. **These findings are a baseline to revalidate, not the live certification result.**
+This is a static audit of the two source archives supplied when v3.1 of this pack was created. **These findings are a baseline to revalidate, not the live certification result.**
 
 ## Source snapshot identity
 
