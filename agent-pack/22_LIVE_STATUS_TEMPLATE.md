@@ -62,3 +62,18 @@ Retries/timeouts: ...
 
 Statuses are factual. Never mark a phase PASS merely because work started.
 
+
+## Memory pressure live status
+
+During heavy runtime phases, live status should include:
+
+```text
+MemAvailable
+swap used
+largest MESA/MESA_Data container/process memory
+pressure state NORMAL/WARNING/PRESSURE/CRITICAL
+OOM/OOM-kill counters
+required-container restart count
+```
+
+Do not print secrets or unbounded process dumps.

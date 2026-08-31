@@ -158,3 +158,18 @@ Before official TEST:
 - [ ] Scoring normalization spec/version is frozen.
 - [ ] Oracle-leakage audit PASS.
 - [ ] `harness-readiness.json` permits official TEST.
+
+## 8 GiB resource-pressure gate
+
+Before official TEST:
+
+- [ ] Total RAM >= 8 GiB.
+- [ ] Current `MemAvailable >= 2 GiB`.
+- [ ] Swap state recorded.
+- [ ] Disk requirement satisfied.
+- [ ] cgroup/kernel OOM baseline captured.
+- [ ] No required container is currently `OOMKilled`.
+- [ ] No unexplained required-container restart exists.
+- [ ] `resource-guard-config.json` exists and is frozen.
+- [ ] `resource-telemetry.jsonl` collection is active.
+- [ ] Harness concurrency/batching was chosen before TEST, not from TEST results.

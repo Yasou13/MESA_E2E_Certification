@@ -119,3 +119,12 @@ contract in:
 
 Official TEST is blocked until Phase H0 proves the harness, qrels, normalization
 and oracle barrier are correct.
+
+## 8 GiB VM memory/OOM guard
+
+Profile B uses the proactive memory-pressure and OOM protection contract in:
+
+`agent-pack/34_8GB_VM_MEMORY_PRESSURE_AND_OOM_GUARD.md`
+
+This prevents avoidable VM OOM while preserving genuine MESA resource failures
+as certification failures.

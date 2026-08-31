@@ -691,3 +691,20 @@ Freeze:
 - harness self-test/readiness artifacts.
 
 A changed harness/scorer/normalizer after freeze invalidates the RUN.
+
+## Resource guard freeze
+
+Before official TEST freeze:
+
+- resource-pressure thresholds,
+- monitor cadence,
+- harness concurrency,
+- harness batch size,
+- OOM/cgroup baseline,
+
+and hash/reference `resource-guard-config.json`.
+
+A material resource-policy change after TEST begins invalidates the RUN if it
+can affect execution/results.
+
+Hidden OOM/restart invalidates PASS regardless of numerical benchmark metrics.

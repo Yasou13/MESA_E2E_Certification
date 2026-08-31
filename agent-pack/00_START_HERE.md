@@ -49,7 +49,8 @@ Before running commands, read every numbered contract file in this exact order:
 31. `31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md`
 32. `32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`
 33. `33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md`
-34. `MANIFEST.md`
+34. `34_8GB_VM_MEMORY_PRESSURE_AND_OOM_GUARD.md`
+35. `MANIFEST.md`
 
 Do not start execution after reading only the master prompt.
 Do not skip later-numbered contracts because an earlier file already mentions

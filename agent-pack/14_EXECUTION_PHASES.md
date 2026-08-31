@@ -190,3 +190,15 @@ After TEST:
 6. only then perform safe teardown.
 
 See document 31.
+
+## Cross-phase resource guard
+
+`34_8GB_VM_MEMORY_PRESSURE_AND_OOM_GUARD.md` is active across every runtime
+phase after environment/bootstrap setup.
+
+Initialize its telemetry before heavy MESA/MESA_Data work and keep it active
+through ingestion, indexing, TEST, graph ablation, answer generation and
+post-test health capture.
+
+A CRITICAL memory-pressure event may pause/abort scheduling but may not weaken
+official benchmark semantics.

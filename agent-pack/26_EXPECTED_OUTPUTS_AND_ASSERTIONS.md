@@ -230,3 +230,16 @@ runs/<RUN_ID>/oracle-leakage-audit.json
 ```
 
 Official TEST must not start if any mandatory readiness assertion is false.
+
+## Resource pressure outputs
+
+Expected resource-guard artifacts:
+
+```text
+runs/<RUN_ID>/resource-guard-config.json
+runs/<RUN_ID>/resource-telemetry.jsonl
+runs/<RUN_ID>/resource-pressure-events.jsonl
+```
+
+Final resource summary must report minimum MemAvailable, peak memory/swap,
+pressure-event counts, OOM/OOM-kill counts and required-container restarts.

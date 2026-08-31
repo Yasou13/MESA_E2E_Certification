@@ -75,3 +75,24 @@ secrets.
 
 A numerically passing run with an unexplained crash, OOM, dead worker or broken
 required backend is not PASS_NATIVE.
+
+## Active 8 GiB OOM prevention
+
+Resource measurement is not enough.
+
+On the minimum supported 8 GiB VM, execute the active pressure guard from
+document 34.
+
+Canonical `MemAvailable` states:
+
+```text
+NORMAL   >= 2.0 GiB
+WARNING  1.5-2.0 GiB
+PRESSURE 1.0-1.5 GiB
+CRITICAL < 1.0 GiB
+```
+
+The guard may reduce/serialize harness-side work before freeze, but must not
+hide genuine MESA OOM/resource behavior.
+
+Capture cgroup/kernel OOM counters and container restart/OOMKilled state.

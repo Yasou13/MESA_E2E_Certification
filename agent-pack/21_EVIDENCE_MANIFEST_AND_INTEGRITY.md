@@ -210,3 +210,17 @@ GT semantic-validation output
 
 Executable harness/scorer source hashes are part of the official contract
 freeze.
+
+## Resource guard evidence
+
+Include/checksum:
+
+```text
+resource-guard-config.json
+resource-telemetry.jsonl
+resource-pressure-events.jsonl
+```
+
+The compact release bundle must contain a resource/OOM summary including peak
+memory, minimum MemAvailable, peak swap, OOM counters and required-container
+restart counts.

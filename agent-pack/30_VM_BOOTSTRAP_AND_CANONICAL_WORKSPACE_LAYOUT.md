@@ -653,3 +653,21 @@ packages to make certification proceed.
 
 Any necessary new certification dependency must be pinned/locked in the proper
 repository and causes refreeze/new RUN if added after contract freeze.
+
+## 8 GiB host resource inventory
+
+Bootstrap must record:
+
+```text
+MemTotal
+MemAvailable
+SwapTotal/SwapFree
+disk free
+cgroup version
+Docker memory/cgroup visibility
+```
+
+Do not create or resize swap automatically unless current state is inspected,
+the change is safe and reversible, and it occurs before official freeze.
+
+Document 34 owns active memory-pressure behavior.

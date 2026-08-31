@@ -587,3 +587,13 @@ Phase H0 / harness integrity PASS requires all of:
 - official harness/config hashes are frozen.
 
 Failure of any item blocks official TEST.
+
+## Harness resource discipline
+
+The executable harness must integrate document 34 resource telemetry without
+loading large evidence/corpus objects unnecessarily into RAM.
+
+Prefer streaming JSONL evidence and bounded batches.
+
+Harness self-tests must prove that a synthetic CRITICAL pressure signal prevents
+new heavy scheduling without falsely marking product gates PASS.

@@ -87,3 +87,18 @@ Record at run start:
 
 Remote NVIDIA aliases may change server-side. If no immutable model revision is exposed, record this explicitly as a reproducibility limitation rather than pretending the model binary is frozen.
 
+
+## 8 GiB active memory-pressure guard
+
+For the minimum supported 8 GiB certification VM, document 34 is mandatory.
+
+Before heavy runtime work:
+
+- verify RAM >= 8 GiB,
+- capture swap state,
+- capture `/proc/meminfo`,
+- establish OOM/cgroup baselines,
+- configure the resource guard,
+- refuse official TEST start when `MemAvailable < 2 GiB`.
+
+Swap is a safety buffer and does not replace the RAM requirement.

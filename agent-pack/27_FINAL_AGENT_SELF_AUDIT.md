@@ -218,3 +218,19 @@ Before final PASS ask:
 
 Any unresolved risk of harness-caused false PASS/false FAIL prevents
 `PROFILE_B_PASS_NATIVE`.
+
+## 8 GiB/OOM self-audit
+
+Before `PROFILE_B_PASS_NATIVE` verify:
+
+- Did the VM meet the 8 GiB RAM floor?
+- Was resource telemetry active during every heavy phase?
+- Did official TEST start with at least 2 GiB MemAvailable?
+- Were WARNING/PRESSURE/CRITICAL events handled per document 34?
+- Did cgroup/kernel OOM counters increase?
+- Was any required container OOMKilled or unexpectedly restarted?
+- Was heavy swap use disclosed?
+- Was harness work reduced only in allowed pre-freeze ways?
+- Was a genuine MESA OOM hidden by lowering the benchmark workload?
+
+Any unexplained OOM/resource integrity risk prevents PASS_NATIVE.

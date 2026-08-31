@@ -104,3 +104,7 @@ The checksum file is external to the Markdown documents to avoid circular/self-h
   mandatory executable harness bootstrap/self-test, source-linked semantic
   ground-truth verification, NO_ANSWER corpus audit, deterministic scoring
   normalization and oracle-separation evidence.
+
+- `34_8GB_VM_MEMORY_PRESSURE_AND_OOM_GUARD.md` — proactive 8 GiB VM
+  memory-pressure thresholds, swap/cgroup/OOM monitoring, safe scheduling,
+  harness-vs-product failure classification and resource evidence requirements.
