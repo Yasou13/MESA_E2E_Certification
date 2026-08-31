@@ -36,8 +36,11 @@ def score_retrieval(
     for idx, res in enumerate(retrieved_results[:5]):
         rank = idx + 1
         raw_id = res.get("chunk_id") or res.get("id") or ""
-        if not raw_id and "provenance" in res and isinstance(res["provenance"], dict):
-            raw_id = res["provenance"].get("chunk_id", "")
+        if not raw_id and "provenance" in res:
+            if isinstance(res["provenance"], dict):
+                raw_id = res["provenance"].get("chunk_id", "")
+            elif isinstance(res["provenance"], list) and len(res["provenance"]) > 0 and isinstance(res["provenance"][0], dict):
+                raw_id = res["provenance"][0].get("chunk_id", "")
         norm_id = identity_map.resolve_source_chunk_id(raw_id)
         normalized_chunks_by_rank.append((rank, norm_id))
         all_normalized_chunk_ids.append(norm_id)
