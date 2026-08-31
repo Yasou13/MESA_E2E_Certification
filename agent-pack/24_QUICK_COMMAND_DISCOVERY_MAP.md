@@ -124,3 +124,21 @@ git -C <candidate> status --porcelain=v1
 
 A folder name is not proof of repository identity.
 Verify the Git remote.
+
+## Token-efficient discovery order
+
+Use narrow-to-wide discovery:
+
+```text
+exact symbol/config/API search
+→ matching files
+→ relevant line ranges
+→ direct callers/callees
+→ broader scan only if necessary
+```
+
+Before repeating discovery, check the source/config hashes recorded in
+`agent-discovery-cache.json`.
+
+Large command output should go to an evidence file; inspect only the relevant
+summary/error slice in agent context.

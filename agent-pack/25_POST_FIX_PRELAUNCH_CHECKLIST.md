@@ -173,3 +173,17 @@ Before official TEST:
 - [ ] `resource-guard-config.json` exists and is frozen.
 - [ ] `resource-telemetry.jsonl` collection is active.
 - [ ] Harness concurrency/batching was chosen before TEST, not from TEST results.
+
+## Fresh-VM/token-efficiency gate
+
+Before official TEST:
+
+- [ ] Document 35 was read in the mandatory initial sequence.
+- [ ] Fresh/restored VM provisioning, if needed, is recorded.
+- [ ] `provisioning-manifest.json` exists.
+- [ ] `agent-discovery-cache.json` exists.
+- [ ] `agent-checkpoint.json` reflects the current phase.
+- [ ] No unnecessary unresolved dependency installs remain.
+- [ ] Provider call/retry budget is established.
+- [ ] Official TEST query execution count starts at zero.
+- [ ] No material config/source identity is being reused from a stale cache.

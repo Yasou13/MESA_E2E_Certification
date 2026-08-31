@@ -224,3 +224,18 @@ resource-pressure-events.jsonl
 The compact release bundle must contain a resource/OOM summary including peak
 memory, minimum MemAvailable, peak swap, OOM counters and required-container
 restart counts.
+
+## Agent efficiency and provisioning evidence
+
+Index/checksum where applicable:
+
+```text
+runs/<RUN_ID>/agent-discovery-cache.json
+runs/<RUN_ID>/agent-checkpoint.json
+runs/<RUN_ID>/provisioning-manifest.json
+runs/<RUN_ID>/agent-efficiency-summary.json
+```
+
+These are operational/evidence artifacts, not benchmark oracles.
+
+Do not store secret values in them.

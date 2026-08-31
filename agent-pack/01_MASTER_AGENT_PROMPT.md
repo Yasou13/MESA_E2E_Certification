@@ -162,3 +162,15 @@ Freeze the complete certification contract before TEST and invalidate the run
 after any material post-freeze change.
 
 Follow `31_BENCHMARK_INTEGRITY_FREEZE_DETERMINISM_AND_FINALIZATION.md`.
+
+## Token-efficient fresh-VM execution
+
+Document `35_AGENT_TOKEN_AND_FRESH_VM_EXECUTION_EFFICIENCY.md` is mandatory.
+
+The agent must support a clean/restored Ubuntu snapshot, provision only missing
+required dependencies safely, avoid redundant scans/builds/tests/provider
+calls, keep compact phase checkpoints, and reuse only hash-proven immutable
+artifacts.
+
+Efficiency never authorizes skipping a hard gate or reusing mutable product
+state across runs.

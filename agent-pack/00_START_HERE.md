@@ -50,7 +50,8 @@ Before running commands, read every numbered contract file in this exact order:
 32. `32_PROFILE_B_CANONICAL_MESA_RUNTIME_LOCK.md`
 33. `33_CERTIFICATION_HARNESS_AND_GROUND_TRUTH_VERIFICATION_CONTRACT.md`
 34. `34_8GB_VM_MEMORY_PRESSURE_AND_OOM_GUARD.md`
-35. `MANIFEST.md`
+35. `35_AGENT_TOKEN_AND_FRESH_VM_EXECUTION_EFFICIENCY.md`
+36. `MANIFEST.md`
 
 Do not start execution after reading only the master prompt.
 Do not skip later-numbered contracts because an earlier file already mentions
@@ -178,3 +179,18 @@ MESA_TIER3_MODE=0
 ```
 
 with the canonical NVIDIA Nemotron/GPT-OSS identities defined in document 32.
+
+## Initial full read, then phase-scoped reads
+
+At session start, read the complete mandatory numbered contract sequence,
+including documents 29-35.
+
+After this initial read, follow document 35:
+
+- use `agent-pack/SHA256SUMS.txt` to detect contract changes,
+- use `agent-checkpoint.json` for context recovery,
+- reread only the contracts relevant to the active phase unless checksums or
+  failure context require more,
+- never skip a later-numbered contract merely to save tokens.
+
+This reduces repeated context/token use without weakening the certification.

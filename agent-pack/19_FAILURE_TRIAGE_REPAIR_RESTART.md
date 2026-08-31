@@ -128,3 +128,13 @@ Preserve evidence, make the minimal fix, test/commit it, create a new RUN_ID
 and restart from bootstrap/Phase -1/Phase 0.
 
 Do not continue the official TEST from the failure point.
+
+## Failure investigation efficiency
+
+On failure, apply document 35's narrow-to-wide investigation strategy.
+
+Do not repeatedly rescan the entire repository or rerun the full test suite
+while the same root cause can be isolated with a minimal reproducer and focused
+test.
+
+This efficiency rule does not weaken the required final regression/CI checks.

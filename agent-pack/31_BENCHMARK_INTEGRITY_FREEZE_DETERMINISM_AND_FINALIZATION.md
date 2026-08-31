@@ -708,3 +708,16 @@ A material resource-policy change after TEST begins invalidates the RUN if it
 can affect execution/results.
 
 Hidden OOM/restart invalidates PASS regardless of numerical benchmark metrics.
+
+## Efficiency state and benchmark integrity
+
+Operational caches/checkpoints from document 35 may be updated as execution
+progresses, but they must never become scoring oracles.
+
+Before official TEST, freeze all execution parameters that can affect results,
+including relevant concurrency/batch/retry/provider settings.
+
+Reusing unchanged provider/discovery evidence is allowed only when its
+dependency hashes/identities match.
+
+Re-running an official TEST query to improve its result is forbidden.

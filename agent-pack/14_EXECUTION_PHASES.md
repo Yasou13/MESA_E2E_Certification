@@ -202,3 +202,18 @@ post-test health capture.
 
 A CRITICAL memory-pressure event may pause/abort scheduling but may not weaken
 official benchmark semantics.
+
+## Cross-phase execution/token efficiency
+
+Document 35 applies across all phases.
+
+After the mandatory initial full contract read:
+
+- use phase-scoped contract rereads,
+- maintain `agent-checkpoint.json`,
+- maintain hash-keyed discovery cache,
+- store large raw outputs on disk and inspect bounded slices,
+- use focused-test -> relevant-suite -> final-CI escalation,
+- avoid duplicate NVIDIA calls and official TEST re-execution.
+
+A fresh/restored VM follows Bootstrap -> Phase -1 -> Phase 0 normally.

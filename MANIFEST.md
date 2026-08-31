@@ -128,3 +128,13 @@ Profile B uses the proactive memory-pressure and OOM protection contract in:
 
 This prevents avoidable VM OOM while preserving genuine MESA resource failures
 as certification failures.
+
+## Fresh-VM and token-efficient autonomous execution
+
+Profile B supports a clean/restored Ubuntu snapshot and bounded autonomous
+execution through:
+
+`agent-pack/35_AGENT_TOKEN_AND_FRESH_VM_EXECUTION_EFFICIENCY.md`
+
+The agent must minimize redundant context, scans, builds, tests and NVIDIA calls
+while preserving every certification gate and raw evidence requirement.

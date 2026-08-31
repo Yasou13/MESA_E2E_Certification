@@ -671,3 +671,21 @@ Do not create or resize swap automatically unless current state is inspected,
 the change is safe and reversible, and it occurs before official freeze.
 
 Document 34 owns active memory-pressure behavior.
+
+## Fresh snapshot provisioning and bounded discovery
+
+A restored clean Ubuntu snapshot is a supported first-class starting state.
+
+Follow document 35:
+
+- inspect likely MESA/certification locations first,
+- do not perform an unbounded whole-filesystem crawl by default,
+- if canonical repos are absent, create fresh verified canonical clones,
+- inventory existing tools before installing anything,
+- install only missing required dependencies using the safest standard/project
+  mechanism,
+- do not repeatedly clone/build/install unchanged state,
+- write `runs/<RUN_ID>/provisioning-manifest.json`.
+
+If historical state is discovered, fall back to the stronger isolation rules in
+documents 29/30 rather than assuming the VM is clean.

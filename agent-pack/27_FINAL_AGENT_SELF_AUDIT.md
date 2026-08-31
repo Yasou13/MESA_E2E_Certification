@@ -234,3 +234,19 @@ Before `PROFILE_B_PASS_NATIVE` verify:
 - Was a genuine MESA OOM hidden by lowering the benchmark workload?
 
 Any unexplained OOM/resource integrity risk prevents PASS_NATIVE.
+
+## Token/execution efficiency self-audit
+
+Before final verdict verify:
+
+- Were unchanged docs/repos repeatedly reread without need?
+- Were large logs kept on disk and inspected by bounded slices?
+- Were provider calls duplicated without a changed identity?
+- Was any official TEST query rerun inside one valid frozen RUN?
+- Were unchanged dependencies/images repeatedly rebuilt/reinstalled?
+- Was immutable raw-source reuse hash-verified?
+- Did efficiency ever cause a required gate/evidence item to be skipped?
+- Can the run be resumed from `agent-checkpoint.json` plus evidence without
+  reconstructing the entire history?
+
+Efficiency must reduce waste without changing certification semantics.

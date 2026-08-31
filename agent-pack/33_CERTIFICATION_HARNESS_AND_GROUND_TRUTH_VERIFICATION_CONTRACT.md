@@ -597,3 +597,17 @@ Prefer streaming JSONL evidence and bounded batches.
 
 Harness self-tests must prove that a synthetic CRITICAL pressure signal prevents
 new heavy scheduling without falsely marking product gates PASS.
+
+## Harness execution efficiency
+
+The harness must support document 35 efficiency rules:
+
+- stream raw evidence,
+- use bounded batches,
+- avoid loading the full corpus/log set into agent context,
+- avoid duplicate provider/test execution,
+- expose stable machine-readable phase summaries,
+- support resume from persisted checkpoint/evidence without resubmitting
+  already completed official TEST operations in the same valid RUN.
+
+No cache may expose GT/oracle data to request construction.

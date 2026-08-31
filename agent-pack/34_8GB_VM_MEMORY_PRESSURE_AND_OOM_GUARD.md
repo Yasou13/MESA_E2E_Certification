@@ -682,3 +682,18 @@ Resource guard PASS requires:
 
 A genuine OOM in the required normal Profile B workload prevents
 `PROFILE_B_PASS_NATIVE`.
+
+## Token efficiency also protects RAM
+
+Document 35 complements this memory guard.
+
+Prefer:
+
+- streaming evidence,
+- bounded source/log reads,
+- one heavy analysis/build/test at a time,
+- avoiding duplicate Docker builds,
+- avoiding repeated full-corpus in-memory analysis.
+
+Do not keep large logs/corpora in memory solely to reduce future tool calls.
+Persist them safely and use indexed/bounded reads.

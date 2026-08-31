@@ -108,3 +108,8 @@ The checksum file is external to the Markdown documents to avoid circular/self-h
 - `34_8GB_VM_MEMORY_PRESSURE_AND_OOM_GUARD.md` — proactive 8 GiB VM
   memory-pressure thresholds, swap/cgroup/OOM monitoring, safe scheduling,
   harness-vs-product failure classification and resource evidence requirements.
+
+- `35_AGENT_TOKEN_AND_FRESH_VM_EXECUTION_EFFICIENCY.md` — fresh/restored VM
+  provisioning, token/context/provider-call efficiency, hash-keyed discovery
+  reuse, compact agent checkpoints, bounded logs/scans/tests and safe immutable
+  artifact reuse without weakening Profile B gates.

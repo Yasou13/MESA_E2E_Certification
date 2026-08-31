@@ -96,3 +96,17 @@ The guard may reduce/serialize harness-side work before freeze, but must not
 hide genuine MESA OOM/resource behavior.
 
 Capture cgroup/kernel OOM counters and container restart/OOMKilled state.
+
+## Agent/provider token efficiency
+
+Document 35 extends provider-call budgeting to execution-token efficiency.
+
+Track provider request/token usage by phase where exposed.
+
+Reuse successful provider smoke evidence only when source/config/runtime/model
+identity hashes remain equivalent.
+
+Do not repeat expensive provider calls merely to recreate evidence, and do not
+stack product + harness + agent retries into a retry storm.
+
+Official TEST queries are executed once per valid frozen RUN.
