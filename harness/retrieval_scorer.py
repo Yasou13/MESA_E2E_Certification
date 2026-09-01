@@ -35,15 +35,24 @@ def score_retrieval(
     all_normalized_chunk_ids: list[str] = []
     for idx, res in enumerate(retrieved_results[:5]):
         rank = idx + 1
-        raw_id = res.get("chunk_id") or res.get("id") or ""
-        if not raw_id and "provenance" in res:
-            if isinstance(res["provenance"], dict):
-                raw_id = res["provenance"].get("chunk_id", "")
-            elif isinstance(res["provenance"], list) and len(res["provenance"]) > 0 and isinstance(res["provenance"][0], dict):
-                raw_id = res["provenance"][0].get("chunk_id", "")
-        norm_id = identity_map.resolve_source_chunk_id(raw_id)
-        normalized_chunks_by_rank.append((rank, norm_id))
-        all_normalized_chunk_ids.append(norm_id)
+        raw_ids: list[str] = []
+        if res.get("chunk_id"):
+            raw_ids.append(res["chunk_id"])
+        elif res.get("id"):
+            raw_ids.append(res["id"])
+        if "provenance" in res:
+            if isinstance(res["provenance"], dict) and res["provenance"].get("chunk_id"):
+                raw_ids.append(res["provenance"]["chunk_id"])
+            elif isinstance(res["provenance"], list):
+                for p in res["provenance"]:
+                    if isinstance(p, dict) and p.get("chunk_id"):
+                        raw_ids.append(p["chunk_id"])
+        for raw_id in raw_ids:
+            norm_id = identity_map.resolve_source_chunk_id(raw_id)
+            if norm_id:
+                normalized_chunks_by_rank.append((rank, norm_id))
+                if norm_id not in all_normalized_chunk_ids:
+                    all_normalized_chunk_ids.append(norm_id)
 
     # NO_ANSWER queries are not scored for hit/recall in retrieval lane
     if not gt.is_answerable or gt.query_class == "NO_ANSWER":
