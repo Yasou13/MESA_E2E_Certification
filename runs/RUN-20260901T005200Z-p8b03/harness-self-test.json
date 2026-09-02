@@ -1,0 +1,99 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp_utc": "2026-08-31T21:53:08Z",
+  "status": "PASS",
+  "details": {
+    "timestamp_utc": "2026-08-31T21:53:08Z",
+    "total_cases": 17,
+    "passed_cases": 17,
+    "failed_cases": 0,
+    "all_passed": true,
+    "cases": [
+      {
+        "case": 1,
+        "name": "direct retrieval hit at rank 1",
+        "status": "PASS"
+      },
+      {
+        "case": 2,
+        "name": "hit exactly at rank 5",
+        "status": "PASS"
+      },
+      {
+        "case": 3,
+        "name": "complete miss",
+        "status": "PASS"
+      },
+      {
+        "case": 4,
+        "name": "duplicate returned evidence IDs",
+        "status": "PASS"
+      },
+      {
+        "case": 5,
+        "name": "equivalent source/MESA chunk identity mapping",
+        "status": "PASS"
+      },
+      {
+        "case": 6,
+        "name": "source chunk ID different from MESA public chunk ID",
+        "status": "PASS"
+      },
+      {
+        "case": 7,
+        "name": "REL query with all evidence groups",
+        "status": "PASS"
+      },
+      {
+        "case": 8,
+        "name": "REL query missing exactly one evidence group",
+        "status": "PASS"
+      },
+      {
+        "case": 9,
+        "name": "malformed provenance",
+        "status": "PASS"
+      },
+      {
+        "case": 10,
+        "name": "infrastructure error distinct from retrieval MISS",
+        "status": "PASS"
+      },
+      {
+        "case": 11,
+        "name": "NO_ANSWER correct abstention",
+        "status": "PASS"
+      },
+      {
+        "case": 12,
+        "name": "NO_ANSWER hallucinated answer",
+        "status": "PASS"
+      },
+      {
+        "case": 13,
+        "name": "correct answer with fabricated evidence ID",
+        "status": "PASS"
+      },
+      {
+        "case": 14,
+        "name": "correct wording but unsupported evidence",
+        "status": "PASS"
+      },
+      {
+        "case": 15,
+        "name": "Unicode/Turkish normalization fixtures",
+        "status": "PASS"
+      },
+      {
+        "case": 16,
+        "name": "intentionally wrong qrel expected to fail",
+        "status": "PASS"
+      },
+      {
+        "case": 17,
+        "name": "intentionally wrong answer expected to fail",
+        "status": "PASS"
+      }
+    ]
+  }
+}

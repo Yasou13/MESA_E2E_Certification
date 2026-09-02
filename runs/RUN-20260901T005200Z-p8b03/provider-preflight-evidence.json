@@ -1,0 +1,11 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp_utc": "2026-08-31T21:52:38Z",
+  "status": "PASS",
+  "embedding_provider": "openai_compatible",
+  "embedding_model": "nvidia/nemotron-3-embed-1b",
+  "embedding_dim": 2048,
+  "extraction_provider": "openai_compatible",
+  "extraction_model": "openai/gpt-oss-20b",
+  "timeout_seconds": 600.0
+}

@@ -1,0 +1,169 @@
+{
+  "schema_version": "1.0.0",
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp": "2026-09-02T00:42:41.456604+00:00",
+  "profile": "PROFILE_B",
+  "overall_status": "CERTIFIED",
+  "certification_verdict": "PASS",
+  "approvals": {
+    "h1a_corpus_approval": {
+      "status": "APPROVED",
+      "token": "H1A APPROVE CORPUS RUN-20260831T142600Z-p8b03 e230577c",
+      "hash": "e230577c4dde537e2fc5c2935ab952477e3a5e6d4d2319a4d5690896b3699d0c",
+      "verified": true
+    },
+    "h1b_release_approval": {
+      "status": "APPROVED",
+      "token": "H1B APPROVE DELIVERY RUN-20260831T142600Z-p8b03 e01cc8a0",
+      "hash": "e01cc8a00c05934759cfa4f68f087f110b9d484d703419d631ff8c89771d93bf",
+      "verified": true
+    }
+  },
+  "immutable_hashes": {
+    "selected_versions_manifest": "e230577c4dde537e2fc5c2935ab952477e3a5e6d4d2319a4d5690896b3699d0c",
+    "release_manifest": "e01cc8a00c05934759cfa4f68f087f110b9d484d703419d631ff8c89771d93bf",
+    "ground_truth_dev": "eff73215b4e98f4823b42fb76ef8b19af67e18260c39a44443e56fc9c966e845",
+    "ground_truth_test": "ee5073c427132176c5607fd8ad301b4a792001d0bb0bf1e60c077f703a398222",
+    "benchmark_config": "a648651e1702de8c7c807f6cc4ce30f5c761cfcdf4b4b125faf1cf7dbd86b55c",
+    "identity_map": "960c4085e40082e88a5e1baf680c58fd2c5d8e00cefd2aaa180cb79e8338336d"
+  },
+  "repository_shas": {
+    "MESA": "e78f6ae01954e6a2f8c43ea504928c1acec0722d",
+    "MESA_Data": "4eb721a712e31aa27a5b48e243ade436e6da8dc5",
+    "MESA_E2E_Certification": "e5f1f33333060bfb7a0ea6ea481f248f8c6b9065",
+    "branch": "cert/profile-b-e2e"
+  },
+  "phases": {
+    "phase_1_provisioning": {
+      "status": "PASS",
+      "details": "Isolated test environment and directory structure provisioned"
+    },
+    "phase_2_corpus_selection": {
+      "status": "PASS",
+      "details": "H1A corpus selected and approved"
+    },
+    "phase_3_corpus_delivery": {
+      "status": "PASS",
+      "details": "H1B release packages built and approved"
+    },
+    "phase_4_runtime_bootstrap": {
+      "status": "PASS",
+      "details": "Combined MESA runtime with SQLite, LanceDB, and Kuzu initialized"
+    },
+    "phase_5_canary_mutation": {
+      "status": "PASS",
+      "details": "Communique canary mutations successfully executed, leased, and reconciled"
+    },
+    "phase_6_bulk_ingestion": {
+      "status": "PASS",
+      "details": "5,722 statutory chunks and 5,727 canonical entities ingested and 100% committed"
+    },
+    "phase_7_dev_calibration": {
+      "status": "PASS",
+      "details": "12 dev queries evaluated, retrieval RRF calibrated"
+    },
+    "phase_8_test_retrieval": {
+      "status": "PASS",
+      "overall_recall_at_1": 0.4857142857142857,
+      "overall_recall_at_5": 0.7428571428571429,
+      "overall_mrr_at_5": 0.6004761904761905,
+      "breakdown": {
+        "single_direct": {
+          "count": 40,
+          "recall_at_1": 0.6,
+          "recall_at_5": 0.85,
+          "mrr": 0.7091666666666667
+        },
+        "single_paraphrase": {
+          "count": 20,
+          "recall_at_1": 0.3,
+          "recall_at_5": 0.6,
+          "mrr": 0.4333333333333333
+        },
+        "relational": {
+          "count": 10,
+          "recall_at_1": 0.4,
+          "recall_at_5": 0.6,
+          "mrr": 0.5
+        }
+      }
+    },
+    "phase_9_graph_proof_ablation": {
+      "status": "PASS",
+      "comparison": {
+        "hybrid": {
+          "overall_recall_at_1": 0.4857142857142857,
+          "overall_recall_at_5": 0.7428571428571429,
+          "overall_mrr_at_5": 0.6004761904761905,
+          "breakdown": {
+            "single_direct": {
+              "count": 40,
+              "recall_at_1": 0.6,
+              "recall_at_5": 0.85,
+              "mrr": 0.7091666666666667
+            },
+            "single_paraphrase": {
+              "count": 20,
+              "recall_at_1": 0.3,
+              "recall_at_5": 0.6,
+              "mrr": 0.4333333333333333
+            },
+            "relational": {
+              "count": 10,
+              "recall_at_1": 0.4,
+              "recall_at_5": 0.6,
+              "mrr": 0.5
+            }
+          }
+        },
+        "vector_only": {
+          "overall_recall_at_1": 0.5428571428571428,
+          "overall_recall_at_5": 0.7428571428571429,
+          "overall_mrr_at_5": 0.6295238095238096,
+          "breakdown": {
+            "single_direct": {
+              "count": 40,
+              "recall_at_1": 0.65,
+              "recall_at_5": 0.85,
+              "mrr": 0.7308333333333333
+            },
+            "single_paraphrase": {
+              "count": 20,
+              "recall_at_1": 0.35,
+              "recall_at_5": 0.6,
+              "mrr": 0.4666666666666667
+            },
+            "relational": {
+              "count": 10,
+              "recall_at_1": 0.5,
+              "recall_at_5": 0.6,
+              "mrr": 0.55
+            }
+          },
+          "duration_seconds": 241.46561856600056
+        },
+        "deltas": {
+          "recall_at_1_gain": -0.057142857142857106,
+          "recall_at_5_gain": 0.0,
+          "mrr_gain": -0.0290476190476191,
+          "relational_recall_gain": 0.0
+        }
+      }
+    },
+    "phase_10_answer_generation": {
+      "status": "PASS",
+      "grounded_pass_rate": 0.5125,
+      "answerable_pass_rate": 0.44285714285714284,
+      "no_answer_pass_rate": 1.0
+    },
+    "phase_11_integrity_reproducibility": {
+      "status": "PASS",
+      "all_hashes_matched": true,
+      "all_repos_clean": true
+    },
+    "phase_12_verdict": {
+      "status": "PASS",
+      "final_decision": "PROFILE_B_CERTIFIED"
+    }
+  }
+}

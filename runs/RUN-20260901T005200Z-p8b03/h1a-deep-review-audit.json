@@ -1,0 +1,485 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "review_items": [
+    {
+      "document_id": "tr:legislation:constitution:2709",
+      "title": "Türkiye Cumhuriyeti Anayasası",
+      "version_id": "tr:legislation:constitution:2709:version:unknown-date:58de994c36ae00e6",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.2709.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (685,755 bytes)",
+        "Canonical JSONL SHA-256 verified (194,635 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 177)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 685755,
+        "canonical_char_count": 194635,
+        "detected_articles_count": 176,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "1\n\n\nTÜRKİYE CUMHURİYETİ ANAYASASI 1 2 3 4\n\nKanun Numarası: 2709\nKabul Tarihi: 18/10/1982\nYayımlandığı Resmî Gazete: Tarih: 9/11/1982 Sayı: 17863 (Mükerrer)\nYayımlandığı Düstur: Tertip: 5 Cilt: 22 Say",
+        "middle": "keler doğrultusunda temel hak ve hürriyetlerin nasıl sınırlanacağı veya geçici olarak\ndurdurulacağı, hangi hükümlerin uygulanacağı ve işlemlerin nasıl yürütüleceği kanunla düzenlenir.\nOlağanüstü halle",
+        "end": "yardımcılarını,\nbakanları,” şeklinde değiştirilmesine dair\ndeğişiklik, 150, 151, 152, 153, 155 inci\nmaddenin ikinci fıkrası, 161, 162, 163,\n164, 166, 167, Geçici 21 inci maddenin\n(F) ve (G) fıkraları"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (669.7 KB PDF). Parsed into 194,635 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 177 (176 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:1136",
+      "title": "Avukatlık Kanunu",
+      "version_id": "tr:legislation:law:1136:version:unknown-date:7a1f2820ca77f490",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.1136.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (648,094 bytes)",
+        "Canonical JSONL SHA-256 verified (204,017 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 201)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 648094,
+        "canonical_char_count": 204017,
+        "detected_articles_count": 198,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "AVUKATLIK KANUNU\n\n\nKanun Numarası:1136\nKabul Tarihi: 19/3/1969\nYayımlandığı Resmî Gazete: Tarih: 7/4/1969 Sayı: 13168\nYayımlandığı Düstur: Tertip: 5 Cilt: 8 Sayfa: 1694\n\n\n\n\nBİRİNCİ KISIM\nAvukatlık ve",
+        "middle": "ve iltizami işlemlerde Birlik Başkanına\nyetki vermek,\n6. Birliğin ücretli memurlarının özlük işlerini düzenlemek ve yürütmek,\n7. Birlik yönetim kurulu kararlarının özetini gösteren defterleri tutmak,",
+        "end": "yılı\nKararı\n180\nKararın Resmî\nGazete’de\nyayımlanmasından\nbaşlayarak dokuz ay\nsonra (19/6/2024)\n7531 180 14/11/2024\n7532 16, Geçici Madde 25 27/11/2024\n7571 59, 134, 135, 136, 155, 159, 160 25/12/2025"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (632.9 KB PDF). Parsed into 204,017 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 201 (198 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:2577",
+      "title": "İdari Yargılama Usulü Kanunu",
+      "version_id": "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.2577.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (540,792 bytes)",
+        "Canonical JSONL SHA-256 verified (98,566 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 65)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 540792,
+        "canonical_char_count": 98566,
+        "detected_articles_count": 65,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "İDARİ YARGILAMA USULÜ KANUNU12\n\nKanun Numarası: 2577\nKabul Tarihi: 6/1/1982\nYayımlandığı Resmî Gazete: Tarih: 20/1/1982 Sayı: 17580\nYayımlandığı Düstur: Tertip: 5 Cilt: 21 Sayfa: 147\n\nBİRİNCİ BÖLÜM\nGe",
+        "middle": "5 – (Değişik: 5/4/1990-3622/13 md.)\nTaşınır mallara ilişkin davalarda yetkili mahkeme, taşınır malın bulunduğu yer idare\nmahkemesidir.\n\nTam yargı davalarında yetki:\nMadde 36 – İdari sözleşmelerden doğ",
+        "end": "/2024)\n7524 45, 46, Ek Madde 1 2/8/2024\n7550 Ek Madde 1 4/6/2025\nAnayasa Mahkemesinin\n27/3/2025 tarihli ve E.:\n2024/189; K.: 2025/83\nsayılı Kararı\n45 26/6/2025\n7588 28 11/7/2026\n7589 45, 46 31/7/2026"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (528.1 KB PDF). Parsed into 98,566 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 65 (65 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:4721",
+      "title": "Türk Medeni Kanunu",
+      "version_id": "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4721.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (1,260,952 bytes)",
+        "Canonical JSONL SHA-256 verified (387,474 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 1030)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 1260952,
+        "canonical_char_count": 387474,
+        "detected_articles_count": 1015,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "TÜRK MEDENİ KANUNU\n\nKanun Numarası: 4721\nKabul Tarihi: 22/11/2001\nYayımlandığı Resmî Gazete: Tarihi: 8/12/2001 Sayı: 24607\nYayımlandığı Düstur: Tertip: 5 Cilt: 41\n\nDurumu: 3/12/2001 tarih ve 4722 sayı",
+        "middle": "bırakanın beyanının kendi önlerinde yapıldığını ve o nu\ntasarrufa ehil gördüklerini; hem vasiyetnamenin kendi önlerinde memur tarafından mirasbırakana\nokunduğunu ve onun vasiyetnamenin son arzularını",
+        "end": "K: 2023/140 Sayılı\nKararı\n286\nResmî Gazete’de\nyayımlanmasından başlayarak\ndokuz ay sonra\n(22/7/2024)\n7531 286, 289, 291, 314 14/11/2024\n7532 27, 166 27/11/2024\n7571 733,734, Geçici Madde 1 25/12/2025"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (1231.4 KB PDF). Parsed into 387,474 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 1030 (1015 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:4857",
+      "title": "İş Kanunu",
+      "version_id": "tr:legislation:law:4857:version:unknown-date:cd75c7fe92bd4384",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4857.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (667,539 bytes)",
+        "Canonical JSONL SHA-256 verified (141,091 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 122)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 667539,
+        "canonical_char_count": 141091,
+        "detected_articles_count": 122,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "İŞ KANUNU\n\nKanun Numarası: 4857\nKabul Tarihi: 22/5/2003\nYayımlandığı Resmî Gazete: Tarih: 10/6/2003 Sayı: 25134\nYayımlandığı Düstur: Tertip: 5 Cilt: 42\n\nBİRİNCİ BÖLÜM\nGenel Hükümler\nAmaç ve kapsam\nMad",
+        "middle": "esabında dikkate alınmaz. İşçi\nverdiği onayı otuz gün önceden işverene yazılı olarak bildirimde bulunmak kaydıyla geri\nalabilir.\nÇalışılmayan hafta tatili günü için işveren tarafından bir iş karşılığı",
+        "end": "kemesinin Geçici Madde 11 23/1/2024\n\n8/11/2023 tarihli ve E.:\n2020/75; K.: 2023/188\nsayılı Kararı\n7553 46, 108 14/7/2025\n7555 109 24/7/2025\n7573 Geçici Madde 12 29/1/2026\n7578 74, Ek Madde 2 1/5/2026"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (651.9 KB PDF). Parsed into 141,091 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 122 (122 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:5237",
+      "title": "Türk Ceza Kanunu",
+      "version_id": "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.5237.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (1,070,143 bytes)",
+        "Canonical JSONL SHA-256 verified (284,046 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 345)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 1070143,
+        "canonical_char_count": 284046,
+        "detected_articles_count": 338,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "TÜRK CEZA KANUNU1\n\nKanun Numarası: 5237\nKabul Tarihi: 26/9/2004\nYayımlandığı Resmî Gazete: Tarih: 12/10/2004 Sayı: 25611\nYayımlandığı Düstur: Tertip: 5 Cilt: 43\n\nBİRİNCİ KİTAP\nGenel Hükümler\n\nBİRİNCİ",
+        "middle": "linde, verilecek cezanın yarısına kadarı indirilir.\n(3) Yağma suçundan dolayı et kin pişmanlık gösteren kişiye verilecek cezanın, birinci\nfıkraya giren hallerde yarısına, ikinci fıkraya giren hallerde",
+        "end": "Tarihi\n5/11/2024 Tarihli ve\nE: 2024/81, K:\n2024/189 Sayılı\nKararı ile\nbaşlayarak altı ay sonra\n(9/7/2025)\n7571 32, 57, 75, 89, 155, 170, 220, 223 25/12/2025\n7589 158 31/7/2026\n7593 31, 233 18/8/2026"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (1045.1 KB PDF). Parsed into 284,046 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 345 (338 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:5271",
+      "title": "Ceza Muhakemesi Kanunu",
+      "version_id": "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.5271.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (1,186,650 bytes)",
+        "Canonical JSONL SHA-256 verified (343,210 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 335)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 1186650,
+        "canonical_char_count": 343210,
+        "detected_articles_count": 332,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "CEZA MUHAKEMESİ KANUNU\n\nKanun Numarası: 5271\nKabul Tarihi: 4/12/2004\nYayımlandığı Resmî Gazete: Tarih: 17/12/2004 Sayı: 25673\nYayımlandığı Düstur:Tertip: 5 Cilt: 44\n\nBİRİNCİ KİTAP\nGenel Hükümler\n\nBİRİ",
+        "middle": "olan h ususlar değil,\nlehine olan hususlar da ileri sürülür.\n(6) İddianamenin son uç kısmında, işlenen suç dolayısıyla ilgili kanunda öngörülen\nceza ve güvenlik tedbirlerinden hangilerine hükmedilmesi",
+        "end": "nin\n27/3/2025 tarihli ve E.:\n2024/197; K.: 2025/86\nsayılı Kararı\nGeçici Madde 7 29/5/2025\n7571 128/A, 250, 253, 280, Geçici\nMadde 8 25/12/2025\n7589 80, 231, 247, 308 31/7/2026\n7593 174, 253 18/8/2026"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (1158.8 KB PDF). Parsed into 343,210 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 335 (332 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:6098",
+      "title": "Türk Borçlar Kanunu",
+      "version_id": "tr:legislation:law:6098:version:unknown-date:052287d8111a0761",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6098.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (848,842 bytes)",
+        "Canonical JSONL SHA-256 verified (290,101 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 649)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 848842,
+        "canonical_char_count": 290101,
+        "detected_articles_count": 643,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "TÜRK BORÇLAR KANUNU\n\nKanun Numarası: 6098\nKabul Tarihi: 11/1/2011\nYayımlandığı Resmî Gazete: Tarih: 4/2/2011 Sayı: 27836\nYayımlandığı Düstur: Tertip: 5 Cilt: 50\n\nBİRİNCİ KISIM\nGenel Hükümler\n\nBİRİNCİ",
+        "middle": "da mahkemece belirlenecek kira bedeli de, bu\nyeni dönemin başlangıcından itibaren geçerli olur.\n\nIV. Kiracı aleyhine düzenleme yasağı2\nMADDE 346 - Kiracıya, kira bedeli ve yan giderler dışında başka b",
+        "end": "aşkanının andiçerek\ngöreve başladığı tarihte\n(9/7/2018)\n7161 344 1/1/2019 tarihinden geçerli\nolmak üzere yayımı tarihinde\n7409 Geçici Madde 1 11/6/2022\n7456 Geçici Madde 2 15/7/2023\n7589 55 31/7/2026"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (828.9 KB PDF). Parsed into 290,101 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 649 (643 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:6100",
+      "title": "Hukuk Muhakemeleri Kanunu",
+      "version_id": "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6100.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (1,221,275 bytes)",
+        "Canonical JSONL SHA-256 verified (275,921 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 452)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 1221275,
+        "canonical_char_count": 275921,
+        "detected_articles_count": 452,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "HUKUK MUHAKEMELERİ KANUNU\n\nKanun Numarası: 6100\nKabul Tarihi: 12/1/2011\nYayımlandığı Resmî Gazete: Tarih: 4/2/2011 Sayı: 27836\nYayımlandığı Düstur: Tertip: 5 Cilt: 50\n\nBİRİNCİ KISIM\nGenel Hükümler\n\nBİ",
+        "middle": "pılmış olması şarttır. Ret sebeplerinin ispatı için, yemin teklif edilemez.\n(4) Görevden alınma, ret ve bilirkişinin kendisini reddetmesine yönelik talep,\nbilirkişiyi görevlendiren mahkemece dosya üze",
+        "end": "025)\nAnayasa Mahkemesinin\n26/2/2026 tarihli ve E.:\n2026/49, K.: 2026/48 sayılı\nKararı\n362 21/5/2026\n7589\n107, 109, 147, 166, 168, 362 31/7/2026\n149\nyayımı tarihinden itibaren üç\nay sonra\n(31/10/2026)"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (1192.7 KB PDF). Parsed into 275,921 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 452 (452 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:6102",
+      "title": "Türk Ticaret Kanunu",
+      "version_id": "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6102.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (3,651,705 bytes)",
+        "Canonical JSONL SHA-256 verified (962,621 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 1535)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 3651705,
+        "canonical_char_count": 962621,
+        "detected_articles_count": 1535,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "TÜRK TİCARET KANUNU1\n\nKanun Numarası: 6102\nKabul Tarihi: 13/1/2011\nYayımlandığı Resmî Gazete: Tarih: 14/2/2011 Sayı: 27846\nYayımlandığı Düstur: Tertip: 5 Cilt: 50\n\nBAŞLANGIÇ\nA) Kanunun uygulama alanı",
+        "middle": "ilir.\n\nB) Poliçe suretleri\nI - Şekil ve hükümleri\nMADDE 746- (1) Her poliçe hamilinin, poliçe suretlerini çıkarmaya hakkı vardır.\n(2) Suretin, cirolar ve poliçede bulunan diğer bütün kayıtlarla birlik",
+        "end": "tarihli ve E.: 2025/31,\nK.: 2025/183 Sayılı Kararı\nGeçici Madde 7\n15 inci fıkra altıncı cümle 23/12/2025\nAnayasa Mahkemesinin 3/6/2025\ntarihli ve E.: 2024/208, K.:\n2025/122 Sayılı Kararı\n26 8/5/2026"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (3566.1 KB PDF). Parsed into 962,621 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 1535 (1535 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    },
+    {
+      "document_id": "tr:legislation:law:6698",
+      "title": "Kişisel Verilerin Korunması Kanunu",
+      "version_id": "tr:legislation:law:6698:version:unknown-date:1ad27253b0068d4c",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6698.pdf",
+      "original_review_reason": "Large comprehensive legal code with non-zero PDF running header gap requiring human confirmation",
+      "checks_performed": [
+        "Official mevzuat.gov.tr source verified",
+        "Raw PDF SHA-256 verified (465,042 bytes)",
+        "Canonical JSONL SHA-256 verified (48,666 chars)",
+        "Turkish character encoding (ğ, ü, ş, ı, İ, ö, ç) verified",
+        "Article span continuity verified (Madde 1 to 33)",
+        "Beginning, middle, and end content sanity sampled"
+      ],
+      "metrics": {
+        "raw_byte_size": 465042,
+        "canonical_char_count": 48666,
+        "detected_articles_count": 33,
+        "coverage_ratio": 1.0,
+        "largest_uncovered_gap": 0
+      },
+      "samples": {
+        "beginning": "KİŞİSEL VERİLERİN KORUNMASI KANUNU\n\nKanun Numarası: 6698\nKabul Tarihi: 24/3/2016\nYayımlandığı Resmî Gazete: Tarih: 7/4/2016 Sayı: 29677\nYayımlandığı Düstur: Tertip: 5 Cilt: 57\n\nBİRİNCİ BÖLÜM\nAmaç, Kap",
+        "middle": "cak, siyasi parti gruplarında, Türkiye Büyük Millet Meclisinde yapılacak seçimlerde kime\noy kullanılacağına dair görüşme yapılamaz ve karar alınamaz.\nb) Kurul üyelerinin seçimi, adayların belirlenerek",
+        "end": "8 tarihinde birlikte\nyapılan Türkiye Büyük Millet\nMeclisi ve Cumhurbaşkanlığı\nseçimleri sonucunda\nCumhurbaşkanının andiçerek\ngöreve başladığı tarihte\n(9/7/2018)\n7499 6, 9, 18, Geçici Madde 3 1/6/2024"
+      },
+      "material_issues_found": false,
+      "recommendation": "APPROVE",
+      "justification": "Official statute from mevzuat.gov.tr (454.1 KB PDF). Parsed into 48,666 chars of canonical legal text. Intact article sequence from Madde 1 to Madde 33 (33 distinct articles). Coverage ratio is 1.0000. Uncovered gap (0 chars) represents non-substantive PDF running headers/footers. Clean Turkish typography with zero mojibake."
+    }
+  ],
+  "pass_sample_items": [
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-5",
+      "title": "––  Geçici İthal Edilen Kara \r\nTaşıtlarına İlişkin Gümrük Genel Tebliği (Seri No: 1)’nde Değişiklik Yapılmasına \r\nDair Tebliğ (Seri No: 9)",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-5.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-6",
+      "title": "––  Hububat, Baklagiller ve \r\nYağlı Tohumlar Lisanslı Depo Tebliğinde Değişiklik Yapılmasına Dair Tebliğ",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-6.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-7",
+      "title": "––  İthalatta Haksız Rekabetin \r\nÖnlenmesine İlişkin Tebliğ (No: 2026/28)",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-7.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-8",
+      "title": "––  Lisanslı Depo \r\nİşletmelerine Kuruluş İzni Verilmesi Hakkında Tebliğde Değişiklik Yapılmasına \r\nDair Tebliğ",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-8.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260821-10",
+      "title": "––   İthalatta Haksız \r\nRekabetin Önlenmesine İlişkin Tebliğ (No: 2026/30)",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260821-10.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260821-11",
+      "title": "––   Zorunlu Deprem \r\nSigortası Genel Şartlarında Değişiklik Yapılmasına Dair Genel Şartlar",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260821-11.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260821-9",
+      "title": "––Yeminli Mali Müşavirlik \r\nTasdik Raporlarına Eklenen Karşıt İnceleme Tutanaklarının Elektronik Ortamda \r\nGönderilmesi Hakkında Tebliğ (Sıra No: 1)’de Değişiklik Yapılmasına Dair Tebliğ \r\n(Sıra No: 2)",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260821-9.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260826-4",
+      "title": "––Konkordato Gider Avansı \r\nTarifesi",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260826-4.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260829-7",
+      "title": "––Beşeri Tıbbi Ürünlerin \r\nFiyatlandırılması Hakkında Tebliğ",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260829-7.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:law:rg-20260731-1",
+      "title": "7589Yargının Etkin ve Verimli İşlemesine Yönelik Bazı Kanunlarda Değişiklik \r\nYapılmasına Dair Kanun",
+      "document_type": "law",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/07/20260731-1.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:law:rg-20260731-2",
+      "title": "7590   Bazı Kanun ve \r\nKanun Hükmünde Kararnamelerde Değişiklik Yapılmasına Dair Kanun",
+      "document_type": "law",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/07/20260731-2.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:law:rg-20260809-1",
+      "title": "7591Türkiye Cumhuriyeti Hükümeti ile Birleşmiş Milletler İklim Değişikliği Çerçeve \r\nSözleşmesi, Kyoto Protokolü ve Paris Anlaşması Sekretaryası Arasında Birleşmiş \r\nMilletler İklim Değişikliği Çerçeve Sözleşmesi Taraflar Konferansının Otuz \r\nBirinci Oturumu, Kyoto Protokolü Taraflar Toplantısı Olarak Düzenlenen Taraflar \r\nKonferansının Yirmi Birinci Oturumu, Paris Anlaşması Taraflar Toplantısı Olarak \r\nDüzenlenen Taraflar Konferansının Sekizinci Oturumu, Bağlı Organların Oturumları \r\nve Diğer Bmidçs Toplantılarına Dair Anlaşmanın Onaylanmasının Uygun Bulunduğuna \r\nDair Kanun",
+      "document_type": "law",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260809-1.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:law:rg-20260809-2",
+      "title": "7592  Yükseköğretim \r\nKanunu ve Bazı Kanunlarda Değişiklik Yapılmasına Dair Kanun",
+      "document_type": "law",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260809-2.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:law:rg-20260818-1",
+      "title": "7593     Çocuk Koruma \r\nKanunu ile Bazı Kanunlarda Değişiklik Yapılmasına Dair Kanun",
+      "document_type": "law",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260818-1.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    },
+    {
+      "document_id": "tr:legislation:law:rg-20260818-2",
+      "title": "7594     Bazı Kanunlarda \r\nDeğişiklik Yapılmasına Dair Kanun",
+      "document_type": "law",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260818-2.htm",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "suspicious_anomalies_found": false
+    }
+  ],
+  "summary": {
+    "total_selected": 68,
+    "dev_count": 8,
+    "test_count": 60,
+    "pass_count": 57,
+    "review_count": 11,
+    "block_count": 0,
+    "raw_sha256_verifications_passed": 68,
+    "raw_sha256_verifications_failed": 0,
+    "canonical_sha256_verifications_passed": 68,
+    "canonical_sha256_verifications_failed": 0,
+    "all_checks_passed": true
+  }
+}

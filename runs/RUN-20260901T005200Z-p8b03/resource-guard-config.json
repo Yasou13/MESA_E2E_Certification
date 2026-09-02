@@ -1,0 +1,21 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "memory_pressure_thresholds_bytes": {
+    "normal_min": 2147483648,
+    "warning_max": 2147483647,
+    "warning_min": 1610612736,
+    "pressure_max": 1610612735,
+    "pressure_min": 1073741824,
+    "critical_max": 1073741823
+  },
+  "descriptions": {
+    "NORMAL": "MemAvailable >= 2.0 GiB",
+    "WARNING": "1.5 GiB <= MemAvailable < 2.0 GiB",
+    "PRESSURE": "1.0 GiB <= MemAvailable < 1.5 GiB",
+    "CRITICAL": "MemAvailable < 1.0 GiB"
+  },
+  "monitoring_cadence_seconds": {
+    "heavy_phase": 10,
+    "low_activity": 30
+  }
+}

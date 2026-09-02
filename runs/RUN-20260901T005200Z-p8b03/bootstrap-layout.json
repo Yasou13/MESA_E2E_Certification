@@ -1,0 +1,29 @@
+{
+  "canonical_root": "/home/yasin/mesa-cert",
+  "repositories": {
+    "MESA": {
+      "path": "/home/yasin/mesa-cert/repos/MESA",
+      "origin": "https://github.com/Yasou13/MESA.git",
+      "branch": "cert/profile-b-e2e",
+      "sha": "6f918a177a2c30c4bbd732cad3f71f762f1da632"
+    },
+    "MESA_Data": {
+      "path": "/home/yasin/mesa-cert/repos/MESA_Data",
+      "origin": "https://github.com/Yasou13/MESA_Data.git",
+      "branch": "cert/profile-b-e2e",
+      "sha": "b1861b3b3dfeda699d5a90dd06a1dbdd4fea377c"
+    },
+    "MESA_E2E_Certification": {
+      "path": "/home/yasin/mesa-cert/repos/MESA_E2E_Certification",
+      "origin": "https://github.com/Yasou13/MESA_E2E_Certification.git",
+      "branch": "cert/profile-b-e2e",
+      "sha": "58576a596797b7867cdfee18379a1dc3b572c37d"
+    }
+  },
+  "runtime_root": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02",
+  "evidence_root": "/home/yasin/mesa-cert/evidence/RUN-20260831T142600Z-p8b02",
+  "old_noncanonical_checkouts_preserved": true,
+  "unknown_user_data_deleted": false,
+  "docker_project": "mesa-profile-b-RUN-20260831T142600Z-p8b02",
+  "secret_path_recorded_without_value": true
+}

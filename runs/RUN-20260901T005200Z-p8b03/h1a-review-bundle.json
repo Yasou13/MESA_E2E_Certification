@@ -1,0 +1,185 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "timestamp_utc": "2026-08-31T14:46:26Z",
+  "repository_shas": {
+    "MESA": "6f918a177a2c30c4bbd732cad3f71f762f1da632",
+    "MESA_Data": "b1861b3b3dfeda699d5a90dd06a1dbdd4fea377c",
+    "MESA_E2E_Certification": "71cef9fafae048fec073f97935b28c90721ee19f"
+  },
+  "corpus_statistics": {
+    "total_catalog_documents": 132,
+    "total_eligible_candidates": 74,
+    "total_selected_documents": 68,
+    "dev_documents_count": 8,
+    "test_documents_count": 60,
+    "quality_distribution": {
+      "PASS": 57,
+      "REVIEW": 11,
+      "BLOCK_EXCLUDED": 58
+    },
+    "document_type_distribution": {
+      "constitution": 1,
+      "law": 16,
+      "presidential_decision": 27,
+      "presidential_decree": 2,
+      "regulation": 15,
+      "communique": 7
+    }
+  },
+  "manifest_hashes": {
+    "corpus_manifest_sha256": "96bc089530b35484e27fe338ba4ef144c0a4c12b5b498f8e671e73a7b4d6a038",
+    "selected_versions_manifest_sha256": "e230577c4dde537e2fc5c2935ab952477e3a5e6d4d2319a4d5690896b3699d0c"
+  },
+  "sample_side_by_side_reviews": [
+    {
+      "document_id": "tr:legislation:constitution:2709",
+      "title": "Türkiye Cumhuriyeti Anayasası",
+      "document_type": "constitution",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.2709.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:1136",
+      "title": "Avukatlık Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.1136.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:2577",
+      "title": "İdari Yargılama Usulü Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.2577.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:4721",
+      "title": "Türk Medeni Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4721.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:4857",
+      "title": "İş Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.4857.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:5237",
+      "title": "Türk Ceza Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.5237.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:5271",
+      "title": "Ceza Muhakemesi Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.5271.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:6098",
+      "title": "Türk Borçlar Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6098.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:6100",
+      "title": "Hukuk Muhakemeleri Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6100.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:6102",
+      "title": "Türk Ticaret Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6102.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:law:6698",
+      "title": "Kişisel Verilerin Korunması Kanunu",
+      "document_type": "law",
+      "source_url": "https://www.mevzuat.gov.tr/MevzuatMetin/1.5.6698.pdf",
+      "quality_status": "REVIEW",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-5",
+      "title": "––  Geçici İthal Edilen Kara \r\nTaşıtlarına İlişkin Gümrük Genel Tebliği (Seri No: 1)’nde Değişiklik Yapılmasına \r\nDair Tebliğ (Seri No: 9)",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-5.htm",
+      "quality_status": "PASS",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-6",
+      "title": "––  Hububat, Baklagiller ve \r\nYağlı Tohumlar Lisanslı Depo Tebliğinde Değişiklik Yapılmasına Dair Tebliğ",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-6.htm",
+      "quality_status": "PASS",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-7",
+      "title": "––  İthalatta Haksız Rekabetin \r\nÖnlenmesine İlişkin Tebliğ (No: 2026/28)",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-7.htm",
+      "quality_status": "PASS",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    },
+    {
+      "document_id": "tr:legislation:communique:rg-20260814-8",
+      "title": "––  Lisanslı Depo \r\nİşletmelerine Kuruluş İzni Verilmesi Hakkında Tebliğde Değişiklik Yapılmasına \r\nDair Tebliğ",
+      "document_type": "communique",
+      "source_url": "https://www.resmigazete.gov.tr/eskiler/2026/08/20260814-8.htm",
+      "quality_status": "PASS",
+      "coverage_ratio": 1.0,
+      "canonical_char_count": 0,
+      "canonical_snippet": ""
+    }
+  ]
+}

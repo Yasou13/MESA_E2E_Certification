@@ -1,0 +1,551 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "created_at_utc": "2026-08-31T14:46:26Z",
+  "selected_count": 68,
+  "versions": [
+    {
+      "version_id": "tr:legislation:constitution:2709:version:unknown-date:58de994c36ae00e6",
+      "document_id": "tr:legislation:constitution:2709",
+      "canonical_sha256": "e811614c3acd2d4576b1e8223aa99fc480c2a21f8a05dbf8f5f155e8afae94d3",
+      "raw_sha256": "58de994c36ae00e6dc86c00b886c808d7bee1a2306b9ac35bf8aec9e8d297d1f",
+      "quality_status": "REVIEW",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:law:1136:version:unknown-date:7a1f2820ca77f490",
+      "document_id": "tr:legislation:law:1136",
+      "canonical_sha256": "7d2ce328336e907b3277c26d9ccb2848ef71d68002b84f90f19297b5df4dfb8e",
+      "raw_sha256": "7a1f2820ca77f490b428b65e593b67bd314cc559eb0ab81d6eec4e278b4a075a",
+      "quality_status": "REVIEW",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a",
+      "document_id": "tr:legislation:law:2577",
+      "canonical_sha256": "d4e3149482a3bdefaf137b1f27c9255a6807fb5cc317a84c4357f2afce93da30",
+      "raw_sha256": "1b7d47189b52094af6f947fd3eb85833227c987d154bb7fd67b438f44d4c9a7d",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6",
+      "document_id": "tr:legislation:law:4721",
+      "canonical_sha256": "3a43b70eb5c11bbc163cdea9a611ea96ca8c39455b21681f54a744d23416c7b8",
+      "raw_sha256": "11ae3bcbdccc0dd66701eddd0edf0938e7bc88410171f28be1f6bcea36339408",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:4857:version:unknown-date:cd75c7fe92bd4384",
+      "document_id": "tr:legislation:law:4857",
+      "canonical_sha256": "f418aba97954d020f883b67f17d6eb6abb050fd69c0f386850e4cc7ac9167de5",
+      "raw_sha256": "cd75c7fe92bd438443549c3e973e7ea6d03137e9a6bb2652aded52a8ca95e84e",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c",
+      "document_id": "tr:legislation:law:5237",
+      "canonical_sha256": "21c3ef9dae012c036cbdd3083dc66ee84c74587292399b2ec4ce694a5d33e48f",
+      "raw_sha256": "cf8ba250fadbc51c1815971434971182a61645740c453f8163283875b6c67326",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb",
+      "document_id": "tr:legislation:law:5271",
+      "canonical_sha256": "868de2db1db79db6dae1202b1996a0d8af8a228871f0212509913632f9fbbacc",
+      "raw_sha256": "67a41a70516f18eb94216f554ed4097b74c60e0820e008e23700a1e32f62ab02",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:6098:version:unknown-date:052287d8111a0761",
+      "document_id": "tr:legislation:law:6098",
+      "canonical_sha256": "60a3dd7f50c4c306fced3484f733237440521ed4b9a9bca1869a575ee7a2f5d4",
+      "raw_sha256": "052287d8111a07612974f31a71ed3c90e9743aa28d77a005846e4c392316b9d9",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff",
+      "document_id": "tr:legislation:law:6100",
+      "canonical_sha256": "26872b6bc3ccfb1d4a46c5c0ab82f0eef0e5959976bbbc897c096a3aa27c66e1",
+      "raw_sha256": "481c1389a8b144ff84e4674848dc566503a748b39d2d035d762d7dc9ef171edd",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c",
+      "document_id": "tr:legislation:law:6102",
+      "canonical_sha256": "0514b063d8076ea8dff9f1e3af5d85c9a632a3ac46577c48725af9d226e0cc87",
+      "raw_sha256": "798175bb44f0d69cca7d3b95090bd2a132cb1b1b30ccb9e74376cbfe1fc98773",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:6698:version:unknown-date:1ad27253b0068d4c",
+      "document_id": "tr:legislation:law:6698",
+      "canonical_sha256": "e69d69e22d31352a23fdb3e24ff442065600d2aa2d4808d7772e78eadef99b1d",
+      "raw_sha256": "1ad27253b0068d4c3d991b92b68c6bc1104439430160f4350a3f04fbb211f2b5",
+      "quality_status": "REVIEW",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260814-5:version:2026-08-14:7af8a0ec3d38804a",
+      "document_id": "tr:legislation:communique:rg-20260814-5",
+      "canonical_sha256": "3de134a588c359f0dafb6f287d5f6d2eaf287f82f282776cd5345536c5614418",
+      "raw_sha256": "7af8a0ec3d38804a6dc854444dacaf3b1421fdcd9d60924b741c7ca042d1403a",
+      "quality_status": "PASS",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260814-6:version:2026-08-14:b4bdcfe676b6b8cb",
+      "document_id": "tr:legislation:communique:rg-20260814-6",
+      "canonical_sha256": "3abc10b5d97b85a1b8c81842b9a9a1f567dbe3fb6b4b7d111ca87188b66ad534",
+      "raw_sha256": "b4bdcfe676b6b8cb0aa8efd6f99bb02691afccf026d76cfe53ce2bb9dd91b400",
+      "quality_status": "PASS",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260814-7:version:2026-08-14:e4e7bfa6c0239436",
+      "document_id": "tr:legislation:communique:rg-20260814-7",
+      "canonical_sha256": "4385d95d1e03c83ab2eb9f85e806ebc5bf099b61fb8b9b44cdfbd299195ba0a2",
+      "raw_sha256": "e4e7bfa6c023943678c0105066e2e6a602f204c6ec260be40361cf4c6af743f0",
+      "quality_status": "PASS",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260814-8:version:2026-08-14:59a153bfa883cec7",
+      "document_id": "tr:legislation:communique:rg-20260814-8",
+      "canonical_sha256": "34c33ead53b749a4383139e1fb3c42ad537bc884ebed61498b2d20f80a83d7fe",
+      "raw_sha256": "59a153bfa883cec714c9785bd0d67531b099bc2e7ece2531d70ae49cd6aa8957",
+      "quality_status": "PASS",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260821-10:version:2026-08-21:157781bd4fa62820",
+      "document_id": "tr:legislation:communique:rg-20260821-10",
+      "canonical_sha256": "9bb3510360b3a152b94b39b6bac30f7975a36ff1e494c834ea743107530a1614",
+      "raw_sha256": "157781bd4fa62820edb57613acd3e48d805d37886a8b287604c29f1a2d3a7712",
+      "quality_status": "PASS",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260821-11:version:2026-08-21:c5db5689757cf219",
+      "document_id": "tr:legislation:communique:rg-20260821-11",
+      "canonical_sha256": "7cf00b7fa95254241ca7972e8c95928a3866c69a79124e78e3e5848973c1f1f8",
+      "raw_sha256": "c5db5689757cf2199a76d06587091a5246d7e35bf77dfabe1d394a9d88d96385",
+      "quality_status": "PASS",
+      "partition": "DEV"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260821-9:version:2026-08-21:e05cceb257f816aa",
+      "document_id": "tr:legislation:communique:rg-20260821-9",
+      "canonical_sha256": "2e60ce7f059e1af237e02fff19ccea7d4337d1adef50e0f77a8721c4885f5988",
+      "raw_sha256": "e05cceb257f816aa10513b6fc8330c5569aada6fa67ecc28a34415885de22507",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260826-4:version:2026-08-26:14b60f66c81d27b6",
+      "document_id": "tr:legislation:communique:rg-20260826-4",
+      "canonical_sha256": "e387dc2b75cf6aef629438d36d5144ba814aba0ab28b48cd4c6c30098f891d70",
+      "raw_sha256": "14b60f66c81d27b6bccdc5570afb51f367c49a5dcd2b8377649886ca17e3ead5",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:communique:rg-20260829-7:version:2026-08-29:9d77ba9b4c6f9f89",
+      "document_id": "tr:legislation:communique:rg-20260829-7",
+      "canonical_sha256": "930accbd59744317fb03a25e6a2cb759dd1dcaa0aaf60713452805f00c0d8612",
+      "raw_sha256": "9d77ba9b4c6f9f8934f56a1564fb9a0dd80133c46933643588c884a8972317f9",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260731-1:version:2026-07-31:b9ee9b03725d2d34",
+      "document_id": "tr:legislation:law:rg-20260731-1",
+      "canonical_sha256": "b619b8632992665ff60cdf95a35dd4c0308b5db80e8174cd42daf647a4e978e5",
+      "raw_sha256": "b9ee9b03725d2d3426f4ac24efed01874f6032dc0b3d9f293bcb94b257e7e16a",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260731-2:version:2026-07-31:72834b8447581a65",
+      "document_id": "tr:legislation:law:rg-20260731-2",
+      "canonical_sha256": "eb6a34f00535c1d5e5277c5ee4c5133513db7fddf2f934c7e2f9480f0752993e",
+      "raw_sha256": "72834b8447581a65e36ca2aa4c2c56417966bc384ab53afbbe95e535161fc673",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260809-1:version:2026-08-09:89228e7ebc531ddd",
+      "document_id": "tr:legislation:law:rg-20260809-1",
+      "canonical_sha256": "3db7a1056f1cf3ca23462b47314b1225e8aaa591a31085234411214f5740c873",
+      "raw_sha256": "89228e7ebc531ddd4835d41110342a1ca922889ae7f9611ba4dfeebd753813a1",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260809-2:version:2026-08-09:7963c09bb46da53d",
+      "document_id": "tr:legislation:law:rg-20260809-2",
+      "canonical_sha256": "39194aa7af6782f5d09e585d50d3e9d886693ca227987d39cd6ca04f8e8454e6",
+      "raw_sha256": "7963c09bb46da53d11e90102aa7aecc0f11c7098ff9b44f6f0c7562205221969",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260818-1:version:2026-08-18:1a7c552fdecf343f",
+      "document_id": "tr:legislation:law:rg-20260818-1",
+      "canonical_sha256": "c15589a53655af8ca5c1a51386bd1063202e30ed66f35235ddff9de77a5067ac",
+      "raw_sha256": "1a7c552fdecf343fde648a6ddce33070924f1c256cf91e39c7cc884efb5ae1fb",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260818-2:version:2026-08-18:ece5d4a91e6b9d64",
+      "document_id": "tr:legislation:law:rg-20260818-2",
+      "canonical_sha256": "7980bb6eef05a86b765eef15d5ef8390eeaace3bf5ea2918222e889b4c38e60b",
+      "raw_sha256": "ece5d4a91e6b9d6453f72038e17681f181cd3a72871103b32f820a34275f90b1",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:law:rg-20260818-3:version:2026-08-18:75783111db25d81c",
+      "document_id": "tr:legislation:law:rg-20260818-3",
+      "canonical_sha256": "bc14fcf17e98674161d15aa33be4fd0913c39692948baa1c355e8b8cd51bfd6a",
+      "raw_sha256": "75783111db25d81cb137a399e551d34de8062eb52d4732b4b4cb51d3ac6f70dc",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:presidential_decision:rg-20260820-2:version:2026-08-20:61c4d4bf3feffe7e",
+      "document_id": "tr:legislation:presidential_decision:rg-20260820-2",
+      "canonical_sha256": "a3a64e7910eebcb2c2783067c9020b806445beb88d5cfd075e9c29e1464f1fab",
+      "raw_sha256": "61c4d4bf3feffe7e37f9f0ccfd131ae21d542ebd97551f8e2b9729f20b0af592",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260813-1:version:2026-08-13:d0fe92284a07f334",
+      "document_id": "tr:legislation:regulation:rg-20260813-1",
+      "canonical_sha256": "b37200ff7a9f787dd10807481328d470958a4d7a92fdcdba57e760143becbc9c",
+      "raw_sha256": "d0fe92284a07f334fc9b8c7e0589cdc36c7f9b8338d034741df8223cc71b859e",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260813-2:version:2026-08-13:390921f00089e637",
+      "document_id": "tr:legislation:regulation:rg-20260813-2",
+      "canonical_sha256": "a7f7e771d7b48e6b157e1e163fc1f94238aa7ba18baf0a5c2103f3793c664ae7",
+      "raw_sha256": "390921f00089e6373fe0811347a111b740a8804df345ed04bedc987f3542ba59",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260814-1:version:2026-08-14:94e223cf481cb954",
+      "document_id": "tr:legislation:regulation:rg-20260814-1",
+      "canonical_sha256": "caeba56c44808ebbd8cba5f5d4da536a9d4d2de7240bce30eb051ed5a4001859",
+      "raw_sha256": "94e223cf481cb9542d28126996d7ab22bf8edac5837f25e0b455d3a69c7b89f3",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260814-2:version:2026-08-14:f71d092479243b93",
+      "document_id": "tr:legislation:regulation:rg-20260814-2",
+      "canonical_sha256": "9ef80ee4f5005a26470ea05223c8f11865ac311e7227816867664dd55121640f",
+      "raw_sha256": "f71d092479243b93882a6dc79f6afdfddb2fdcceddd610c019101b098de51b1c",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260815-1:version:2026-08-15:4e17f0831425b24d",
+      "document_id": "tr:legislation:regulation:rg-20260815-1",
+      "canonical_sha256": "9ba4b9920a7c2600bedef3b21cb4e4e1f9d2fda9825c4ff0a5636fafb050d909",
+      "raw_sha256": "4e17f0831425b24ddfd6ab5ee0676a33a6cd0730c307ddaa1e1e875acf3aac69",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260815-2:version:2026-08-15:8d4b551f1032c6bf",
+      "document_id": "tr:legislation:regulation:rg-20260815-2",
+      "canonical_sha256": "e4f9f4377406a24a1bbed1085ca5505312a91a33afb68c0760d4ba74e1c95da0",
+      "raw_sha256": "8d4b551f1032c6bf1c5364ad7293a67ebf271130aebc964bc94e38f6d607f3ec",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260815-3:version:2026-08-15:fad31f47bb67acd6",
+      "document_id": "tr:legislation:regulation:rg-20260815-3",
+      "canonical_sha256": "786945d1f85828bd68cab3739590a266400344b09c108c09dcad95b2ab2ebe65",
+      "raw_sha256": "fad31f47bb67acd69825b6d71175827cd8738b781c81463b86da578c55ee1ec2",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260816-1:version:2026-08-16:34fdf617beb5d6c4",
+      "document_id": "tr:legislation:regulation:rg-20260816-1",
+      "canonical_sha256": "ad35ba5046ce65d9401e3edb1cc7b24961cc6b71168de0c9aa1a47f23c876d0b",
+      "raw_sha256": "34fdf617beb5d6c4867a82c18c701446a220d68d45a866b4627379210937bc63",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260816-2:version:2026-08-16:f9166078dd1d6aa0",
+      "document_id": "tr:legislation:regulation:rg-20260816-2",
+      "canonical_sha256": "c872d868745ef1a06afb203c34c78ada9cf53df4991aa0a656172a214ceff184",
+      "raw_sha256": "f9166078dd1d6aa0012205ea79eaef1716bf9582669040d5114a11c0a3b2d98b",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260816-3:version:2026-08-16:b63234d03013ce72",
+      "document_id": "tr:legislation:regulation:rg-20260816-3",
+      "canonical_sha256": "529ba42c3ad94eab95e2637a866b0fd9cc25e894bd95e058e46c3343b38f19f2",
+      "raw_sha256": "b63234d03013ce728c5ef021c5fdbef6f71d92e51dfb9f8a070dbcdde55925df",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260817-1:version:2026-08-17:a1aab6c44fddc176",
+      "document_id": "tr:legislation:regulation:rg-20260817-1",
+      "canonical_sha256": "f6f76add962bbb62be9b6bd13fe7fcc094c5965261b1a5afb240f8cfdc47a353",
+      "raw_sha256": "a1aab6c44fddc17677defac76d3644a5e53b17486931dce9b730c4184ea183a5",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260817-2:version:2026-08-17:4e753458316c3411",
+      "document_id": "tr:legislation:regulation:rg-20260817-2",
+      "canonical_sha256": "96aaa2a10553635b301569da9fd2571d2e77dff5d6f18b7986c59b88a5f9e2a4",
+      "raw_sha256": "4e753458316c3411e1c1728f073338e77a014a0c9a0d4e936a733893741bcb2c",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260817-3:version:2026-08-17:b638394df8741226",
+      "document_id": "tr:legislation:regulation:rg-20260817-3",
+      "canonical_sha256": "e2c6c13626789838df4d0aa3f8ca37da26cb00bd6b7b074223100b5b1fd5f280",
+      "raw_sha256": "b638394df874122665b8144ef8e3f455207c715fda3138f2faf84bfd466fcefe",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260818-6:version:2026-08-18:76af2df847dd23a1",
+      "document_id": "tr:legislation:regulation:rg-20260818-6",
+      "canonical_sha256": "fed3061bb9c8521850ef767563fd53e066bc76568b8eca26c630c5093479ac3a",
+      "raw_sha256": "76af2df847dd23a17d12808f4b94758d74df17085ca325a5e0c7d2a25be3a044",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260818-7:version:2026-08-18:8a25bdaf811a91dc",
+      "document_id": "tr:legislation:regulation:rg-20260818-7",
+      "canonical_sha256": "f2805795da3cfa0768e7f5a640a933d1c849d9f85f20e9821719810d69b3a152",
+      "raw_sha256": "8a25bdaf811a91dc26d991488802f61ae2e35c16afe2f64a81b43ee6c3dbd010",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260819-3:version:2026-08-19:dcf55d70c3098e13",
+      "document_id": "tr:legislation:regulation:rg-20260819-3",
+      "canonical_sha256": "a4e70ba557ab887878819f80e9b21eb60ba9462d8030e000b9c64eb6973a0aeb",
+      "raw_sha256": "dcf55d70c3098e13d8d416ed53d22b29be4cc92c71cc07c930dddc8e7eabaee9",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260819-4:version:2026-08-19:4af4bc8d8b4a57c7",
+      "document_id": "tr:legislation:regulation:rg-20260819-4",
+      "canonical_sha256": "47ec503023c0b9993890ea2023b0677941176fa0dd08b4017a015dd4cf44f037",
+      "raw_sha256": "4af4bc8d8b4a57c7fa995024027427af5ba5f5f94cc2d9e8cc93626224369a43",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260819-5:version:2026-08-19:6b88722a113f441b",
+      "document_id": "tr:legislation:regulation:rg-20260819-5",
+      "canonical_sha256": "80b4aa670acbe3ba7238b1c45a94d2f288351125cb9db496822d30ed900e8ec7",
+      "raw_sha256": "6b88722a113f441b81c57bea44664d02c1b9fe0aa3b5d0da8d1928739063f229",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260819-6:version:2026-08-19:8efc2831a90f0fe2",
+      "document_id": "tr:legislation:regulation:rg-20260819-6",
+      "canonical_sha256": "e2f9418c3f92c88c97c4325e4f013bebacc1dda22a457510ca12f272a2a4cce0",
+      "raw_sha256": "8efc2831a90f0fe26ec78383d4b8810ed5aa139654c1f150467f9a0af883ce22",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260819-7:version:2026-08-19:3f8c929980ff4af2",
+      "document_id": "tr:legislation:regulation:rg-20260819-7",
+      "canonical_sha256": "2fe06ce4365067fe7955e6a48e928921f7a073c09bb504f43714917718ee60ca",
+      "raw_sha256": "3f8c929980ff4af204db5c1176e1e91313f34dd62a0680e82de16cd2a8d0de72",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260821-4:version:2026-08-21:efe37913d21fb0bc",
+      "document_id": "tr:legislation:regulation:rg-20260821-4",
+      "canonical_sha256": "3cdfb599238cd28f408358c5378306042a331f30a0fd3253518a1cc5ede61d6f",
+      "raw_sha256": "efe37913d21fb0bcadad2eed5bdccbfdecf06cc035650f1fbfcb10a4d1d17721",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260821-5:version:2026-08-21:9c7317299bb8aa27",
+      "document_id": "tr:legislation:regulation:rg-20260821-5",
+      "canonical_sha256": "56aff897739de06e1ff2baa903476225c014e52fd188305515f4109d25e8b2c3",
+      "raw_sha256": "9c7317299bb8aa2760ee2d9a04c0220af9bf61ca072632dad637a769f6729805",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260821-6:version:2026-08-21:2d6df6e8c6967828",
+      "document_id": "tr:legislation:regulation:rg-20260821-6",
+      "canonical_sha256": "77c1d90ddee45ccab296f2b23b2b8eda720cf7f8e453a1e211348311b710ac9c",
+      "raw_sha256": "2d6df6e8c6967828707abeee4cea013604140fe584f6100fcff9471b6771f9d2",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260821-7:version:2026-08-21:e1ee803fbc292988",
+      "document_id": "tr:legislation:regulation:rg-20260821-7",
+      "canonical_sha256": "c9d6193e6cffd3214acaca15c1d46105a72c95a3763cbbcc5cfc61fd86e78035",
+      "raw_sha256": "e1ee803fbc292988f5f995c5f8ffc84e528f673c67c10eeb7d5d32975dcc745e",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260821-8:version:2026-08-21:df798ab96c17e2e9",
+      "document_id": "tr:legislation:regulation:rg-20260821-8",
+      "canonical_sha256": "3f2d5588f98030c0274148806cfd610a18d378decdc077970f6a8df9e7ecc5f1",
+      "raw_sha256": "df798ab96c17e2e9bcd85fcc884287174368778e23f3b07eb6aa0c812e752065",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260822-5:version:2026-08-22:134c740e5b0fe5bd",
+      "document_id": "tr:legislation:regulation:rg-20260822-5",
+      "canonical_sha256": "c8300f346ee6bc19f5c25a0205f71cfeea504b6062fc8d4c6ac079ef449b7707",
+      "raw_sha256": "134c740e5b0fe5bd679d57d78694a2738ad75f1ed3b377a7f919e6892cfdf1a8",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260822-6:version:2026-08-22:101e0d189aeb009e",
+      "document_id": "tr:legislation:regulation:rg-20260822-6",
+      "canonical_sha256": "ca1f339276e97c5458eee87077cbe2945b9830d51d1ccc0dbd8451c9e8a8de95",
+      "raw_sha256": "101e0d189aeb009e67b0d547d7cb9819cab263fb20eaf0300ef52805b8b514b8",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260822-7:version:2026-08-22:9328b614315e946d",
+      "document_id": "tr:legislation:regulation:rg-20260822-7",
+      "canonical_sha256": "17dc6dc58ac3898d48228e27cbd1e644595e60eb2ca5fb81d0cd94fe321a96cc",
+      "raw_sha256": "9328b614315e946d215b83a5b40514e614edb1c49bf3bc66a6555cf06c74a5e0",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260822-8:version:2026-08-22:53b27b33b9369fb0",
+      "document_id": "tr:legislation:regulation:rg-20260822-8",
+      "canonical_sha256": "abf436f0186e8f071faa80a19aeea6a0f214f499a4abe2c83a57a531b8a219ed",
+      "raw_sha256": "53b27b33b9369fb012cdc8208b2b8128b040eb15c6ade896a1d339ef1eaf361d",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260822-9:version:2026-08-22:5945dc82fefbe74c",
+      "document_id": "tr:legislation:regulation:rg-20260822-9",
+      "canonical_sha256": "7fbacc810e189b205a252711e09c41870012a11de05fd84f29d22fe41d2b06b1",
+      "raw_sha256": "5945dc82fefbe74c550a2449c9325060eb34b64259d3eb9dc3704b7de2779538",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260824-1:version:2026-08-24:033b1075acf8deb1",
+      "document_id": "tr:legislation:regulation:rg-20260824-1",
+      "canonical_sha256": "e768a52f86515648067fca9fc9729592ef6be3b850ecb03edb2eab14e68391a1",
+      "raw_sha256": "033b1075acf8deb15e634be9e422caf41773ca05da2735160336a57ceb8ae033",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260824-2:version:2026-08-24:48a95e1a4007811d",
+      "document_id": "tr:legislation:regulation:rg-20260824-2",
+      "canonical_sha256": "03647f8cf8ea5bc7bf1539eac1352f0c6760eadef1b38cbd9bbdc615982db208",
+      "raw_sha256": "48a95e1a4007811dce48afefa4699378522aad59af1cdf152e443ebc132633e7",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260826-1:version:2026-08-26:d911093da09e4e14",
+      "document_id": "tr:legislation:regulation:rg-20260826-1",
+      "canonical_sha256": "a5e6725ac3d2075b771dcc161802d74c97c38ee1364b561ff7bbccb5d989574a",
+      "raw_sha256": "d911093da09e4e1418087ded80ca0378178b97d07c1a82c3ebdb66950d62ead3",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260826-2:version:2026-08-26:4a93638e5e12a93a",
+      "document_id": "tr:legislation:regulation:rg-20260826-2",
+      "canonical_sha256": "638408c8307b71539f2656493f0fbb2a61015df0a0882a74233d8fc771fbeb40",
+      "raw_sha256": "4a93638e5e12a93a9d19dd2c1bc9ca7fbb86b77860baec374ebc713d8024d606",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260826-3:version:2026-08-26:00eedce477003dc0",
+      "document_id": "tr:legislation:regulation:rg-20260826-3",
+      "canonical_sha256": "ee2462d98897f0afe11b13420f031275a4c7bc53b5042ef18eb5f7aec2a48603",
+      "raw_sha256": "00eedce477003dc0c883630c68aaf2c67dd0c4aaec363ecdf0c987ced78921ba",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260827-10:version:2026-08-27:81c88f6bf13ed588",
+      "document_id": "tr:legislation:regulation:rg-20260827-10",
+      "canonical_sha256": "17b91cd54c52c4e4b2a831528357f89615a8b90abd867b7148640c7fab3b698a",
+      "raw_sha256": "81c88f6bf13ed5880619301821284e2bf1c2cbedc66891dc955872eabbfba0a1",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260827-7:version:2026-08-27:428392502d01a3bf",
+      "document_id": "tr:legislation:regulation:rg-20260827-7",
+      "canonical_sha256": "05c51924a5411a68334f4556ad6326550887031d8383515719b263ed04e6bb04",
+      "raw_sha256": "428392502d01a3bf95a56373c4759f550707f84c5d6ec8851b38c06588b46c9b",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260827-8:version:2026-08-27:ee3d3db03f2b3fed",
+      "document_id": "tr:legislation:regulation:rg-20260827-8",
+      "canonical_sha256": "4de30518ef0d99900901d7c608167f502d92704592e8ec3212cf150878f2cbc6",
+      "raw_sha256": "ee3d3db03f2b3fed9fcef575f0a48351c547e45d214107abf2d4cc7be673a497",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260827-9:version:2026-08-27:ff40187fec4ed1fc",
+      "document_id": "tr:legislation:regulation:rg-20260827-9",
+      "canonical_sha256": "2d4b486abc0dbd869ac178029697e01ea6de395afbcbc84c4d0ff4da301e975a",
+      "raw_sha256": "ff40187fec4ed1fc1e7d8c32237e3b9c3c316e74e00dc7d3806d565d50a84ff5",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    },
+    {
+      "version_id": "tr:legislation:regulation:rg-20260828-7:version:2026-08-28:8c35d43662bdb37d",
+      "document_id": "tr:legislation:regulation:rg-20260828-7",
+      "canonical_sha256": "a0ba3af427346502d1466b77cfb1f70973f319141aa8476faeb2016cd259bef0",
+      "raw_sha256": "8c35d43662bdb37d771ed3dfa853cedae9b8f19d1c7d98ada3c7cc33cd1db6da",
+      "quality_status": "PASS",
+      "partition": "TEST"
+    }
+  ]
+}

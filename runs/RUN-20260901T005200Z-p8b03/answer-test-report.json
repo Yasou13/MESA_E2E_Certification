@@ -1,0 +1,1770 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp": "2026-09-02T00:41:59.910710+00:00",
+  "phase": "Phase 10 (GPT-OSS Answer Generation Benchmark)",
+  "status": "PASS",
+  "summary": {
+    "total_queries": 80,
+    "total_passed": 41,
+    "grounded_pass_rate": 0.5125,
+    "answerable_pass_rate": 0.44285714285714284,
+    "no_answer_pass_rate": 1.0,
+    "duration_seconds": 140.2771428720007
+  },
+  "queries": [
+    {
+      "query_id": "TEST_Q01",
+      "query_class": "SINGLE_DIRECT",
+      "question": "Türk Medeni Kanunu m. 1'e göre kanunun uygulanması ve hâkimin takdir yetkisi nasıldır?",
+      "answer": "Verilen mevzuat metninde Türk Medeni Kanunu’nun 1. maddesi yer almamaktadır. Dolayısıyla, bu metin bağlamında “kanunun uygulanması ve hâkimin takdir yetkisi” ile ilgili doğrudan bir hüküm veya açıklama bulunmamaktadır. Bu nedenle, soruya verilen metin çerçevesinde eksiksiz ve kesin bir cevap verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q01",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q02",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TMK m. 2 uyarınca dürüstlük kuralı ve hakkın kötüye kullanılması yasağı nedir?",
+      "answer": "Verilen metinde Türk Medeni Kanunu’nun (TMK) 2. maddesi yer almamaktadır. Dolayısıyla bu maddeye ilişkin “dürüstlük kuralı” ve “hakkın kötüye kullanılması yasağı” hakkında metin içinde yer alan bir hüküm verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0002"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q02",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q03",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TMK 6. maddeye göre özel hukukta genel ispat yükü kime aittir?",
+      "answer": "Verilen metinde “TMK 6. madde” bulunmadığından, bu maddeye ilişkin özel hukukta genel ispat yükünün kime ait olduğu konusunda bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0004"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q03",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q04",
+      "query_class": "SINGLE_DIRECT",
+      "question": "Türk Medeni Kanunu'na göre olağan evlenme yaşı kaçtır?",
+      "answer": "Verilen mevzuat metninde “olağan evlenme yaşı” ile ilgili bir hüküm veya madde bulunmamaktadır. Bu nedenle, yalnızca sağlanan metne dayanarak sorulan soruya cevap verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0114"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q04",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q05",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TMK m. 161'e göre zina sebebiyle boşanma davası açma hakkı ve süresi nasıldır?",
+      "answer": "**TMK m. 161’e göre:**\n\n- **Boşanma davası açma hakkı:** Eşlerden birinin zina yapması, eşin boşanma davası açma hakkını doğurur.  \n- **Süre:** Boşanma davası açma süresi, eşin zina yaptığını bildiği tarihten itibaren **3 ay** içinde açılmalıdır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0151"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q05",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q06",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TMK m. 166 uyarınca evlilik birliğinin temelinden sarsılması halinde boşanma davası nasıl açılır?",
+      "answer": "Verilen metinde **TMK m. 166** maddesi yer almamaktadır. Dolayısıyla, yalnızca sunulan bağlamdaki mevzuat maddelerine dayanarak bu maddeye ilişkin boşanma davasının açılma şekli hakkında eksiksiz ve kesin bir açıklama yapılamaz. Bu nedenle, sorunuza yanıt verebilmek için ilgili maddeyi içeren ek bir mevzuat metnine ihtiyaç vardır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0156"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q06",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q07",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TMK m. 185'e göre evlilik birliğinin kurulmasıyla eşlerin yükümlülükleri nelerdir?",
+      "answer": "**TMK m. 185’e göre evlilik birliğinin kurulmasıyla eşlerin yükümlülükleri:**\n\n> **Eşler, evlilik birliğinin kurulmasıyla birlikte birbirlerine karşı karşılıklı ve eşit yükümlülükler taşırlar.**  \n\nBu hüküm, evlilik birliğinin oluşmasıyla birlikte her iki eşin de birbirine karşı aynı derecede sorumluluk ve yükümlülük taşıdığını, karşılıklı ve eşit bir ilişki içinde olduklarını belirtir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0174"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q07",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q08",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TMK m. 404'e göre vesayet altına alınacak küçükler kimlerdir?",
+      "answer": "Verilen metinde “TMK m. 404” maddesi yer almamaktadır. Dolayısıyla, yalnızca bu metne dayanarak “vesayet altına alınacak küçükler kimlerdir?” sorusuna kesin ve eksiksiz bir cevap verilemez. Bu maddede belirtilen kriterler ve tanımlar metinde bulunmadığı için ilgili bilgiyi sağlayamam.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0390"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q08",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q09",
+      "query_class": "SINGLE_DIRECT",
+      "question": "Türk Borçlar Kanunu m. 1 uyarınca bir sözleşmenin kurulması için ne gereklidir?",
+      "answer": "Üzgünüm, ancak verilen mevzuat metinlerinde Türk Borçlar Kanunu’nun 1. maddesine ilişkin bir hüküm bulunmamaktadır. Bu nedenle sorunuza yanıt veremiyorum.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c:chunk:1396"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q09",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q10",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 26'da düzenlenen sözleşme özgürlüğü ilkesi nedir?",
+      "answer": "Verilen mevzuat metni içinde Türk Borçlar Kanunu (TBK) veya TBK m. 26 ile ilgili herhangi bir madde yer almamaktadır. Dolayısıyla, yalnızca bu metne dayanarak “TBK m. 26’da düzenlenen sözleşme özgürlüğü ilkesi” hakkında bir açıklama yapmak mümkün değildir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0021"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q10",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q11",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 49'a göre haksız fiil sorumluluğunun temel kuralı nedir?",
+      "answer": "Soru, Türk Borçlar Kanunu’nun 49. maddesine ilişkin bir sorudur. Ancak, sağlanan mevzuat metninde 49. maddeye ait hüküm yer almamaktadır. Bu nedenle, “TBK m. 49’a göre haksız fiil sorumluluğunun temel kuralı nedir?” sorusuna, verilen bağlamdaki mevzuat maddelerine dayanarak kesin ve eksiksiz bir yanıt verememekteyim. 49. madde metnini paylaşmanız durumunda, sorunuza doğrudan ve hukuken eksiksiz bir cevap sağlayabilirim.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0044"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q11",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q12",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 117'ye göre borçlunun temerrüde düşmesi için ne gereklidir?",
+      "answer": "**Cevap:**\n\nTBK m. 117, “Vakıfların malları üzerinde zilyetlik yoluyla kazanma hükümleri uygulanmaz” başlıklı bir madde olup, vakıf mallarının zilyetlik (zilyetlik yoluyla edinme) ile ilgili özel hükümleri kapsar. Madde, derneklerin uluslararası faaliyetleri, üst kuruluş kurma ve vakıflar hakkında il işkin hükümlerinin kıyas yoluyla uygulanması gibi konuları içerir. **Temerrüt** (borçlunun borcunu yerine getirmeme durumu) ile ilgili herhangi bir şart, süre veya koşul bu madde içinde yer almamaktadır. Dolayısıyla, TBK m. 117’ye göre borçlunun temerrüde düşmesi için belirlenmiş bir gereklilik yoktur; madde temerrütle ilgili değildir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0112"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q12",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q13",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 125 uyarınca borçlunun temerrüdü halinde alacaklının seçimlik hakları nelerdir?",
+      "answer": "**Cevap:**\n\nVerilen mevzuat metninde **Türk Borçlar Kanunu (TBK) m. 125** maddesi yer almamaktadır. Dolayısıyla, yalnızca sunulan metinlere dayanarak “TBK m. 125 uyarınca borçlunun temerrüdü halinde alacaklının seçimlik hakları” hakkında kesin ve eksiksiz bir açıklama yapılamaz.  \n\nBu nedenle, soruya yanıt verebilmek için TBK m. 125 maddesinin metnine veya ilgili ek kaynaklara ihtiyaç vardır. Sunulan metin yalnızca farklı borç türleri, borçluluk ilişkileri ve bazı sözleşme hükümleriyle ilgili maddeleri içermektedir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0120"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q13",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q14",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 207'ye göre satış sözleşmesinin tanımı nedir?",
+      "answer": "Verilen mevzuat metninde **TBK m. 207** maddesi yer almamaktadır. Dolayısıyla, bu metin bağlamında “satış sözleşmesinin tanımı” hakkında bilgi verilemez. Bu soruya yanıt verebilmek için TBK m. 207’nin metnine ihtiyaç vardır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0202"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q14",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q15",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 299'da kira sözleşmesi nasıl tanımlanmıştır?",
+      "answer": "Verilen metinde TBK m. 299’da kira sözleşmesinin tanımı yer almamaktadır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0294"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q15",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q16",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TBK m. 393'e göre hizmet sözleşmesinin kurucu unsurları nelerdir?",
+      "answer": "",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0388"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q16",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q17",
+      "query_class": "SINGLE_DIRECT",
+      "question": "Hukuk Muhakemeleri Kanunu m. 1'e göre mahkemelerin görevi nasıl düzenlenir?",
+      "answer": "Verilen mevzuat metni içinde **Hukuk Muhakemeleri Kanunu**’nun 1. maddesine ilişkin bir hüküm yer almamaktadır. Dolayısıyla, “Mahkemelerin görevi nasıl düzenlenir?” sorusuna, yalnızca sağlanan metinlere dayanarak kesin ve eksiksiz bir yanıt verilemez. Bu konuda bilgi almak için ilgili kanunun 1. maddesinin tam metnine başvurmanız gerekmektedir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q17",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q18",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 6 uyarınca genel yetkili mahkeme neresidir?",
+      "answer": "Verilen mevzuat metninde “HMK m. 6” ile ilgili herhangi bir madde ya da hüküm yer almamaktadır. Dolayısıyla bu metne dayanarak “genel yetkili mahkeme”nün neresinde olduğu konusunda bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0004"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q18",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q19",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 118'e göre dava ne zaman açılmış sayılır?",
+      "answer": "Verilen mevzuat metinlerinde HMK (Hukuk Muhakemeleri Kanunu) m. 118’e ilişkin bir madde bulunmamaktadır. Dolayısıyla, yalnızca bu metinlere dayanarak “HMK m. 118’e göre dava ne zaman açılmış sayılır?” sorusuna cevap verilemez. Bu maddeye ilişkin bilgiye ulaşmak için ilgili kanunun tamamına veya başka bir kaynağa başvurmanız gerekir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0117"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q19",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q20",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 119'a göre dava dilekçesinde hangi zorunlu hususlar yer alır?",
+      "answer": "Verilen mevzuat metninde “HMK m. 119” ile ilgili herhangi bir madde ya da hüküm bulunmamaktadır. Dolayısıyla, yalnızca bu metne dayanarak “HMK m. 119’a göre dava dilekçesinde hangi zorunlu hususlar yer alır?” sorusuna cevap verilemez. Bu konuda bilgi almak için ilgili mevzuatın kendisine (Türk Medeni Kanunu’nun 119. maddesine) başvurmanız gerekmektedir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0118"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q20",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q21",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 140 gereğince ön inceleme duruşmasının amacı nedir?",
+      "answer": "Verilen mevzuat metni, evlilikle ilgili hükümleri içermektedir; “HMK m. 140” (Hukuk Muhakemeleri Kanunu’nun 140. maddesi) metni bu bağlamda yer almamaktadır. Dolayısıyla, yalnızca verilen metne dayanarak “HMK m. 140 gereğince ön inceleme duruşmasının amacı” sorusuna yanıt vermek mümkün değildir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0139"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q21",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q22",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 190 uyarınca usul hukukunda ispat yükü kuralı nedir?",
+      "answer": "Üzgünüm, ancak verilen mevzuat metinlerinde HMK m. 190 ile ilgili herhangi bir madde bulunmamaktadır. Bu nedenle, sorunuza yanıt verecek bilgiye sahip değilim.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0189"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q22",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q23",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 341'e göre istinaf yoluna başvurulabilen kararlar nelerdir?",
+      "answer": "Verilen mevzuat metinlerinde “HMK m. 341” maddesine ilişkin herhangi bir hüküm yer almamaktadır. Dolayısıyla, yalnızca sunulan metinlere dayanarak HMK m. 341’e göre istinaf yoluna başvurulabilen kararlar hakkında bilgi veremeyiz.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0341"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q23",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q24",
+      "query_class": "SINGLE_DIRECT",
+      "question": "HMK m. 353 uyarınca Bölge Adliye Mahkemesi hangi hallerde duruşma yapmadan kararı kaldırır?",
+      "answer": "Verilen mevzuat metninde HMK m. 353’e ilişkin bir madde yer almamaktadır. Dolayısıyla bu maddeye göre Bölge Adliye Mahkemesi’nin duruşma yapmadan kararı kaldırdığı haller hakkında bilgi veremiyorum.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0353"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q24",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q25",
+      "query_class": "SINGLE_DIRECT",
+      "question": "Türk Ceza Kanunu'nun 1. maddesinde kanunun amacı nasıl açıklanmıştır?",
+      "answer": "Verilen mevzuat metni, Türk Ceza Kanunu’nun 1. maddesiyle ilgili herhangi bir bilgi içermemektedir. Dolayısıyla, yalnızca bu metne dayanarak “Türk Ceza Kanunu’nun 1. maddesinde kanunun amacı nasıl açıklanmıştır?” sorusuna yanıt vermek mümkün değildir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q25",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q26",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 21'e göre ceza hukukunda kast nedir?",
+      "answer": "**TCK m. 21’e göre ceza hukukunda kast:**\n\n> “Suçun oluşması kastın varlığına bağlıdır. Kast, suçun kanuni tanımındaki unsurların bilerek ve istenerek gerçekleştirilmesidir.”",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0015"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q26",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q27",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 22 uyarınca taksirle işlenen suçların cezalandırılma şartı nedir?",
+      "answer": "Verilen mevzuat metninde **TCK m. 22** bulunmamaktadır. Dolayısıyla bu maddeye ilişkin taksirle işlenen suçların cezalandırılma şartı hakkında bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0016"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q27",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q28",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 25'te meşru savunma nasıl düzenlenmiştir?",
+      "answer": "TCK m. 25, “Herkes, düşünce ve kanaat hürriyetine sahiptir” başlıklı madde, yalnızca düşünce ve kanaat hürriyetini korur. Bu madde, meşru savunma (meşru müdafaa) ile ilgili herhangi bir düzenleme içermemektedir. Dolayısıyla TCK m. 25’te meşru savunma konusuna ilişkin bir hüküm bulunmaz.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0019"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q28",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q29",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 81'e göre kasten öldürme suçunun cezası nedir?",
+      "answer": "Verilen mevzuat metninde TCK m. 81 maddesi yer almamaktadır. Dolayısıyla bu metne dayanarak “kasten öldürme” suçunun cezası hakkında bilgi veremem.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0075"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q29",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q30",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 86'da kasten yaralama suçu nasıl tanımlanmıştır?",
+      "answer": "Üzgünüm, ancak verilen mevzuat metinlerinde TCK m. 86 ile ilgili bir tanım bulunmamaktadır. Bu nedenle sorunuza yanıt veremiyorum.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6100:version:unknown-date:481c1389a8b144ff:chunk:0085"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q30",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q31",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 141'e göre hırsızlık suçunun tanımı nedir?",
+      "answer": "Verilen mevzuat metninde **TCK m. 141’e** ilişkin hırsızlık suçunun tanımı yer almamaktadır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0136"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q31",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q32",
+      "query_class": "SINGLE_DIRECT",
+      "question": "TCK m. 157'de dolandırıcılık suçu nasıl tanımlanmıştır?",
+      "answer": "Verilen mevzuat metninde TCK m. 157’ye ilişkin dolandırıcılık suçunun tanımı yer almamaktadır. Dolayısıyla, yalnızca bu metne dayanarak TCK m. 157’de dolandırıcılık suçunun nasıl tanımlandığına dair bir açıklama yapılamaz.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0152"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q32",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q33",
+      "query_class": "SINGLE_DIRECT",
+      "question": "Ceza Muhakemesi Kanunu m. 1'e göre kanunun kapsamı nedir?",
+      "answer": "**Ceza Muhakemesi Kanunu m. 1’e göre kanunun kapsamı:**\n\n> **Madde 1 – (1)**  \n> *Bu Kanun, ceza muhakemesinin nasıl yapılacağı hususundaki kurallar ile bu sürece katılan kişilerin hak, yetki ve yükümlülüklerini düzenler.*",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q33",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q34",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 90'a göre herkes tarafından geçici yakalama hangi halde yapılabilir?",
+      "answer": "**Cevap**\n\nCMK m. 90, “Süreler” başlıklı madde olup, geçici yakalama (yakalama) ile ilgili bir hüküm içermez.  \nDolayısıyla **CMK m. 90’a göre herkes tarafından geçici yakalama yapılamaz**.  \n\nGeçici yakalama, yalnızca **Cumhuriyet savcısı** veya **mahkeme** tarafından, ilgili diğer yasal düzenlemelere (örneğin, 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90‑m. m. 90",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0082"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q34",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q35",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 100 uyarınca tutuklama kararı verilebilmesinin temel şartları nelerdir?",
+      "answer": "Verilen metin içinde “CMK m. 100” maddesi yer almamaktadır. Dolayısıyla, yalnızca bu bağlamdaki mevzuat maddelerine dayanarak tutuklama kararı verilebilmesinin temel şartlarını açıklamak mümkün değildir. Bu konuda yanıt verebilmek için ilgili CMK m. 100 maddesinin metnine ihtiyaç vardır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0092"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q35",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q36",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 135'e göre iletişimin tespiti ve dinlenmesi hangi şartlarda uygulanabilir?",
+      "answer": "",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0130"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q36",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q37",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 141 uyarınca haksız yakalama ve tutuklama halinde kimler tazminat isteyebilir?",
+      "answer": "Verilen mevzuat metninde “CMK m. 141” ile ilgili haksız yakalama ve tutuklama tazminatı hakkında herhangi bir hüküm yer almamaktadır. Dolayısıyla, bu metin bağlamında kimlerin tazminat talep edebileceği konusunda bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0135"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q37",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q38",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 158'e göre suç ihbar ve şikayetleri hangi makamlara yapılır?",
+      "answer": "Verilen mevzuat metninde “CMK m. 158” maddesi yer almamaktadır. Dolayısıyla bu metin çerçevesinde “suç ihbar ve şikayetlerinin hangi makamlara yapılacağı” konusuna ilişkin bir hüküm bulunmamaktadır. Bu nedenle, yalnızca verilen metne dayanarak soruya yanıt verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0152"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q38",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q39",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 223'e göre ceza davasında verilebilecek hüküm türleri nelerdir?",
+      "answer": "Üzgünüm, ancak talebinizde belirtilen **CMK m. 223** maddesine ilişkin bilgi, sağlanan mevzuat metinlerinde yer almamaktadır. Bu nedenle, sorunuza yanıt veremiyorum.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0216"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q39",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q40",
+      "query_class": "SINGLE_DIRECT",
+      "question": "CMK m. 231 uyarınca hükmün açıklanmasının geri bırakılması (HAGB) cezai sınırı nedir?",
+      "answer": "**CMK m. 231 – Hükmün açıklanmasının geri bırakılması (HAGB)**  \nCezai sınırı: **1‑3 yıl hapis**.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5271:version:unknown-date:67a41a70516f18eb:chunk:0224"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q40",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q41",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İş hukukunda belirsiz süreli sözleşmelerin sona erdirilmesinde ihbar önelleri nasıl uygulanır?",
+      "answer": "Verilen mevzuat metninde **belirsiz süreli sözleşmelerin sona erdirilmesinde ihbar önelleri** ile ilgili herhangi bir hüküm, şart, süre veya uygulama belirtilmemiştir. Dolayısıyla, bu konuda doğrudan bir uygulama ya da kural sunulmamaktadır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4857:version:unknown-date:cd75c7fe92bd4384:chunk:0006"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q41",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q42",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Çalışanın iş sözleşmesini haklı nedenle derhal feshetme yetkisini doğuran sebepler nelerdir?",
+      "answer": "",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q42",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q43",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İşverenin haklı fesih hakkını kullanabileceği haller nelerdir?",
+      "answer": "Üzgünüm, ancak verilen mevzuat metinlerinde işverenin haklı fesih hakkıyla ilgili hükümler yer almamaktadır. Bu nedenle sorunuza doğrudan ve eksiksiz bir yanıt veremiyorum.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4857:version:unknown-date:cd75c7fe92bd4384:chunk:0013"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q43",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q44",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İş Kanunu'na göre emeğin karşılığı olan ücretin niteliği ve ödeme şekli nedir?",
+      "answer": "Verilen mevzuat metninde İş Kanunu’na ilişkin herhangi bir madde veya hüküm yer almamaktadır. Dolayısıyla, bu metin çerçevesinde “emeğin karşılığı olan ücretin niteliği ve ödeme şekli” konusuna ilişkin bir açıklama yapılamaz.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4857:version:unknown-date:cd75c7fe92bd4384:chunk:0021"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q44",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q45",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Türk Ticaret Kanunu'na göre tacir olmanın getirdiği temel hukuki sorumluluklar nelerdir?",
+      "answer": "Verilen mevzuat metni, Türk Ticaret Kanunu’na (TTK) ait maddeleri içermemektedir. Dolayısıyla, “tacir olmanın getirdiği temel hukuki sorumluluklar” konusundaki sorunuza, yalnızca bu metin çerçevesinde yanıt vermem mümkün değildir. TTK’nın tacirle ilgili hükümleri bu metinde yer almamaktadır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c:chunk:0010"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q45",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q46",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Ticaret hukuku mevzuatımızda tanınan şirket türleri hangileridir?",
+      "answer": "**Ticaret hukuku mevzuatımızda tanınan şirket türleri:**\n\n1. **Komandit Şirket**  \n   - Sözleşme hükümlerine göre belirlenir.  \n   - Komandit ortakların sorumluluğu sınırlıdır; komanditer ortakların sorumluluğu sınırsızdır.\n\n2. **Kollektif Şirket**  \n   - Şirketin komandit olduğu açıkça saptanamıyorsa, o şirket kollektif sayılır.  \n   - Tüm ortakların sorumluluğu sınırsızdır.\n\nBu iki tür, Türk Ticaret Kanunu’nda (Madde 306) tanımlanan ve tanınan tek şirket biçimleridir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c:chunk:0116"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q46",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q47",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Anonim ortaklığın sermaye yapısı ve ortakların şirket borçlarına karşı sorumluluk sınırı nasıldır?",
+      "answer": "**Anonim ortaklığın sermaye yapısı ve ortakların şirket borçlarına karşı sorumluluk sınırı:**\n\n> **MADDE 329**  \n> (1) *Anonim şirket, sermayesi belirli ve paylara bölünmüş olan, borçlarından dolayı yalnız malvarlığıyla sorumlu bulunan şirkettir.*  \n> (2) *Pay sahipleri, sadece taahhüt etmiş oldukları sermaye payları ile ve şirkete karşı sorumludur.*",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c:chunk:0322"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q47",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q48",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Kıymetli evrakın sağladığı hak ile senet arasındaki bağ nasıldır?",
+      "answer": "Verilen mevzuat metinlerinde “kıymetli evrak” ve “senet” kavramlarına ilişkin herhangi bir madde, hüküm ya da tanım yer almamaktadır. Dolayısıyla, bu iki kavram arasındaki hukuki bağ, yalnızca sunulan maddeler ışığında belirlenemez. Mevzuat metninde kıymetli evrakın sağladığı hak ile senet arasındaki ilişkiyle ilgili bir düzenleme bulunmadığından, bu konuda kanuni bir açıklama yapılamaz.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q48",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q49",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İdari yargıda genel iptal ve tam yargı davalarında başvuru süreleri nasıldır?",
+      "answer": "Verilen mevzuat metninde, idari yargıda genel iptal ve tam yargı davalarında başvuru süreleriyle ilgili herhangi bir hüküm yer almamaktadır. Bu nedenle, metne dayanarak başvuru süreleri hakkında bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q49",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q50",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İdari yargılamada yürütmenin durdurulması kararının verilebilmesi için hangi koşullar aranır?",
+      "answer": "",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a:chunk:0018"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q50",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q51",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İlk derece idare mahkemesi kararlarına karşı istinaf başvuru mercii neresidir?",
+      "answer": "İlk derece idare mahkemesi kararına karşı istinaf başvurusu, kararın bildirildiği tarihten itibaren **30 gün** içinde yapılmalıdır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a:chunk:0036"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q51",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q52",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "İdari yargıda temyiz mercii olarak hangi yüksek yargı organı görev yapar?",
+      "answer": "İdari yargıda temyiz mercii olarak **Danıştay** görev yapar.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a:chunk:0037"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q52",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q53",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "KVKK çerçevesinde kişisel veri işlemede uyulması zorunlu temel ilkeler nelerdir?",
+      "answer": "**KVKK çerçevesinde kişisel veri işlemede uyulması zorunlu temel ilkeler (sadece verilen mevzuat metninde yer alan hükümlerle sınırlı olarak)**  \n\n| İlke | Mevzuat Kaynağı | Açıklama |\n|",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6698:version:unknown-date:1ad27253b0068d4c:chunk:0005"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q53",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q54",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Kişisel verilerin işlenmesinde rıza kuralı nedir?",
+      "answer": "",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q54",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q55",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Veri sorumlusunun ilgili kişiyi bilgilendirme görevinin kapsamı nedir?",
+      "answer": "Veri sorumlusunun ilgili kişiyi bilgilendirme görevinin kapsamı, **bu Yönetmelikte** yer almamaktadır. Yönetmelik yalnızca Türkiye Cumhuriyet Merkez Bankası personelinin disiplin soruşturması, savunma, itiraz ve disiplin cezalarına ilişkin prosedürleri düzenlemektedir. Dolayısıyla, veri sorumlusunun ilgili kişiyi bilgilendirme görevinin kapsamı, bu Yönetmelik metninde belirtilmemiştir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6698:version:unknown-date:1ad27253b0068d4c:chunk:0011"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q55",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q56",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Kişisel verisi işlenen kişilerin sahip olduğu haklar nelerdir?",
+      "answer": "Verilen mevzuat metni, miras, taşınmaz yükleri, eşler arası katkı hakları ve yardım vakıflarıyla ilgili hükümleri içermektedir. Kişisel verisi işlenen kişilerin sahip olduğu haklarla ilgili herhangi bir madde, kural veya tanım bu metinde yer almamaktadır. Dolayısıyla, yalnızca sunulan mevzuat çerçevesinde “kişisel verisi işlenen kişilerin sahip olduğu haklar” konusuna ilişkin bir hüküm veya açıklama bulunmamaktadır.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q56",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q57",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Gerçek kişiliğin başlangıç ve bitiş anı nedir?",
+      "answer": "Verilen mevzuat metninde “gerçek kişiliğin başlangıç ve bitiş anı” ile ilgili herhangi bir hüküm, madde ya da tanım yer almamaktadır. Bu nedenle, yalnızca sunulan metne dayanarak bu soruya cevap verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0023"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q57",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q58",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Haksız eylemde mağdur olan tarafın ispat yükümlülüğü nedir?",
+      "answer": "Verilen mevzuat metinlerinde “haksız eylem”, “mağdur” veya “ispat yükümlülüğü” kavramlarına ilişkin herhangi bir hüküm bulunmamaktadır. Dolayısıyla, bu metinler çerçevesinde haksız eylemde mağdur olan tarafın ispat yükümlülüğü hakkında bir hüküm çıkarmak mümkün değildir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0045"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q58",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q59",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Medeni usulde tasarruf ilkesi gereğince hâkimin davaya bakması nasıl sınırlandırılmıştır?",
+      "answer": "**Medeni usulde tasarruf ilkesi gereğince hâkimin davaya bakması nasıl sınırlandırılmıştır?**\n\nMedeni usulde “tasarruf ilkesi” (yani hâkimin kararını verirken kendi takdirine göre hareket etme özgürlüğü) ancak kanun tarafından belirlenen sınırlar içinde geçerlidir.  Verilen mevzuat metninde bu sınırlandırma, ilgili maddelerde açıkça belirtilmiştir:\n\n| Madde | Sınırlandırma / Kısıtlama | Açıklama |\n|-------|---------------------------|----------|\n| **Madde 674** | **Çocukların eğitim ve öğrenimi için yapılan giderlerin iade yükümlülüğü** | Miras bırakanın aksini arzu ettiği ispat edilmedikçe, yalnızca “alışılmış ölçüleri aşan” giderler iade edilmek zorundadır. Hâkim, bu yükümlülüğü miras bırakanın isteğiyle çelişen bir karar vermek için “alışılmış ölçüleri aşan” tutarı aşamaz. |\n| **Madde 227** | **Eşlerin katkısına ilişkin alacak** | Eşlerden birinin katkısı, yalnızca katkı oranına göre hesaplanır. Değer artışı için alacak, katkının oranına göre belirlenir; değer kaybı durumunda ise katkının başlangıçtaki değeri esas alınır. Hâkim, bu oranları aşarak alacak miktarını belirleyemez. |\n| **Madde 839** | **Taşınmaz yükü** | Taşınmaz yükü, yalnızca taşınmazla ilgili sorumlulukları kapsar. Hâkim, taşınmaz yükünü “yüklü taşınmazın ekonomik nit",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q59",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence does not intersect required expected_source_chunk_ids"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q60",
+      "query_class": "SINGLE_PARAPHRASE",
+      "question": "Ceza hukukundaki kanunilik prensibi nedir?",
+      "answer": "**Ceza hukukundaki kanunilik prensibi** — yani “suç ve ceza kanun olmadan yapılamaz” prensibi, **verilen mevzuat metninde yer almamaktadır**.  \n\nMevzuat metni (Kanun 2577) yalnızca idari yargı, idari işlem ve idari kararların açıklanması, yürütmenin durdurulması gibi idari hukuk konularını düzenlemekte olup, ceza hukukuna ilişkin herhangi bir madde, tanım veya ilke içermemektedir. Dolayısıyla, bu metin bağlamında “kanunilik prensibi”nin ne olduğu, nasıl uygulanacağı veya hangi şartlarla ilgili olduğu hakkında bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q60",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q61",
+      "query_class": "RELATIONAL",
+      "question": "Türk Borçlar Kanunu'na göre haksız fiil sorumluluğu kuralı nedir ve haksız fiil tazminatında borçlu hangi tarihte temerrüde düşer?",
+      "answer": "Verilen mevzuat metinlerinde “haksız fiil sorumluluğu” veya “temerrüt” ile ilgili herhangi bir madde yer almamaktadır. Dolayısıyla, bu metinler ışığında Türk Borçlar Kanunu’na göre haksız fiil sorumluluğu kuralı ve haksız fiil tazminatında borçlunun temerrüde düşme tarihi hakkında bilgi verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0044",
+        "tr:legislation:law:6098:version:unknown-date:052287d8111a0761:chunk:0112"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q61",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q62",
+      "query_class": "RELATIONAL",
+      "question": "TMK hükümleri uyarınca evlilik birliğinde eşlerin yükümlülükleri ile evlilik birliğinin temelinden sarsılması sebebiyle boşanma arasındaki bağ nedir?",
+      "answer": "Üzgünüm, ancak sorunuzda belirtilen “evlilik birliğinde eşlerin yükümlülükleri ile evlilik birliğinin temelinden sarsılması sebebiyle boşanma” konusunu düzenleyen Türk Medeni Kanunu (TMK) maddesi, sizin tarafınızdan sağlanan metin parçalarında yer almamaktadır. Bu nedenle, yalnızca verilen bağlamdaki mevzuat maddelerine dayanarak kesin ve eksiksiz bir cevap veremem. İlgili TMK maddesini (örneğin 112‑114. maddeler) paylaşmanız durumunda, sorunuza uygun bir yanıt sunabilirim.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0156",
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0174"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q62",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q63",
+      "query_class": "RELATIONAL",
+      "question": "Hukuk yargılamasında davanın açılma anı ile dava dilekçesinde yer alması zorunlu unsurlar birlikte nasıl düzenlenmiştir?",
+      "answer": "**Cevap**\n\nVerilen mevzuat metninde “dava açma anı” ve “dava dilekçesinde yer alması zorunlu unsurlar” ile ilgili doğrudan hüküm veya madde bulunmamaktadır.  \nBu nedenle, **sadece verilen bağlamdaki mevzuat maddelerine dayanarak** şu sonuca varılabilir:\n\n- **Madde 674, 839, 667, 227 ve 110** – Bu maddeler sırasıyla çocukların eğitim giderleri, taşınmaz yükleri, işletme satışı, eşler arası katkı hakları ve yardım vakıfları ile ilgili hükümleri içerir.  \n- **Hiçbir madde** “dava dilekçesi”, “dava açma anı”, “zorunlu unsurlar” veya “dava dilekçesinde bulunması gereken öğeler” konularını ele almaz.  \n\nDolayısıyla, **verilen mevzuat metni** içinde “dava açma anı ile dava dilekçesinde yer alması zorunlu unsurların birlikte nasıl düzenlendiği” konusunda bir düzenleme yer almamaktadır. Bu konuda bilgi almak için ilgili Türk Medeni Kanunu, Türk Ceza Kanunu veya ilgili adli prosedür kanunlarına başvurmak gerekir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q63",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence covers only 0/2 required groups"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q64",
+      "query_class": "RELATIONAL",
+      "question": "Ceza Kanunu'nda kastın tanımı ile kasten insan öldürme suçunun manevi unsuru nasıl ilişkilendirilmiştir?",
+      "answer": "Verilen mevzuat metinleri arasında “kast” (kârarlık) tanımı, “kasten insan öldürme” suçu veya bu suçun manevi unsuru (kârarlık) ile ilgili herhangi bir hüküm yer almamaktadır. Dolayısıyla, yalnızca sunulan metinlere dayanarak “Ceza Kanunu’nda kastın tanımı ile kasten insan öldürme suçunun manevi unsuru nasıl ilişkilendirilmiştir?” sorusuna eksiksiz ve kesin bir cevap verilemez. Bu konuda bilgiye ulaşmak için Ceza Kanunu’nun ilgili maddelerine (örneğin 30. Madde, 32. Madde vb.) bakmak gerekir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0015",
+        "tr:legislation:law:5237:version:unknown-date:cf8ba250fadbc51c:chunk:0075"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q64",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q65",
+      "query_class": "RELATIONAL",
+      "question": "Ceza muhakemesinde tutuklama şartları ile hukuka aykırı tutuklamalara karşı öngörülen tazminat hakkı arasındaki ilişki nedir?",
+      "answer": "Verilen mevzuat metni, ceza muhakemesinde tutuklama şartları (Türk Ceza Muhakemesi Kanunu’nun 68. maddesi) ve hukuka aykırı tutuklamalara karşı öngörülen tazminat hakkı (Türk Ceza Muhakemesi Kanunu’nun 69. maddesi) ile ilgili hükümleri içermemektedir. Dolayısıyla, yalnızca sunulan metin çerçevesinde bu iki konu arasındaki ilişkiyi açıklamak mümkün değildir. İlgili yasal metinlere başvurularak detaylı bir değerlendirme yapılması gerekmektedir.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q65",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence covers only 0/2 required groups"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q66",
+      "query_class": "RELATIONAL",
+      "question": "İş sözleşmelerinde süreli fesih ile işçinin haklı nedenle derhal feshi arasındaki bildirim süresi ve tazminat farkı nedir?",
+      "answer": "Verilen metin, iş sözleşmelerinin süreli feshi veya haklı nedenle derhal feshi ile ilgili bildirim süresi ve tazminat hükümlerini içermemektedir. Dolayısıyla, yalnızca bu metne dayanarak sorulan “süreli fesih ile haklı nedenle derhal fesih arasındaki bildirim süresi ve tazminat farkı” konusuna ilişkin eksiksiz ve kesin bir cevap verilemez. Bu konuda net bilgi almak için ilgili Türk İş Kanunu maddelerine (örneğin 15‑18‑19‑20‑21‑22‑23‑24‑25‑26‑27‑28‑29‑30‑31‑32‑33‑34‑35‑36‑37‑38‑39‑40‑41‑42‑43‑44‑45‑46‑47‑48‑49‑50‑51‑52‑53‑54‑55‑56‑57‑58‑59‑60‑61‑62‑63‑64‑65‑66‑67‑68‑69‑70‑71‑72‑73‑74‑75‑76‑77‑78‑79‑80‑81‑82‑83‑84‑85‑86‑87‑88‑89‑90‑91‑92‑93‑94‑95‑96‑97‑98‑99‑100‑101‑102‑103‑104‑105‑106‑107‑108‑109‑110‑111‑112‑113‑114‑115‑116‑117‑118‑119‑120‑121‑122‑123‑124‑125‑126‑127‑128‑129‑130‑131‑132‑133‑134‑135‑136‑137‑138‑139‑140‑141‑142‑143‑144‑145‑146‑147‑148‑149‑150‑151‑152‑153‑154‑155‑156‑157‑158‑159‑160‑161‑162‑163‑164‑165‑166‑167‑168‑169‑170‑171‑172‑173‑174‑175‑176‑177‑178‑179‑180‑181‑182‑183‑184‑185‑186‑187‑188‑189‑190‑191‑192‑193‑194‑195‑196‑197‑198‑199‑200‑201‑202‑203‑204‑205‑206‑207‑208‑209‑210‑211‑212‑213‑214‑215‑216‑217‑218‑219‑220‑221‑222‑223‑224‑225‑226‑227‑228‑229‑230‑231‑232‑233‑234‑235‑236‑237‑238‑239‑240‑241‑242‑243‑244‑245‑246‑247‑248‑249‑250‑251‑252‑253‑254‑255‑256‑257‑258‑259‑260‑261‑262‑263‑264‑265‑266‑267‑268‑269‑270‑271‑272‑273‑274‑275‑276‑277‑",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q66",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence covers only 0/2 required groups",
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q67",
+      "query_class": "RELATIONAL",
+      "question": "Türk Ticaret Kanunu'na göre anonim şirketin yönetiminde basiretli tacir ölçütü ve şirket sorumluluğu nasıl kesişir?",
+      "answer": "Verilen mevzuat metinlerinde “basiretli tacir” ölçütü, anonim şirketin yönetimi, şirket sorumluluğu veya Türk Ticaret Kanunu’na ilişkin hükümler yer almamaktadır. Dolayısıyla, yalnızca bu metinlere dayanarak sorulan “Türk Ticaret Kanunu'na göre anonim şirketin yönetiminde basiretli tacir ölçütü ve şirket sorumluluğu nasıl kesişir?” sorusuna eksiksiz ve kesin bir cevap verilemez. Bu konuda bilgi almak için ilgili kanun maddelerinin (örneğin, Türk Ticaret Kanunu’nun 1‑2‑3‑4‑5‑6‑7‑8‑9‑10‑11‑12‑13‑14‑15‑16‑17‑18‑19‑20‑21‑22‑23‑24‑25‑26‑27‑28‑29‑30‑31‑32‑33‑34‑35‑36‑37‑38‑39‑40‑41‑42‑43‑44‑45‑46‑47‑48‑49‑50‑51‑52‑53‑54‑55‑56‑57‑58‑59‑60‑61‑62‑63‑64‑65‑66‑67‑68‑69‑70‑71‑72‑73‑74‑75‑76‑77‑78‑79‑80‑81‑82‑83‑84‑85‑86‑87‑88‑89‑90‑91‑92‑93‑94‑95‑96‑97‑98‑99‑100‑101‑102‑103‑104‑105‑106‑107‑108‑109‑110‑111‑112‑113‑114‑115‑116‑117‑118‑119‑120‑121‑122‑123‑124‑125‑126‑127‑128‑129‑130‑131‑132‑133‑134‑135‑136‑137‑138‑139‑140‑141‑142‑143‑144‑145‑146‑147‑148‑149‑150‑151‑152‑153‑154‑155‑156‑157‑158‑159‑160‑161‑162‑163‑164‑165‑166‑167‑168‑169‑170‑171‑172‑173‑174‑175‑176‑177‑178‑179‑180‑181‑182‑183‑184‑185‑186‑187‑188‑189‑190‑191‑192‑193‑194‑195‑196‑197‑198‑199‑200‑201‑202‑203‑204‑205‑206‑207‑208‑209‑210‑211‑212‑213‑214‑215‑216‑217‑218‑219‑220‑221‑222‑223‑224‑225‑226‑227‑228‑229‑230‑231‑232‑233‑234‑235‑236‑237‑238‑239‑240‑241‑242‑243‑244‑245‑246‑247‑248‑249‑250‑251‑252‑253‑254‑255‑256‑257‑258‑259‑260‑261‑",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c:chunk:0322",
+        "tr:legislation:law:6102:version:unknown-date:798175bb44f0d69c:chunk:0010"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q67",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q68",
+      "query_class": "RELATIONAL",
+      "question": "İdari yargıda dava açma süresi ile yürütmenin durdurulması müessesesi arasındaki usul ilişkisi nedir?",
+      "answer": "",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a:chunk:0018",
+        "tr:legislation:law:2577:version:unknown-date:1b7d47189b52094a:chunk:0001"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q68",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Answer does not match acceptable answer patterns"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": true,
+        "facts_satisfied": false,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q69",
+      "query_class": "RELATIONAL",
+      "question": "Kişisel verilerin işlenme şartları ile veri sorumlusunun aydınlatma yükümlülüğü nasıl birlikte uygulanır?",
+      "answer": "Verilen mevzuat metni, kişisel verilerin işlenmesiyle ilgili herhangi bir hüküm, şart veya aydınlatma yükümlülüğü içermemektedir. Dolayısıyla, “Kişisel verilerin işlenme şartları ile veri sorumlusunun aydınlatma yükümlülüğü nasıl birlikte uygulanır?” sorusuna, yalnızca bu metin çerçevesinde bir cevap vermek mümkün değildir. Bu konuda geçerli hükümler, 6698 sayılı Kişisel Verilerin Korunması Kanunu ve ilgili yönetmeliklerde yer almaktadır; ancak bu metin bu kanunları kapsamadığı için soruya doğrudan, eksiksiz ve kesin bir yanıt verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0659"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q69",
+        "is_answerable": true,
+        "status": "FAIL",
+        "reasons": [
+          "Cited evidence covers only 0/2 required groups"
+        ],
+        "grounded_pass": false,
+        "evidence_supported": false,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q70",
+      "query_class": "RELATIONAL",
+      "question": "Medeni Kanun'un başlangıç hükümlerinde kanunun uygulanması ile dürüstlük kuralı arasındaki ilişki nedir?",
+      "answer": "Verilen mevzuat metni, 2577 sayılı Kanun’un (idari hukuk) geçici maddeleri, 29. ve 27. maddeleri ile ilgili hükümleri içermektedir. Metinde Medeni Kanun’un başlangıç hükümleri, “kanunun uygulanması” veya “dürüstlük kuralı” ile ilgili herhangi bir madde, ifade ya da bağlam bulunmamaktadır. Dolayısıyla, yalnızca bu metne dayanarak “Medeni Kanun'un başlangıç hükümlerinde kanunun uygulanması ile dürüstlük kuralı arasındaki ilişki” sorusuna hukuki bir yanıt verilemez.",
+      "evidence_chunk_ids": [
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0001",
+        "tr:legislation:law:4721:version:unknown-date:11ae3bcbdccc0dd6:chunk:0002"
+      ],
+      "insufficient_evidence": false,
+      "score": {
+        "query_id": "TEST_Q70",
+        "is_answerable": true,
+        "status": "PASS",
+        "reasons": [
+          "Answer valid, grounded, and verified against evidence"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q71",
+      "query_class": "NO_ANSWER",
+      "question": "213 sayılı Vergi Usul Kanunu m. 359 uyarınca sahte fatura düzenleme fiilinde hapis cezasının alt ve üst sınırı nedir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q71",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q72",
+      "query_class": "NO_ANSWER",
+      "question": "6362 sayılı Sermaye Piyasası Kanunu'na göre içeriden öğrenenlerin ticareti (insider trading) suçunun unsurları nelerdir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q72",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q73",
+      "query_class": "NO_ANSWER",
+      "question": "2004 sayılı İcra ve İflas Kanunu m. 67'ye göre itirazın iptali davası açma süresi ve icra inkar tazminatı oranı nedir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q73",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q74",
+      "query_class": "NO_ANSWER",
+      "question": "4458 sayılı Gümrük Kanunu m. 235 uyarınca kaçak eşya ithalinde uygulanan idari para cezası nasıl hesaplanır?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q74",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q75",
+      "query_class": "NO_ANSWER",
+      "question": "2942 sayılı Kamulaştırma Kanunu m. 10 gereğince bedel tespiti ve tescil davasında taşınmaz değerini belirleme kriterleri nelerdir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q75",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q76",
+      "query_class": "NO_ANSWER",
+      "question": "2872 sayılı Çevre Kanunu m. 15'e göre çevre kirliliğine yol açan tesislerin faaliyetlerinin durdurulması usulü nedir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q76",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q77",
+      "query_class": "NO_ANSWER",
+      "question": "2920 sayılı Türk Sivil Havacılık Kanunu m. 40 uyarınca hava taşıma sözleşmesinde taşıyıcının yolcuya karşı sorumluluk limiti nedir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q77",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q78",
+      "query_class": "NO_ANSWER",
+      "question": "5846 sayılı Fikir ve Sanat Eserleri Kanunu m. 71'e göre manevi haklara tecavüz suçunun cezası nedir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q78",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q79",
+      "query_class": "NO_ANSWER",
+      "question": "6769 sayılı Sınai Mülkiyet Kanunu m. 140 gereğince marka hakkına tecavüz halinde yoksun kalınan kazanç yöntemleri nelerdir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q79",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    },
+    {
+      "query_id": "TEST_Q80",
+      "query_class": "NO_ANSWER",
+      "question": "5718 sayılı Milletlerarası Özel Hukuk ve Usul Hukuku Hakkında Kanun m. 20 uyarınca yabancılık unsuru taşıyan mirasta uygulanacak hukuk nedir?",
+      "answer": "Bu soru hakkında sunulan yürürlükteki mevzuatta yeterli kanıt bulunmamaktadır. YETERSİZ KANIT.",
+      "evidence_chunk_ids": [],
+      "insufficient_evidence": true,
+      "score": {
+        "query_id": "TEST_Q80",
+        "is_answerable": false,
+        "status": "PASS",
+        "reasons": [
+          "Correct abstention with required marker"
+        ],
+        "grounded_pass": true,
+        "evidence_supported": true,
+        "facts_satisfied": true,
+        "forbidden_claims_absent": true
+      }
+    }
+  ]
+}
