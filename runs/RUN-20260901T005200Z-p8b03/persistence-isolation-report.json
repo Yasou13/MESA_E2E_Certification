@@ -1,0 +1,21 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp_utc": "2026-08-31T22:56:51Z",
+  "cold_restart_verified": true,
+  "sqlite_durability": {
+    "memory_mutations": 5722,
+    "source_chunks": 5722,
+    "documents": 69,
+    "document_revisions": 69,
+    "idempotency_receipts": 5721,
+    "status": "PASS"
+  },
+  "idempotency_verified": true,
+  "isolation_checks": {
+    "valid_scope_hits": 5,
+    "cross_workspace_isolated": true,
+    "cross_tenant_isolated": true,
+    "status": "PASS"
+  },
+  "phase_7_verdict": "PASS"
+}

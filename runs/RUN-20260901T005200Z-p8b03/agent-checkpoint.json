@@ -1,0 +1,44 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp": "2026-09-02T00:42:46.332628+00:00",
+  "profile": "PROFILE_B",
+  "phase": "PHASE_12_VERDICT",
+  "subphase": "COMPLETED",
+  "status": "CERTIFIED",
+  "h1a_corpus_approved": true,
+  "h1a_selected_versions_hash": "e230577c4dde537e2fc5c2935ab952477e3a5e6d4d2319a4d5690896b3699d0c",
+  "h1b_release_approved": true,
+  "h1b_release_manifest_hash": "e01cc8a00c05934759cfa4f68f087f110b9d484d703419d631ff8c89771d93bf",
+  "repository_shas": {
+    "MESA": "e78f6ae01954e6a2f8c43ea504928c1acec0722d",
+    "MESA_Data": "4eb721a712e31aa27a5b48e243ade436e6da8dc5",
+    "MESA_E2E_Certification": "e5f1f33333060bfb7a0ea6ea481f248f8c6b9065",
+    "branch": "cert/profile-b-e2e"
+  },
+  "metrics": {
+    "ingested_chunks": 5722,
+    "committed_outbox": 5722,
+    "vector_embeddings": 5727,
+    "graph_nodes": 5727,
+    "retrieval_test_recall_at_5": 0.7429,
+    "retrieval_test_mrr_at_5": 0.6005,
+    "answer_test_grounded_pass_rate": 0.5125,
+    "negative_abstention_pass_rate": 1.0
+  },
+  "artifacts": [
+    "selected-versions-manifest.json",
+    "corpus-manifest.json",
+    "planned-chunk-manifest.json",
+    "ground-truth-dev.jsonl",
+    "ground-truth-test.jsonl",
+    "benchmark-config.json",
+    "identity_map.jsonl",
+    "retrieval-test-report.json",
+    "retrieval-results-raw.json",
+    "graph-proof-ablation.json",
+    "answer-test-report.json",
+    "verdict.json",
+    "status.md",
+    "decision_log.jsonl"
+  ]
+}

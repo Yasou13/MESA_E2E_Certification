@@ -1,0 +1,29 @@
+{
+  "normalization_version": "v1.0-turkish-legal-nfc",
+  "text": {
+    "unicode_form": "NFC",
+    "newline_normalization": "LF",
+    "trim_whitespace": true,
+    "collapse_whitespace": true,
+    "preserve_words": true,
+    "stemming": false,
+    "lemmatization": false,
+    "translation": false
+  },
+  "turkish_casing": {
+    "strategy": "turkish_casefold",
+    "dotted_i_rule": true
+  },
+  "identifiers": {
+    "law_number_patterns": [
+      "^(?:Kanun No:?\\s*)?(\\d+)(?:\\s*sayılı Kanun)?$"
+    ],
+    "article_number_patterns": [
+      "^(?:Madde|m\\.|md\\.)\\s*(\\d+)(?:/([a-z0-9]+))?$"
+    ]
+  },
+  "abstention": {
+    "expected_answer_marker": "YETERSİZ KANIT",
+    "insufficient_evidence_flag": true
+  }
+}

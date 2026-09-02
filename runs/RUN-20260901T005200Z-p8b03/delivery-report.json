@@ -1,0 +1,20 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp_utc": "2026-08-31T22:46:12Z",
+  "delivery_id": "del-81d64d9f5332",
+  "release_id": "release-20260831T145932Z",
+  "target_scope": "default/legal/tr_legislation",
+  "total_chunks": 5721,
+  "delivery_status": "AWAITING_MUTATION",
+  "identity_map_sha256": "960c4085e40082e88a5e1baf680c58fd2c5d8e00cefd2aaa180cb79e8338336d",
+  "submission_duration_seconds": 401.78,
+  "delivery_summary": {
+    "delivery_id": "del-81d64d9f5332",
+    "status": "AWAITING_MUTATION",
+    "total_items": 5721,
+    "committed_items": 0,
+    "failed_items": 0,
+    "skipped_items": 0,
+    "last_error": null
+  }
+}

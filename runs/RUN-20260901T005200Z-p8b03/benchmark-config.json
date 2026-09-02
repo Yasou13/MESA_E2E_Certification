@@ -1,0 +1,38 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "created_at_utc": "2026-08-31T15:06:00Z",
+  "retrieval": {
+    "api_route": "/v4/memory/search",
+    "primary_top_k": 5,
+    "query_normalization": "v1.0-turkish-legal-nfc",
+    "vector_provider": "nvidia-nim",
+    "embedding_model": "nvidia/nemotron-4-340b-reward:canonical-proxy",
+    "embedding_dim": 2048,
+    "lexical_bm25_enabled": true,
+    "graph_lane_enabled": true,
+    "max_graph_hops": 2,
+    "rrf_weights": {
+      "vector": 0.5,
+      "lexical": 0.3,
+      "graph": 0.2
+    }
+  },
+  "generation": {
+    "reasoning_model": "openai/gpt-oss-20b:canonical-proxy",
+    "temperature": 0.0,
+    "max_tokens": 4096,
+    "abstention_phrase": "YETERSİZ KANIT"
+  },
+  "frozen_identities": {
+    "mesa_git_sha": "6f918a177a2c30c4bbd732cad3f71f762f1da632",
+    "mesa_data_git_sha": "b1861b3b3dfeda699d5a90dd06a1dbdd4fea377c",
+    "certification_git_sha": "71cef9fafae048fec073f97935b28c90721ee19f",
+    "release_id": "release-20260831T145932Z",
+    "release_manifest_sha256": "e01cc8a00c05934759cfa4f68f087f110b9d484d703419d631ff8c89771d93bf",
+    "planned_chunk_manifest_sha256": "86ed245e264c94aeef14351edb458a5524f7026de3ea56794b4194fa83427b91",
+    "ground_truth_dev_sha256": "eff73215b4e98f4823b42fb76ef8b19af67e18260c39a44443e56fc9c966e845",
+    "ground_truth_test_sha256": "ee5073c427132176c5607fd8ad301b4a792001d0bb0bf1e60c077f703a398222",
+    "qrels_dev_sha256": "e457e185ba48428c21df8c60b6f8959763e732a4b27bdd823e7207a1b57a4c24",
+    "qrels_test_sha256": "5ea66012c8b126a175a71e17be151da6bcbea1c983dee6d5b6459fe8b01a8a4d"
+  }
+}

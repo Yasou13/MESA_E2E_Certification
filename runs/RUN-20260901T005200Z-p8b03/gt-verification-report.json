@@ -1,0 +1,39 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "timestamp_utc": "2026-08-31T15:10:46Z",
+  "dev_verification": {
+    "count": 12,
+    "expected_count": 12,
+    "count_ok": true,
+    "spans_verified": 13,
+    "spans_failed": 0
+  },
+  "test_verification": {
+    "count": 80,
+    "expected_count": 80,
+    "count_ok": true,
+    "breakdown": {
+      "SINGLE_DIRECT": 40,
+      "SINGLE_PARAPHRASE": 20,
+      "RELATIONAL": 10,
+      "NO_ANSWER": 10
+    },
+    "breakdown_ok": true,
+    "spans_verified": 80,
+    "spans_failed": 0
+  },
+  "partition_isolation": {
+    "dev_citations_in_dev_partition": true,
+    "test_citations_in_test_partition": true,
+    "dev_leaks": [],
+    "test_leaks": []
+  },
+  "overall_status": "PASS",
+  "file_hashes": {
+    "ground_truth_dev_sha256": "eff73215b4e98f4823b42fb76ef8b19af67e18260c39a44443e56fc9c966e845",
+    "ground_truth_test_sha256": "ee5073c427132176c5607fd8ad301b4a792001d0bb0bf1e60c077f703a398222",
+    "qrels_dev_sha256": "e457e185ba48428c21df8c60b6f8959763e732a4b27bdd823e7207a1b57a4c24",
+    "qrels_test_sha256": "5ea66012c8b126a175a71e17be151da6bcbea1c983dee6d5b6459fe8b01a8a4d",
+    "benchmark_config_sha256": "a648651e1702de8c7c807f6cc4ce30f5c761cfcdf4b4b125faf1cf7dbd86b55c"
+  }
+}

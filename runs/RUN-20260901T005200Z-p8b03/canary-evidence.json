@@ -1,0 +1,25 @@
+{
+  "run_id": "RUN-20260901T005200Z-p8b03",
+  "timestamp_utc": "2026-08-31T21:57:46Z",
+  "status": "PASS",
+  "session_id": "sess_de049641da274b229b8ca597a4767ec5",
+  "canary_chunk_id": "tr:legislation:canary:202:version:2026-01-01:chunk:0001",
+  "mutation_id": "f36e8dfc-3ec4-516b-bed9-28dfe48a616f",
+  "final_mutation_state": "COMMITTED",
+  "search_verification": {
+    "status": "PASS",
+    "top_hit_score": 0.048651507139079855,
+    "top_hit_entity": "T\u00fcrkiye Devleti",
+    "top_hit_chunk_id": "tr:legislation:canary:202:version:2026-01-01:chunk:0001",
+    "retrieval_origins": [
+      "vector",
+      "bm25",
+      "graph"
+    ]
+  },
+  "idempotent_retry_verification": {
+    "status": "PASS",
+    "idempotent_mutation_id": "f36e8dfc-3ec4-516b-bed9-28dfe48a616f",
+    "retry_state": "COMMITTED"
+  }
+}

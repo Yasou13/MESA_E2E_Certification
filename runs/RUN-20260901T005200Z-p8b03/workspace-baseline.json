@@ -1,0 +1,27 @@
+{
+  "run_id": "RUN-20260831T142600Z-p8b02",
+  "old_runtime_reused": false,
+  "mesa_storage_clean": true,
+  "mesa_data_root_clean": true,
+  "unknown_files_deleted": false,
+  "secrets_printed": false,
+  "docker_state_inventoried": true,
+  "docker_state_isolated": true,
+  "repositories_updated_from_origin_main": true,
+  "frozen_repository_shas": {
+    "MESA_E2E_Certification": "58576a596797b7867cdfee18379a1dc3b572c37d",
+    "MESA": "6f918a177a2c30c4bbd732cad3f71f762f1da632",
+    "MESA_Data": "b1861b3b3dfeda699d5a90dd06a1dbdd4fea377c"
+  },
+  "runtime_paths": {
+    "mesa_sqlite": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa/sqlite",
+    "mesa_lancedb": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa/lancedb",
+    "mesa_kuzu": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa/kuzu",
+    "mesa_logs": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa/logs",
+    "mesa_temp": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa/temp",
+    "mesa_data_root": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa-data/data",
+    "mesa_data_logs": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa-data/logs",
+    "mesa_data_temp": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/mesa-data/temp",
+    "shared_temp": "/home/yasin/mesa-cert/runtime/RUN-20260831T142600Z-p8b02/shared-temp"
+  }
+}
