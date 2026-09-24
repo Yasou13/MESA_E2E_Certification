@@ -154,3 +154,33 @@ def test_scorers_surface_unknown_identity_instead_of_product_miss() -> None:
 
     assert retrieval.status == "MAPPING_INTEGRITY_ERROR"
     assert answer.status == "MAPPING_INTEGRITY_ERROR"
+
+
+def test_broad_entity_provenance_cannot_create_an_evidence_hit() -> None:
+    identity_map = IdentityMap()
+    identity_map.add_mapping("M-ENTITY", "S-ENTITY")
+    identity_map.add_mapping("M-GOLD", "S-GOLD")
+    gt = GroundTruthItem(
+        query_id="Q-PROVENANCE",
+        query_class="SINGLE_DIRECT",
+        question="question",
+        expected_source_chunk_ids=["S-GOLD"],
+        acceptable_answer_patterns=["answer"],
+    )
+
+    score = score_retrieval(
+        gt,
+        [
+            {
+                "chunk_id": "M-ENTITY",
+                "provenance": [
+                    {"chunk_id": "M-GOLD", "role": "support_or_debug"}
+                ],
+            }
+        ],
+        identity_map,
+    )
+
+    assert score.status == "MISS"
+    assert score.recall_at_1 == 0.0
+    assert score.normalized_retrieved_chunk_ids == ["S-ENTITY"]

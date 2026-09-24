@@ -48,7 +48,9 @@ def score_retrieval(
             matching_chunk_ids=[]
         )
 
-    # 1. Normalize retrieved chunk IDs to source IDs
+    # 1. Normalize only the first-class matched-evidence ID. Broad provenance is
+    # support/debug metadata and must never create a retrieval hit. The final
+    # product adapter remains WAIT_FOR_MESA_PHASE_1.
     normalized_chunks_by_rank: list[tuple[int, str]] = []
     all_normalized_chunk_ids: list[str] = []
     for idx, res in enumerate(retrieved_results[:5]):
@@ -59,19 +61,16 @@ def score_retrieval(
         elif res.get("id"):
             raw_ids.append(res["id"])
         if "provenance" in res:
-            if isinstance(res["provenance"], dict) and res["provenance"].get("chunk_id"):
-                raw_ids.append(res["provenance"]["chunk_id"])
-            elif isinstance(res["provenance"], list):
-                for p in res["provenance"]:
-                    if isinstance(p, dict) and p.get("chunk_id"):
-                        raw_ids.append(p["chunk_id"])
-                    else:
-                        return _mapping_integrity_error(
-                            gt, f"malformed provenance item at rank {rank}"
-                        )
-            else:
+            provenance = res["provenance"]
+            if not isinstance(provenance, (dict, list)):
                 return _mapping_integrity_error(
                     gt, f"malformed provenance at rank {rank}"
+                )
+            if isinstance(provenance, list) and any(
+                not isinstance(item, dict) for item in provenance
+            ):
+                return _mapping_integrity_error(
+                    gt, f"malformed provenance item at rank {rank}"
                 )
         if not raw_ids:
             return _mapping_integrity_error(
