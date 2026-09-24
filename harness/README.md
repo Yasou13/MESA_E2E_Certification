@@ -14,3 +14,14 @@ This directory owns deterministic certification code: runners, validators, score
 
 A harness/scorer change after a run starts invalidates that run.
 
+## Reproducible developer entrypoints
+
+```bash
+uv sync --locked --all-groups
+uv run --locked pytest
+uv run --locked python -O -m harness.self_test
+```
+
+`uv.lock` is the dependency authority for CI and local harness development.
+The optimized self-test command is mandatory because the production self-test
+must not depend on removable Python `assert` statements.

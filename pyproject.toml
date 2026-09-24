@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling==1.27.0"]
+build-backend = "hatchling.build"
+
+[project]
+name = "mesa-e2e-certification"
+version = "0.1.0"
+description = "Fail-closed Profile B certification harness for MESA"
+readme = "README.md"
+requires-python = ">=3.10,<3.15"
+dependencies = [
+  "pydantic>=2.10,<3",
+]
+
+[dependency-groups]
+dev = [
+  "pytest>=8.3,<10",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["harness"]
+
+[tool.pytest.ini_options]
+minversion = "8.3"
+addopts = ["-ra", "--strict-config", "--strict-markers"]
+testpaths = ["tests"]

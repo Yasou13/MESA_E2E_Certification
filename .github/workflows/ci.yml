@@ -1,0 +1,31 @@
+name: certification-harness-ci
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  harness:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - name: Install locked dependencies
+        run: uv sync --locked --all-groups
+      - name: Compile harness
+        run: uv run --locked python -m compileall -q harness scripts tests
+      - name: Verify agent pack
+        run: uv run --locked python scripts/verify_agent_pack.py
+      - name: Check tracked files for secrets
+        run: uv run --locked python scripts/check_no_secrets.py
+      - name: Validate JSON artifacts
+        run: uv run --locked python scripts/validate_json_artifacts.py
+      - name: Run optimized self-test
+        run: uv run --locked python -O -m harness.self_test
+      - name: Run test suite
+        run: uv run --locked pytest
