@@ -56,6 +56,23 @@ class InfrastructureStatus(str, Enum):
     BLOCKED = "BLOCKED"
 
 
+class ExecutionStatus(str, Enum):
+    NOT_RUN = "NOT_RUN"
+    COMPLETED = "COMPLETED"
+    FAILED = "FAILED"
+    BLOCKED = "BLOCKED"
+
+
+class VerdictStatus(str, Enum):
+    PROFILE_B_PASS_NATIVE = "PROFILE_B_PASS_NATIVE"
+    PROFILE_B_FAIL = "PROFILE_B_FAIL"
+    PROFILE_B_BLOCKED_PRECONDITION = "PROFILE_B_BLOCKED_PRECONDITION"
+    PROFILE_B_BLOCKED_EXTERNAL = "PROFILE_B_BLOCKED_EXTERNAL"
+    PROFILE_B_DIAGNOSTIC_BRIDGE_ONLY = "PROFILE_B_DIAGNOSTIC_BRIDGE_ONLY"
+    PROFILE_B_ABORTED_HUMAN_GATE = "PROFILE_B_ABORTED_HUMAN_GATE"
+    INVALIDATED_CODE_CHANGE = "INVALIDATED_CODE_CHANGE"
+
+
 class PatternMode(str, Enum):
     LITERAL = "literal"
     REGEX = "regex"
@@ -249,3 +266,22 @@ class ArtifactReference(VersionedRecord):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("timestamp_utc must be timezone-aware")
         return value
+
+
+class GateResult(VersionedRecord):
+    gate_id: str = Field(min_length=1)
+    hard: bool
+    execution_status: ExecutionStatus
+    status: GateStatus
+    required: dict[str, Any]
+    observed: dict[str, Any]
+    reason: str = Field(min_length=1)
+    evidence: list[str] = Field(default_factory=list)
+
+
+class FinalVerdict(VersionedRecord):
+    run_id: str = Field(min_length=1)
+    status: VerdictStatus
+    reasons: list[str] = Field(default_factory=list)
+    gate_statuses: dict[str, GateStatus] = Field(default_factory=dict)
+    missing_artifacts: list[str] = Field(default_factory=list)

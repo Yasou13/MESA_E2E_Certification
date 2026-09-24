@@ -1,0 +1,44 @@
+{
+  "schema_version": "1.0",
+  "mandatory_gate_ids": [
+    "B0",
+    "B1",
+    "B2",
+    "B3",
+    "B4",
+    "B5",
+    "B6",
+    "B7",
+    "B8",
+    "B9",
+    "B10",
+    "B11",
+    "B12",
+    "B13",
+    "B14"
+  ],
+  "gates": {
+    "B10": {
+      "gate_id": "B10",
+      "hard": true,
+      "requirements": {
+        "answerable_mrr": {"operator": "gte", "value": 0.7},
+        "answerable_recall_at_5": {"operator": "gte", "value": 0.8},
+        "rel_complete_evidence_at_5": {"operator": "gte", "value": 0.7},
+        "single_hop_recall_at_5": {"operator": "gte", "value": 0.9},
+        "tenant_leakage": {"operator": "eq", "value": 0}
+      }
+    },
+    "B12": {
+      "gate_id": "B12",
+      "hard": true,
+      "requirements": {
+        "answerable_pass_rate": {"operator": "gte", "value": 0.8},
+        "fabricated_evidence_chunk_ids": {"operator": "eq", "value": 0},
+        "no_answer_pass_rate": {"operator": "gte", "value": 0.8},
+        "unsupported_material_claim_rate": {"operator": "eq", "value": 0}
+      }
+    }
+  },
+  "methodology_note": "B12 remains hard under the current agent-pack contract; changing it requires explicit human approval."
+}

@@ -31,3 +31,9 @@ Record and hash:
 
 See `../agent-pack/13_BENCHMARK_CONFIG_FREEZE.md` for the authoritative policy.
 
+## Executable gate configuration
+
+`profile-b-gates.json` encodes the current B10 and B12 numerical thresholds
+from the agent pack and lists the complete mandatory B0–B14 gate set. B12
+remains hard under the current repository contract. Any future change to that
+methodology requires an explicit human decision and a new pre-run freeze.
