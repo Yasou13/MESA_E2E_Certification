@@ -3,7 +3,6 @@ Deterministic 17 Synthetic Self-Tests for Phase H0 Certification Harness.
 Adheres strictly to Doc 33 Section 3.
 """
 
-import json
 import time
 from harness.models import (
     GroundTruthItem, RequiredFact, EvidenceGroup, ExactSourceSpan,
@@ -108,11 +107,11 @@ def run_harness_self_tests() -> dict:
     _require(s8.status == "PARTIAL" and s8.complete_evidence_at_5 == 0.0 and s8.group_coverage_at_5 == 0.5, "case 8 failed")
     results.append({"case": 8, "name": "REL query missing exactly one evidence group", "status": "PASS"})
 
-    # --- Test 9: Malformed provenance ---
+    # --- Test 9: Malformed provenance is an integrity error, not a miss ---
     ret9 = [{"malformed": "data"}]
     s9 = score_retrieval(gt1, ret9, id_map)
-    _require(s9.status == "MISS", "case 9 failed")
-    results.append({"case": 9, "name": "malformed provenance", "status": "PASS"})
+    _require(s9.status == "MAPPING_INTEGRITY_ERROR", "case 9 failed")
+    results.append({"case": 9, "name": "malformed provenance fails closed", "status": "PASS"})
 
     # --- Test 10: Infrastructure error distinct from retrieval MISS ---
     s10 = score_retrieval(gt1, [], id_map, is_infrastructure_error=True)
@@ -132,15 +131,15 @@ def run_harness_self_tests() -> dict:
     _require(a12.status == "FAIL" and a12.grounded_pass is False, "case 12 failed")
     results.append({"case": 12, "name": "NO_ANSWER hallucinated answer", "status": "PASS"})
 
-    # --- Test 13: Correct answer with fabricated evidence ID ---
+    # --- Test 13: Unknown evidence ID is an identity integrity error ---
     gt13 = GroundTruthItem(
         query_id="TEST-13", query_class="SINGLE_DIRECT", question="Soru",
         expected_source_chunk_ids=["SRC-CHUNK-A"], acceptable_answer_patterns=["Doğru Cevap"]
     )
     ans13 = AnswerResponse(answer="Doğru Cevap", evidence_chunk_ids=["MESA-FAKE-999"], insufficient_evidence=False)
     a13 = score_answer(gt13, ans13, ["MESA-CHUNK-001"], id_map)
-    _require(a13.status == "FAIL" and any("Fabricated" in r for r in a13.reasons), "case 13 failed")
-    results.append({"case": 13, "name": "correct answer with fabricated evidence ID", "status": "PASS"})
+    _require(a13.status == "MAPPING_INTEGRITY_ERROR", "case 13 failed")
+    results.append({"case": 13, "name": "unknown evidence identity fails closed", "status": "PASS"})
 
     # --- Test 14: Correct wording but unsupported evidence ---
     ans14 = AnswerResponse(answer="Doğru Cevap", evidence_chunk_ids=["MESA-CHUNK-002"], insufficient_evidence=False)

@@ -5,7 +5,25 @@ Evaluates single-hop, relational, and negative retrieval against source ground t
 
 from typing import Any
 from harness.models import GroundTruthItem, RetrievalScore
-from harness.identity import IdentityMap
+from harness.identity import IdentityMap, UnknownIdentityError
+
+
+def _mapping_integrity_error(gt: GroundTruthItem, reason: str) -> RetrievalScore:
+    return RetrievalScore(
+        query_id=gt.query_id,
+        query_class=gt.query_class,
+        is_answerable=gt.is_answerable,
+        status="MAPPING_INTEGRITY_ERROR",
+        rank=None,
+        recall_at_1=0.0,
+        recall_at_5=0.0,
+        mrr=0.0,
+        group_coverage_at_5=0.0,
+        complete_evidence_at_5=0.0,
+        normalized_retrieved_chunk_ids=[],
+        matching_chunk_ids=[],
+        reasons=[reason],
+    )
 
 def score_retrieval(
     gt: GroundTruthItem,
@@ -47,8 +65,23 @@ def score_retrieval(
                 for p in res["provenance"]:
                     if isinstance(p, dict) and p.get("chunk_id"):
                         raw_ids.append(p["chunk_id"])
+                    else:
+                        return _mapping_integrity_error(
+                            gt, f"malformed provenance item at rank {rank}"
+                        )
+            else:
+                return _mapping_integrity_error(
+                    gt, f"malformed provenance at rank {rank}"
+                )
+        if not raw_ids:
+            return _mapping_integrity_error(
+                gt, f"retrieval result at rank {rank} has no resolvable chunk ID"
+            )
         for raw_id in raw_ids:
-            norm_id = identity_map.resolve_source_chunk_id(raw_id)
+            try:
+                norm_id = identity_map.resolve_source_chunk_id(raw_id)
+            except UnknownIdentityError as exc:
+                return _mapping_integrity_error(gt, str(exc))
             if norm_id:
                 normalized_chunks_by_rank.append((rank, norm_id))
                 if norm_id not in all_normalized_chunk_ids:
@@ -107,7 +140,7 @@ def score_retrieval(
             group_coverage_at_5=group_coverage,
             complete_evidence_at_5=complete_evidence,
             normalized_retrieved_chunk_ids=all_normalized_chunk_ids,
-            matching_chunk_ids=list(set(matched_chunks))
+            matching_chunk_ids=sorted(set(matched_chunks))
         )
 
     # 3. Single-hop / Standard Scoring
@@ -134,7 +167,7 @@ def score_retrieval(
             group_coverage_at_5=1.0,
             complete_evidence_at_5=1.0,
             normalized_retrieved_chunk_ids=all_normalized_chunk_ids,
-            matching_chunk_ids=list(set(matched_chunks))
+            matching_chunk_ids=sorted(set(matched_chunks))
         )
 
     return RetrievalScore(

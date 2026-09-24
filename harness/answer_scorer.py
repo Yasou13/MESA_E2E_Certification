@@ -5,8 +5,8 @@ Evaluates final grounded answers and negative abstention (Doc 17, Doc 33).
 
 import re
 from harness.models import GroundTruthItem, AnswerResponse, AnswerScore
-from harness.identity import IdentityMap
-from harness.normalizer import normalize_text, turkish_casefold
+from harness.identity import IdentityMap, UnknownIdentityError
+from harness.normalizer import get_abstention_marker, normalize_text, turkish_casefold
 
 def score_answer(
     gt: GroundTruthItem,
@@ -17,17 +17,35 @@ def score_answer(
     """Score final answer deterministically."""
     reasons = []
     
-    # 1. Normalize retrieved chunk IDs to source IDs
-    normalized_retrieved = {identity_map.resolve_source_chunk_id(cid) for cid in retrieved_chunk_ids}
-    
-    # 2. Normalize cited chunk IDs to source IDs
-    normalized_cited = {identity_map.resolve_source_chunk_id(cid) for cid in answer_obj.evidence_chunk_ids if cid}
+    try:
+        # 1. Normalize retrieved chunk IDs to source IDs
+        normalized_retrieved = {
+            identity_map.resolve_source_chunk_id(cid) for cid in retrieved_chunk_ids
+        }
+
+        # 2. Normalize cited chunk IDs to source IDs
+        normalized_cited = {
+            identity_map.resolve_source_chunk_id(cid)
+            for cid in answer_obj.evidence_chunk_ids
+            if cid
+        }
+    except UnknownIdentityError as exc:
+        return AnswerScore(
+            query_id=gt.query_id,
+            is_answerable=gt.is_answerable,
+            status="MAPPING_INTEGRITY_ERROR",
+            reasons=[str(exc)],
+            grounded_pass=False,
+            evidence_supported=False,
+            facts_satisfied=False,
+            forbidden_claims_absent=False,
+        )
     
     # Check NO_ANSWER queries
     if not gt.is_answerable or gt.query_class == "NO_ANSWER":
         # Rule: insufficient_evidence=true AND answer contains 'YETERSİZ KANIT'
         ans_norm = turkish_casefold(normalize_text(answer_obj.answer))
-        marker_norm = turkish_casefold("YETERSİZ KANIT")
+        marker_norm = turkish_casefold(get_abstention_marker())
         
         has_abstention_marker = marker_norm in ans_norm
         flag_set = answer_obj.insufficient_evidence is True
