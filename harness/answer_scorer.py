@@ -1,165 +1,290 @@
-"""
-Deterministic Answer Grader for Profile B.
-Evaluates final grounded answers and negative abstention (Doc 17, Doc 33).
-"""
+"""Fail-closed deterministic answer scorer for Profile B."""
+
+from __future__ import annotations
 
 import re
-from harness.models import GroundTruthItem, AnswerResponse, AnswerScore
+
 from harness.identity import IdentityMap, UnknownIdentityError
+from harness.models import (
+    AnswerPattern,
+    AnswerResponse,
+    AnswerScore,
+    GroundTruthItem,
+    PatternMode,
+)
 from harness.normalizer import get_abstention_marker, normalize_text, turkish_casefold
+
+
+DENIAL_PHRASES = (
+    "bulunmamaktadır",
+    "yer almamaktadır",
+    "cevap verilemez",
+    "bilgi verilemez",
+    "yanıt veremiyorum",
+    "kanıt yoktur",
+)
+
+
+def _normalized(text: str) -> str:
+    return turkish_casefold(normalize_text(text))
+
+
+def _contains_denial(text: str) -> bool:
+    normalized = _normalized(text)
+    return any(_normalized(phrase) in normalized for phrase in DENIAL_PHRASES)
+
+
+def _pattern_matches(pattern: AnswerPattern, text: str) -> bool:
+    if _contains_denial(text):
+        return False
+    normalized_text = _normalized(text)
+    if pattern.mode is PatternMode.LITERAL:
+        return _normalized(pattern.value or "") in normalized_text
+    if pattern.mode is PatternMode.REGEX:
+        normalized_pattern = _normalized(pattern.value or "")
+        return re.search(normalized_pattern, normalized_text) is not None
+    normalized_values = [_normalized(value) for value in pattern.values]
+    if pattern.mode is PatternMode.ALL_OF:
+        return all(value in normalized_text for value in normalized_values)
+    return any(value in normalized_text for value in normalized_values)
+
+
+def _has_unstructured_material(answer: str, claim_texts: list[str]) -> bool:
+    remainder = _normalized(answer)
+    for claim_text in sorted(claim_texts, key=len, reverse=True):
+        normalized_claim = _normalized(claim_text)
+        if normalized_claim not in remainder:
+            return True
+        remainder = remainder.replace(normalized_claim, " ", 1)
+    return bool(re.sub(r"[\W_]+", "", remainder, flags=re.UNICODE))
+
+
+def _mapping_error(gt: GroundTruthItem, error: UnknownIdentityError) -> AnswerScore:
+    return AnswerScore(
+        query_id=gt.query_id,
+        is_answerable=gt.is_answerable,
+        status="MAPPING_INTEGRITY_ERROR",
+        reasons=[str(error)],
+        grounded_pass=False,
+        evidence_supported=False,
+        facts_satisfied=False,
+        forbidden_claims_absent=False,
+    )
+
 
 def score_answer(
     gt: GroundTruthItem,
     answer_obj: AnswerResponse,
     retrieved_chunk_ids: list[str],
-    identity_map: IdentityMap
+    identity_map: IdentityMap,
 ) -> AnswerScore:
-    """Score final answer deterministically."""
-    reasons = []
-    
+    """Score an answer without converting semantic ambiguity into PASS."""
     try:
-        # 1. Normalize retrieved chunk IDs to source IDs
         normalized_retrieved = {
-            identity_map.resolve_source_chunk_id(cid) for cid in retrieved_chunk_ids
+            identity_map.resolve_source_chunk_id(chunk_id)
+            for chunk_id in retrieved_chunk_ids
         }
-
-        # 2. Normalize cited chunk IDs to source IDs
         normalized_cited = {
-            identity_map.resolve_source_chunk_id(cid)
-            for cid in answer_obj.evidence_chunk_ids
-            if cid
+            identity_map.resolve_source_chunk_id(chunk_id)
+            for chunk_id in answer_obj.evidence_chunk_ids
+            if chunk_id
         }
+        normalized_claim_evidence = [
+            {
+                identity_map.resolve_source_chunk_id(chunk_id)
+                for chunk_id in claim.evidence_chunk_ids
+            }
+            for claim in answer_obj.claims
+        ]
     except UnknownIdentityError as exc:
-        return AnswerScore(
-            query_id=gt.query_id,
-            is_answerable=gt.is_answerable,
-            status="MAPPING_INTEGRITY_ERROR",
-            reasons=[str(exc)],
-            grounded_pass=False,
-            evidence_supported=False,
-            facts_satisfied=False,
-            forbidden_claims_absent=False,
-        )
-    
-    # Check NO_ANSWER queries
+        return _mapping_error(gt, exc)
+
+    reasons: list[str] = []
+    unresolved: list[str] = []
+
     if not gt.is_answerable or gt.query_class == "NO_ANSWER":
-        # Rule: insufficient_evidence=true AND answer contains 'YETERSİZ KANIT'
-        ans_norm = turkish_casefold(normalize_text(answer_obj.answer))
-        marker_norm = turkish_casefold(get_abstention_marker())
-        
-        has_abstention_marker = marker_norm in ans_norm
+        exact_marker = _normalized(answer_obj.answer) == _normalized(
+            get_abstention_marker()
+        )
         flag_set = answer_obj.insufficient_evidence is True
-        no_fabricated_evidence = len(normalized_cited) == 0 or normalized_cited.issubset(normalized_retrieved)
-        
-        if flag_set and has_abstention_marker and no_fabricated_evidence:
+        no_citations = not normalized_cited and not answer_obj.claims
+        if flag_set and exact_marker and no_citations:
             return AnswerScore(
                 query_id=gt.query_id,
                 is_answerable=False,
                 status="PASS",
-                reasons=["Correct abstention with required marker"],
+                reasons=["Exact canonical abstention without appended claims"],
                 grounded_pass=True,
                 evidence_supported=True,
                 facts_satisfied=True,
-                forbidden_claims_absent=True
+                forbidden_claims_absent=True,
             )
-        else:
-            if not flag_set:
-                reasons.append("insufficient_evidence flag not set to true for unanswerable question")
-            if not has_abstention_marker:
-                reasons.append("Answer missing canonical YETERSİZ KANIT abstention marker")
-            if not no_fabricated_evidence:
-                reasons.append("Fabricated evidence IDs cited on unanswerable question")
-            return AnswerScore(
-                query_id=gt.query_id,
-                is_answerable=False,
-                status="FAIL",
-                reasons=reasons,
-                grounded_pass=False,
-                evidence_supported=False,
-                facts_satisfied=False,
-                forbidden_claims_absent=True
-            )
+        if not flag_set:
+            reasons.append("insufficient_evidence flag is not true")
+        if not exact_marker:
+            reasons.append("answer is not exactly the canonical abstention marker")
+        if not no_citations:
+            reasons.append("NO_ANSWER response contains evidence citations or claims")
+        return AnswerScore(
+            query_id=gt.query_id,
+            is_answerable=False,
+            status="FAIL",
+            reasons=reasons,
+            grounded_pass=False,
+            evidence_supported=False,
+            facts_satisfied=False,
+            forbidden_claims_absent=True,
+        )
 
-    # 3. Answerable query grading
-    # Rule 1: insufficient_evidence must be False
-    if answer_obj.insufficient_evidence is True:
+    if answer_obj.insufficient_evidence:
         return AnswerScore(
             query_id=gt.query_id,
             is_answerable=True,
             status="FAIL",
-            reasons=["Model incorrectly abstained on answerable question"],
+            reasons=["model incorrectly abstained on an answerable question"],
             grounded_pass=False,
             evidence_supported=False,
             facts_satisfied=False,
-            forbidden_claims_absent=True
+            forbidden_claims_absent=True,
         )
 
-    # Rule 2: Cited evidence must be non-empty and subset of retrieved
-    if not normalized_cited:
-        reasons.append("No evidence chunk IDs cited")
-    elif not normalized_cited.issubset(normalized_retrieved):
-        fabricated = normalized_cited - normalized_retrieved
-        reasons.append(f"Fabricated evidence IDs not in retrieved context: {fabricated}")
-
-    # Rule 3: Cited evidence must cover expected source chunks / evidence groups
-    expected_ids = set(gt.expected_source_chunk_ids)
-    evidence_supported = False
-    if gt.query_class == "RELATIONAL" and gt.evidence_groups:
-        covered_groups = set()
-        for group in gt.evidence_groups:
-            if set(group.acceptable_source_chunk_ids).intersection(normalized_cited):
-                covered_groups.add(group.group_id)
-        if len(covered_groups) == len(gt.evidence_groups):
-            evidence_supported = True
-        else:
-            reasons.append(f"Cited evidence covers only {len(covered_groups)}/{len(gt.evidence_groups)} required groups")
-    else:
-        if expected_ids.intersection(normalized_cited):
-            evidence_supported = True
-        else:
-            reasons.append("Cited evidence does not intersect required expected_source_chunk_ids")
-
-    # Rule 4: Answer text must satisfy required fact patterns / acceptable patterns
-    ans_text_norm = turkish_casefold(normalize_text(answer_obj.answer))
-    facts_satisfied = False
-    
-    if gt.acceptable_answer_patterns:
-        matched_any = False
-        for pat in gt.acceptable_answer_patterns:
-            pat_norm = turkish_casefold(normalize_text(pat))
-            if pat_norm in ans_text_norm or re.search(re.escape(pat_norm), ans_text_norm):
-                matched_any = True
-                break
-        facts_satisfied = matched_any
-        if not facts_satisfied:
-            reasons.append("Answer does not match acceptable answer patterns")
-    else:
-        facts_satisfied = True
-
-    # Rule 5: Forbidden claims must not be present
-    forbidden_absent = True
-    for forb in gt.forbidden_claims:
-        forb_norm = turkish_casefold(normalize_text(forb))
-        if forb_norm in ans_text_norm:
-            forbidden_absent = False
-            reasons.append(f"Answer contains forbidden claim: {forb}")
-            break
-
-    is_pass = (
-        len(normalized_cited) > 0 and
-        normalized_cited.issubset(normalized_retrieved) and
-        evidence_supported and
-        facts_satisfied and
-        forbidden_absent
+    citation_subset = bool(normalized_cited) and normalized_cited.issubset(
+        normalized_retrieved
     )
+    if not normalized_cited:
+        reasons.append("no evidence chunk IDs cited")
+    elif not citation_subset:
+        fabricated = sorted(normalized_cited - normalized_retrieved)
+        reasons.append(f"evidence IDs outside retrieved context: {fabricated}")
 
+    if gt.query_class == "RELATIONAL" and gt.evidence_groups:
+        covered_groups = {
+            group.group_id
+            for group in gt.evidence_groups
+            if set(group.acceptable_source_chunk_ids).intersection(normalized_cited)
+        }
+        evidence_supported = len(covered_groups) == len(gt.evidence_groups)
+        if not evidence_supported:
+            reasons.append(
+                "cited evidence covers only "
+                f"{len(covered_groups)}/{len(gt.evidence_groups)} required groups"
+            )
+    else:
+        expected_ids = set(gt.expected_source_chunk_ids)
+        evidence_supported = bool(expected_ids.intersection(normalized_cited))
+        if not evidence_supported:
+            reasons.append(
+                "cited evidence does not intersect expected_source_chunk_ids"
+            )
+
+    answer_normalized = _normalized(answer_obj.answer)
+    forbidden_absent = True
+    for forbidden in gt.forbidden_claims:
+        if _normalized(forbidden) in answer_normalized:
+            forbidden_absent = False
+            reasons.append(f"answer contains forbidden claim: {forbidden}")
+
+    required_by_id = {fact.fact_id: fact for fact in gt.required_facts}
+    if not required_by_id:
+        unresolved.append("answerable item has no source-linked required_facts")
+    if not answer_obj.claims:
+        unresolved.append("answer has no structured material claims")
+
+    unknown_claim_facts = sorted(
+        {
+            fact_id
+            for claim in answer_obj.claims
+            for fact_id in claim.fact_ids
+            if fact_id not in required_by_id
+        }
+    )
+    if unknown_claim_facts:
+        unresolved.append(f"claims reference unknown fact IDs: {unknown_claim_facts}")
+
+    all_claim_evidence_supported = True
+    for claim, claim_evidence in zip(
+        answer_obj.claims, normalized_claim_evidence, strict=True
+    ):
+        if not claim_evidence.issubset(normalized_retrieved):
+            reasons.append(
+                f"claim evidence is outside retrieved context: {claim.fact_ids}"
+            )
+            all_claim_evidence_supported = False
+        if not claim_evidence.issubset(normalized_cited):
+            reasons.append(
+                f"claim evidence is absent from answer citations: {claim.fact_ids}"
+            )
+            all_claim_evidence_supported = False
+
+    satisfied_fact_ids: set[str] = set()
+    for fact_id, fact in required_by_id.items():
+        patterns = [
+            pattern
+            for pattern in gt.acceptable_answer_patterns
+            if fact_id in pattern.fact_ids
+        ]
+        if not patterns:
+            unresolved.append(f"required fact {fact_id} has no explicit pattern")
+            continue
+        fact_source_ids = {span.source_chunk_id for span in fact.supported_by}
+        if not fact_source_ids:
+            unresolved.append(f"required fact {fact_id} has no frozen evidence link")
+            continue
+        candidate_indexes = [
+            index
+            for index, claim in enumerate(answer_obj.claims)
+            if fact_id in claim.fact_ids
+        ]
+        if not candidate_indexes:
+            reasons.append(f"required fact {fact_id} is missing")
+            continue
+        fact_passed = False
+        for index in candidate_indexes:
+            claim = answer_obj.claims[index]
+            if not fact_source_ids.intersection(normalized_claim_evidence[index]):
+                continue
+            if any(_pattern_matches(pattern, claim.text) for pattern in patterns):
+                fact_passed = True
+                break
+        if fact_passed:
+            satisfied_fact_ids.add(fact_id)
+        else:
+            reasons.append(
+                f"required fact {fact_id} is denied, unsupported, or unmatched"
+            )
+
+    facts_satisfied = bool(required_by_id) and satisfied_fact_ids == set(
+        required_by_id
+    )
+    if answer_obj.claims and _has_unstructured_material(
+        answer_obj.answer, [claim.text for claim in answer_obj.claims]
+    ):
+        unresolved.append("answer contains unstructured material outside claims")
+
+    evidence_supported = (
+        evidence_supported and citation_subset and all_claim_evidence_supported
+    )
+    hard_failure = bool(reasons)
+    if hard_failure:
+        status = "FAIL"
+    elif unresolved:
+        status = "UNRESOLVED"
+    elif evidence_supported and facts_satisfied and forbidden_absent:
+        status = "PASS"
+    else:
+        status = "FAIL"
+        reasons.append("grounded PASS invariants were not satisfied")
+
+    is_pass = status == "PASS"
     return AnswerScore(
         query_id=gt.query_id,
         is_answerable=True,
-        status="PASS" if is_pass else "FAIL",
-        reasons=reasons if not is_pass else ["Answer valid, grounded, and verified against evidence"],
+        status=status,
+        reasons=(reasons + unresolved)
+        if not is_pass
+        else ["all source-linked facts and material claims verified"],
         grounded_pass=is_pass,
         evidence_supported=evidence_supported,
         facts_satisfied=facts_satisfied,
-        forbidden_claims_absent=forbidden_absent
+        forbidden_claims_absent=forbidden_absent,
     )

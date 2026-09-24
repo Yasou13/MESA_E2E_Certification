@@ -120,7 +120,7 @@ def run_harness_self_tests() -> dict:
 
     # --- Test 11: NO_ANSWER correct abstention ---
     gt11 = GroundTruthItem(query_id="TEST-11", query_class="NO_ANSWER", question="Olmayan kanun maddesi?", is_answerable=False)
-    ans11 = AnswerResponse(answer="Verilen kaynaklarda bu bilgi bulunmamaktadır. YETERSİZ KANIT.", evidence_chunk_ids=[], insufficient_evidence=True)
+    ans11 = AnswerResponse(answer="YETERSİZ KANIT", evidence_chunk_ids=[], insufficient_evidence=True)
     a11 = score_answer(gt11, ans11, ["MESA-CHUNK-001"], id_map)
     _require(a11.status == "PASS" and a11.grounded_pass is True, "case 11 failed")
     results.append({"case": 11, "name": "NO_ANSWER correct abstention", "status": "PASS"})
@@ -144,7 +144,7 @@ def run_harness_self_tests() -> dict:
     # --- Test 14: Correct wording but unsupported evidence ---
     ans14 = AnswerResponse(answer="Doğru Cevap", evidence_chunk_ids=["MESA-CHUNK-002"], insufficient_evidence=False)
     a14 = score_answer(gt13, ans14, ["MESA-CHUNK-001", "MESA-CHUNK-002"], id_map)
-    _require(a14.status == "FAIL" and any("Cited evidence does not intersect" in r for r in a14.reasons), "case 14 failed")
+    _require(a14.status == "FAIL" and any("cited evidence does not intersect" in r for r in a14.reasons), "case 14 failed")
     results.append({"case": 14, "name": "correct wording but unsupported evidence", "status": "PASS"})
 
     # --- Test 15: Unicode/Turkish normalization fixtures ---
@@ -169,7 +169,7 @@ def run_harness_self_tests() -> dict:
     # --- Test 17: Intentionally wrong answer expected to fail ---
     ans17 = AnswerResponse(answer="Tamamen Yanlış ve Uydurma Bilgi", evidence_chunk_ids=["MESA-CHUNK-001"], insufficient_evidence=False)
     a17 = score_answer(gt13, ans17, ["MESA-CHUNK-001"], id_map)
-    _require(a17.status == "FAIL" and a17.grounded_pass is False, "case 17 failed")
+    _require(a17.status != "PASS" and a17.grounded_pass is False, "case 17 failed")
     results.append({"case": 17, "name": "intentionally wrong answer expected to fail", "status": "PASS"})
 
     return {
