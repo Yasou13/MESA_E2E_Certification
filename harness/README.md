@@ -25,3 +25,10 @@ uv run --locked python -O -m harness.self_test
 `uv.lock` is the dependency authority for CI and local harness development.
 The optimized self-test command is mandatory because the production self-test
 must not depend on removable Python `assert` statements.
+
+## Raw-first execution evidence
+
+New runs use separate `raw/retrieval`, `raw/answers`, `scored/retrieval`, and
+`scored/answers` lanes. Raw records and their SHA sidecars must exist and pass
+the sealed oracle audit before scored output can be written. Existing run
+directories without an E2E layout marker are treated as immutable/unowned.
