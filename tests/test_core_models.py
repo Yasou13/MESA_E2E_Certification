@@ -47,7 +47,16 @@ def test_versioned_records_forbid_unknown_fields_and_serialize_deterministically
         source_chunk_id="S-1",
         text="evidence",
     )
-    artifact = ArtifactReference(path="raw/Q-1.json", sha256="d" * 64)
+    artifact = ArtifactReference(
+        path="raw/Q-1.json",
+        sha256="d" * 64,
+        producer="test",
+        phase="E2",
+        timestamp_utc=timestamp,
+        source_run_id="RUN-test",
+        immutable=True,
+        sealed=False,
+    )
 
     assert request.schema_version == "1.0"
     assert response.schema_version == "1.0"

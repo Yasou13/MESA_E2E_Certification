@@ -236,8 +236,16 @@ class AnswerScore(VersionedRecord):
 class ArtifactReference(VersionedRecord):
     path: str = Field(min_length=1)
     sha256: str = Field(pattern=SHA256_PATTERN)
-    producer: Optional[str] = None
-    phase: Optional[str] = None
-    source_run_id: Optional[str] = None
-    immutable: bool = False
-    sealed: bool = False
+    producer: str = Field(min_length=1)
+    phase: str = Field(min_length=1)
+    timestamp_utc: datetime
+    source_run_id: str = Field(min_length=1)
+    immutable: bool
+    sealed: bool
+
+    @field_validator("timestamp_utc")
+    @classmethod
+    def timestamp_must_be_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp_utc must be timezone-aware")
+        return value

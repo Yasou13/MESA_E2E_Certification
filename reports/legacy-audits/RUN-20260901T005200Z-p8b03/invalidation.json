@@ -1,0 +1,19 @@
+{
+  "audit_version": "1.0",
+  "historical_run_id": "RUN-20260901T005200Z-p8b03",
+  "historical_verdict": {
+    "certification_verdict": "PASS",
+    "overall_status": "CERTIFIED"
+  },
+  "current_interpretation": "NOT_A_VALID_PROFILE_B_V2_CERTIFICATION_RESULT",
+  "original_evidence_mutated": false,
+  "reasons": [
+    "hard gate results contradict the historical PASS verdict",
+    "retrieval scorer treated broad entity provenance as ranked evidence",
+    "answer scorer did not enforce source-linked required facts or strict abstention",
+    "nine JSON control artifacts declare a different run_id without reuse authorization",
+    "contract-freeze.json and contract-freeze.SHA256 are absent"
+  ],
+  "supersession_status": "HISTORICAL_EVIDENCE_PRESERVED_PENDING_FUTURE_PROFILE_B_V2_RUN",
+  "source_hash_manifest": "SHA256SUMS.txt"
+}
