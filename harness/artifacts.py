@@ -243,6 +243,23 @@ class RunArtifactStore:
             self._query_path(self.raw_answers_dir, capture.query_id), payload
         )
 
+    def compute_raw_manifest(self) -> dict[str, Any]:
+        entries: list[dict[str, str]] = []
+        for lane_dir in (self.raw_retrieval_dir, self.raw_answers_dir):
+            if lane_dir.is_dir():
+                for json_file in sorted(lane_dir.glob("*.json")):
+                    sha = self._verify_seal(json_file)
+                    rel_path = json_file.relative_to(self.run_dir).as_posix()
+                    entries.append({"path": rel_path, "sha256": sha})
+        entries.sort(key=lambda item: item["path"])
+        manifest_hash = _sha256_bytes(canonical_json_bytes(entries))
+        return {
+            "schema_version": "1.0",
+            "run_id": self.run_id,
+            "manifest_hash": manifest_hash,
+            "entries": entries,
+        }
+
     def persist_oracle_audit(self, report: dict[str, Any]) -> Path:
         status = report.get("status")
         findings = report.get("findings")
@@ -251,8 +268,17 @@ class RunArtifactStore:
             raise ArtifactStoreError("invalid oracle audit report")
         if finding_count != len(findings):
             raise ArtifactStoreError("oracle audit finding_count mismatch")
+
+        report_copy = dict(report)
+        if not report_copy.get("raw_manifest_hash"):
+            raw_man = self.compute_raw_manifest()
+            report_copy["raw_manifest_hash"] = raw_man["manifest_hash"]
+            report_copy["raw_artifacts"] = raw_man["entries"]
+        if not report_copy.get("run_id"):
+            report_copy["run_id"] = self.run_id
+
         return self._write_immutable_json(
-            self.run_dir / "oracle-leakage-audit.json", report
+            self.run_dir / "oracle-leakage-audit.json", report_copy
         )
 
     def _require_passing_oracle_audit(self) -> None:
@@ -262,6 +288,12 @@ class RunArtifactStore:
         if report.get("status") != "PASS" or report.get("finding_count") != 0:
             raise ArtifactOrderError(
                 f"oracle audit must PASS before scoring: {report.get('status')}"
+            )
+        current_man = self.compute_raw_manifest()
+        audited_hash = report.get("raw_manifest_hash")
+        if current_man["manifest_hash"] != audited_hash:
+            raise ArtifactOrderError(
+                f"ORACLE_AUDIT_STALE: raw manifest hash {current_man['manifest_hash']} does not match audited hash {audited_hash}"
             )
 
     def persist_scored(

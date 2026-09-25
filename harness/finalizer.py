@@ -11,7 +11,10 @@ import shutil
 import tempfile
 from typing import Any, Mapping
 
-from harness.models import VerdictStatus
+from pydantic import ValidationError
+
+from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, MANDATORY_REPOSITORIES
+from harness.models import EvidenceIndex, VerdictStatus
 
 
 REQUIRED_RELEASE_FILES = {
@@ -147,6 +150,28 @@ def _load_and_validate_source(
         raise ReleaseFinalizationError(
             f"sensitive field is forbidden in {name}: {sensitive_path}"
         )
+
+    if name == "evidence-index.json":
+        try:
+            ev_model = EvidenceIndex.model_validate(payload)
+        except ValidationError as exc:
+            raise ReleaseFinalizationError(f"evidence-index.json fails schema: {exc}") from exc
+        if ev_model.index_hash:
+            entries_for_hash = [
+                {"path": art.path, "sha256": art.sha256}
+                for art in sorted(ev_model.artifacts, key=lambda item: item.path)
+            ]
+            canonical_bytes = json.dumps(
+                entries_for_hash, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+            observed_index_hash = hashlib.sha256(canonical_bytes).hexdigest()
+            if observed_index_hash != ev_model.index_hash:
+                raise ReleaseFinalizationError("evidence-index index_hash integrity mismatch")
+        for art in ev_model.artifacts:
+            if art.source_run_id != run_id:
+                raise ReleaseFinalizationError(
+                    f"unauthorized foreign source_run_id in evidence index: {art.source_run_id} for {art.path}"
+                )
     return content
 
 
@@ -160,11 +185,138 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
         raise ReleaseFinalizationError("gate-results.json has no gate results")
     if verdict != VerdictStatus.PROFILE_B_PASS_NATIVE.value:
         return
+
+    # 1. Run lifecycle terminal state validation
+    run_manifest = payloads.get("run_manifest.json")
+    if isinstance(run_manifest, dict):
+        manifest_status = run_manifest.get("status")
+        if manifest_status in {"FAIL", "INVALIDATED", "BLOCKED", "INVALID", "UNVERIFIED"}:
+            raise ReleaseFinalizationError(f"run lifecycle is invalid: {manifest_status}")
+        if run_manifest.get("lifecycle_valid") is False:
+            raise ReleaseFinalizationError("run lifecycle terminal state is invalid")
+        if run_manifest.get("lifecycle_status") in {"FAIL", "INVALIDATED", "BLOCKED", "INVALID"}:
+            raise ReleaseFinalizationError(
+                f"run lifecycle terminal state is invalid: {run_manifest.get('lifecycle_status')}"
+            )
+
+    # 2. Contract freeze validation
+    contract_freeze = payloads.get("contract-freeze.json")
+    if isinstance(contract_freeze, dict):
+        freeze_status = contract_freeze.get("status")
+        if freeze_status in {
+            "FAIL",
+            "INVALID_FREEZE",
+            "FREEZE_INVALID",
+            "MISSING_FREEZE",
+            "INVALIDATED_CODE_CHANGE",
+            "FREEZE_MISSING_REQUIRED_MATERIAL",
+            "FREEZE_REPOSITORY_IDENTITY_MISSING",
+            "FREEZE_HASH_MISMATCH",
+        }:
+            raise ReleaseFinalizationError(f"contract freeze is invalid: {freeze_status}")
+        if contract_freeze.get("freeze_valid") is False:
+            raise ReleaseFinalizationError("contract freeze is invalid")
+        repos = contract_freeze.get("repository_shas")
+        if isinstance(repos, dict):
+            missing_repos = sorted(MANDATORY_REPOSITORIES - set(repos.keys()))
+            if missing_repos:
+                raise ReleaseFinalizationError(
+                    f"contract freeze missing mandatory repositories: {missing_repos}"
+                )
+        materials = contract_freeze.get("materials")
+        if isinstance(materials, list) and materials:
+            present_cats = {
+                m.get("category") for m in materials if isinstance(m, dict)
+            }
+            missing_cats = sorted(MANDATORY_MATERIAL_CATEGORIES - present_cats)
+            if missing_cats:
+                raise ReleaseFinalizationError(
+                    f"contract freeze missing mandatory material categories: {missing_cats}"
+                )
+
+    # 3. Oracle audit and raw sealing validation
+    for name, pl in payloads.items():
+        if isinstance(pl, dict):
+            if pl.get("oracle_audit_stale") is True:
+                raise ReleaseFinalizationError(f"oracle audit is stale in {name}")
+            if pl.get("oracle_audit_status") in {"STALE", "FAIL"}:
+                raise ReleaseFinalizationError(
+                    f"oracle audit is {pl.get('oracle_audit_status')} in {name}"
+                )
+
+    # 4. Mandatory PASS artifacts
     for name in sorted(_REQUIRED_PASS_ARTIFACTS):
         if payloads[name].get("status") != "PASS":
             raise ReleaseFinalizationError(
                 f"PASS release requires {name} status PASS"
             )
+
+    # 5. Authoritative gate results recomputation
+    gates = gate_results["gates"]
+    gate_ids = [g.get("gate_id") for g in gates if isinstance(g, dict)]
+    if len(gate_ids) != len(set(gate_ids)):
+        raise ReleaseFinalizationError("duplicate gate results found in gate-results.json")
+
+    mandatory_gate_ids: set[str] = set()
+    if "mandatory_gate_ids" in gate_results:
+        if isinstance(gate_results["mandatory_gate_ids"], list):
+            mandatory_gate_ids = set(gate_results["mandatory_gate_ids"])
+            missing = sorted(mandatory_gate_ids - set(gate_ids))
+            if missing:
+                raise ReleaseFinalizationError(
+                    f"mandatory gate results missing: {missing}"
+                )
+
+    for g in gates:
+        if not isinstance(g, dict):
+            raise ReleaseFinalizationError("gate entry must be an object")
+        gid = g.get("gate_id", "unknown")
+        status = g.get("status")
+        is_hard = g.get("hard", False) or (gid in mandatory_gate_ids)
+
+        if is_hard and status != "PASS":
+            raise ReleaseFinalizationError(
+                f"hard gate {gid} has status {status}, cannot promote PASS release"
+            )
+        if status in {"FAIL", "UNVERIFIED", "BLOCKED"}:
+            if is_hard:
+                raise ReleaseFinalizationError(
+                    f"hard gate {gid} failed or unverified: {status}"
+                )
+
+        reqs = g.get("requirements")
+        obs = g.get("observed")
+        if status == "PASS" and isinstance(reqs, dict) and isinstance(obs, dict):
+            for metric, req in reqs.items():
+                if metric not in obs:
+                    raise ReleaseFinalizationError(
+                        f"gate {gid} marked PASS but missing observed metric {metric}"
+                    )
+                val = obs[metric]
+                op = req.get("operator") if isinstance(req, dict) else None
+                expected_val = req.get("value") if isinstance(req, dict) else None
+                if op == "gte" and val < expected_val:
+                    raise ReleaseFinalizationError(
+                        f"gate {gid} marked PASS but observed metric {metric}={val} fails requirements (gte {expected_val})"
+                    )
+                elif op == "lte" and val > expected_val:
+                    raise ReleaseFinalizationError(
+                        f"gate {gid} marked PASS but observed metric {metric}={val} fails requirements (lte {expected_val})"
+                    )
+                elif op == "eq" and val != expected_val:
+                    raise ReleaseFinalizationError(
+                        f"gate {gid} marked PASS but observed metric {metric}={val} fails requirements (eq {expected_val})"
+                    )
+
+    any_failed = any(
+        (g.get("hard", False) or g.get("gate_id") in mandatory_gate_ids)
+        and g.get("status") != "PASS"
+        for g in gates
+    )
+    if any_failed:
+        raise ReleaseFinalizationError(
+            "tampered final_verdict: hard gate failed but verdict claimed PASS"
+        )
 
 
 def finalize_release(
