@@ -304,6 +304,8 @@ class CertificationTransaction:
 
                 if scoring_fn:
                     scored = scoring_fn(raw_payload)
+                    if scored is None:
+                        continue
                 elif isinstance(raw_payload, dict) and "gt" in raw_payload and "answer_obj" in raw_payload:
                     scored = score_answer(
                         gt=raw_payload["gt"],
@@ -344,6 +346,11 @@ class CertificationTransaction:
 
                 self.store.persist_scored(lane=lane, query_id=query_id, score=scored)
                 evaluated_items.append(scored)
+
+            if not evaluated_items:
+                msg = "scoring failed: 0 scored items produced from raw artifacts"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
 
             oracle_audit_path = self.run_dir / "oracle-leakage-audit.json"
             oracle_audit_hash = hashlib.sha256(oracle_audit_path.read_bytes()).hexdigest()
