@@ -15,13 +15,42 @@ from harness.models import (
 from harness.normalizer import get_abstention_marker, normalize_text, turkish_casefold
 
 
+DENIAL_WORDS = frozenset(
+    {
+        "değil",
+        "değildir",
+        "yok",
+        "yoktur",
+        "bulunmaz",
+        "bulunmamaktadır",
+        "öngörülmemiştir",
+        "öngörülmez",
+        "uygulanmaz",
+        "uygulanamaz",
+        "geçersizdir",
+    }
+)
+
 DENIAL_PHRASES = (
-    "bulunmamaktadır",
+    "geçerli değildir",
+    "söz konusu değildir",
     "yer almamaktadır",
     "cevap verilemez",
     "bilgi verilemez",
     "yanıt veremiyorum",
     "kanıt yoktur",
+    "yetersiz kanıt",
+)
+
+STOPWORDS = frozenset(
+    {
+        "ve", "veya", "ile", "için", "bir", "bu", "ise", "de", "da", "göre",
+        "olarak", "gibi", "ancak", "fakat", "şu", "o", "ki", "daha", "en",
+        "ayrıca", "her", "tüm", "bütün", "vardır", "ise", "ya", "ne",
+        "hakkında", "olmak", "olan", "olduğu", "buna", "bunun", "şekilde",
+        "somut", "olayda", "olay", "ilgili", "gereğince", "uyarınca",
+        "belirtilmiştir", "öngörülmüştür", "düzenlenmiştir", "yer", "alır",
+    }
 )
 
 
@@ -29,13 +58,29 @@ def _normalized(text: str) -> str:
     return turkish_casefold(normalize_text(text))
 
 
-def _contains_denial(text: str) -> bool:
+def _contains_denial(text: str, target: str = "") -> bool:
     normalized = _normalized(text)
-    return any(_normalized(phrase) in normalized for phrase in DENIAL_PHRASES)
+    norm_target = _normalized(target) if target else ""
+    for phrase in DENIAL_PHRASES:
+        norm_phrase = _normalized(phrase)
+        if norm_phrase in normalized and norm_phrase not in norm_target:
+            return True
+    for word in DENIAL_WORDS:
+        norm_word = _normalized(word)
+        if norm_word not in norm_target:
+            if re.search(r"(?:\b|_)" + re.escape(norm_word) + r"(?:\b|_)", normalized):
+                return True
+    return False
 
 
 def _pattern_matches(pattern: AnswerPattern, text: str) -> bool:
-    if _contains_denial(text):
+    target_str = ""
+    if pattern.mode in {PatternMode.LITERAL, PatternMode.REGEX}:
+        target_str = pattern.value or ""
+    elif pattern.values:
+        target_str = " ".join(pattern.values)
+
+    if _contains_denial(text, target=target_str):
         return False
     normalized_text = _normalized(text)
     if pattern.mode is PatternMode.LITERAL:
@@ -243,9 +288,25 @@ def score_answer(
             claim = answer_obj.claims[index]
             if not fact_source_ids.intersection(normalized_claim_evidence[index]):
                 continue
-            if any(_pattern_matches(pattern, claim.text) for pattern in patterns):
-                fact_passed = True
-                break
+            if not any(_pattern_matches(pattern, claim.text) for pattern in patterns):
+                continue
+
+            # Check for unsupported additional material in the claim itself
+            source_texts = " ".join(span.exact_text for span in fact.supported_by) + " " + fact.claim
+            source_words = set(re.findall(r"\w+", _normalized(source_texts)))
+            claim_words = [
+                w for w in re.findall(r"\w+", _normalized(claim.text))
+                if len(w) > 2 and w not in STOPWORDS
+            ]
+            unsupported_words = [w for w in claim_words if w not in source_words]
+            if len(unsupported_words) >= 3:
+                unresolved.append(
+                    f"claim {claim.fact_ids} contains unsupported material: {' '.join(unsupported_words[:5])}"
+                )
+                continue
+
+            fact_passed = True
+            break
         if fact_passed:
             satisfied_fact_ids.add(fact_id)
         else:
