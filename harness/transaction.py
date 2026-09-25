@@ -200,6 +200,8 @@ class CertificationTransaction:
                 self.store = RunArtifactStore(self.run_dir, self.run_id)
             manifest_info = self.store.compute_raw_manifest()
             self.raw_manifest_hash = manifest_info["manifest_hash"]
+            raw_manifest_path = self.run_dir / "raw-manifest.json"
+            self.store._write_immutable_json(raw_manifest_path, manifest_info)
             self.lifecycle.transition(RunStatus.TEST_COMPLETED)
             self.completed_phases.add(TransactionPhase.RAW_SEALING)
             self.current_step_idx += 1
@@ -351,6 +353,53 @@ class CertificationTransaction:
             (self.run_dir / "retrieval-test-report.json").write_bytes(report_bytes + b"\n")
             (self.run_dir / "scoring-report.json").write_bytes(report_bytes + b"\n")
 
+            # Calculate retrieval & answer metrics from evaluated_items
+            retrieval_items = [it for it in evaluated_items if it.get("lane") == "retrieval"]
+            answer_items = [it for it in evaluated_items if it.get("lane") == "answers"]
+
+            metrics_computed: dict[str, Any] = {}
+            if retrieval_items:
+                r5_vals = [it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0) for it in retrieval_items]
+                mrr_vals = [it.get("mrr", 1.0 if it.get("status") == "PASS" else 0.0) for it in retrieval_items]
+                rel_vals = [it.get("rel_complete_evidence_at_5", it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0)) for it in retrieval_items]
+                single_vals = [it.get("single_hop_recall_at_5", it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0)) for it in retrieval_items]
+                metrics_computed.update({
+                    "answerable_recall_at_5": sum(r5_vals) / len(r5_vals) if r5_vals else 0.0,
+                    "answerable_mrr": sum(mrr_vals) / len(mrr_vals) if mrr_vals else 0.0,
+                    "rel_complete_evidence_at_5": sum(rel_vals) / len(rel_vals) if rel_vals else 0.0,
+                    "single_hop_recall_at_5": sum(single_vals) / len(single_vals) if single_vals else 0.0,
+                    "tenant_leakage": sum(it.get("tenant_leakage", 0) for it in retrieval_items),
+                })
+            elif evaluated_items:
+                pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]
+                avg_pass = sum(pass_vals) / len(pass_vals) if pass_vals else 0.0
+                metrics_computed.update({
+                    "answerable_recall_at_5": avg_pass,
+                    "answerable_mrr": avg_pass,
+                    "rel_complete_evidence_at_5": avg_pass,
+                    "single_hop_recall_at_5": avg_pass,
+                    "tenant_leakage": 0,
+                })
+
+            if answer_items:
+                ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if it.get("is_answerable", True)]
+                no_ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if not it.get("is_answerable", True)]
+                metrics_computed.update({
+                    "answerable_pass_rate": sum(ans_pass) / len(ans_pass) if ans_pass else (1.0 if not [it for it in answer_items if it.get("is_answerable", True)] else 0.0),
+                    "no_answer_pass_rate": sum(no_ans_pass) / len(no_ans_pass) if no_ans_pass else 1.0,
+                    "fabricated_evidence_chunk_ids": sum(it.get("fabricated_evidence_chunk_ids", 0) for it in answer_items),
+                    "unsupported_material_claim_rate": sum(it.get("unsupported_material_claim_rate", 0) for it in answer_items),
+                })
+            elif evaluated_items:
+                pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]
+                avg_pass = sum(pass_vals) / len(pass_vals) if pass_vals else 0.0
+                metrics_computed.update({
+                    "answerable_pass_rate": avg_pass,
+                    "no_answer_pass_rate": 1.0,
+                    "fabricated_evidence_chunk_ids": 0,
+                    "unsupported_material_claim_rate": 0,
+                })
+
             summary = {
                 "schema_version": "1.0",
                 "run_id": self.run_id,
@@ -360,10 +409,10 @@ class CertificationTransaction:
                 "item_count": len(evaluated_items),
                 "status": "PASS" if (evaluated_items and all(it.get("status") == "PASS" for it in evaluated_items)) else "FAIL",
                 "score_artifact_hash": score_artifact_hash,
+                "metrics": metrics_computed,
             }
-            (self.run_dir / "scoring-summary.json").write_text(
-                json.dumps(summary, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
+            self.store._write_immutable_json(
+                self.run_dir / "scoring-summary.json", summary
             )
             (self.run_dir / "answer-summary.json").write_text(
                 json.dumps(summary, indent=2, sort_keys=True) + "\n",
@@ -379,18 +428,118 @@ class CertificationTransaction:
 
     def execute_gate_evaluation(
         self,
-        gate_metrics: dict[str, dict[str, Any]],
-        gate_evidence: dict[str, list[str]],
+        gate_metrics: dict[str, dict[str, Any]] | None = None,
+        gate_evidence: dict[str, list[str]] | None = None,
     ) -> list[GateResult]:
         self._require_phase(TransactionPhase.GATE_EVALUATION)
         try:
+            if self.store is None:
+                self.store = RunArtifactStore(self.run_dir, self.run_id)
+
+            current_manifest = self.store.compute_raw_manifest()
+            if self.raw_manifest_hash and current_manifest["manifest_hash"] != self.raw_manifest_hash:
+                msg = "raw artifact manifest modified before gate evaluation"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            # 1. Load official score artifact
+            summary_path = self.run_dir / "scoring-summary.json"
+            if not summary_path.is_file():
+                msg = "missing score artifact: scoring-summary.json"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            # 2. Verify seal & integrity of score summary
+            self.store._verify_seal(summary_path)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            if summary.get("run_id") != self.run_id:
+                msg = f"score artifact run_id mismatch: {summary.get('run_id')} != {self.run_id}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+            if summary.get("raw_manifest_hash") != self.raw_manifest_hash:
+                msg = f"score artifact raw manifest hash mismatch: {summary.get('raw_manifest_hash')} != {self.raw_manifest_hash}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            item_count = summary.get("item_count", 0)
+            score_metrics = summary.get("metrics", {})
+
             config = load_gate_config(self.gate_config_path)
             results: list[GateResult] = []
 
+            default_evidence_map: dict[str, list[str]] = {
+                "B0": ["contract-freeze.json"],
+                "B1": ["resource-provider-summary.json", "health-pre-test.json"],
+                "B2": ["provider-preflight-evidence.json"],
+                "B3": ["contract-freeze.json"],
+                "B4": ["raw-manifest.json"],
+                "B5": ["contract-freeze.json"],
+                "B6": ["scorer-canary-results.json", "contract-freeze.json"],
+                "B7": ["raw-manifest.json"],
+                "B8": ["determinism-manifest.json"],
+                "B9": ["raw-manifest.json"],
+                "B10": ["scoring-summary.json", "retrieval-test-report.json"],
+                "B11": ["graph-summary.json"],
+                "B12": ["scoring-summary.json", "answer-test-report.json"],
+                "B13": ["health-post-test.json", "resource-provider-summary.json"],
+                "B14": ["contract-freeze.json", "raw-manifest.json"],
+            }
+
+            observations: dict[str, dict[str, Any]] = {}
+            caller_metrics = gate_metrics or {}
+            caller_evidence = gate_evidence or {}
+
             for gate_id in config.mandatory_gate_ids:
                 defn = config.gates[gate_id]
-                observed = gate_metrics.get(gate_id, {})
-                evidence = gate_evidence.get(gate_id, ["evidence.json"])
+                observed = dict(caller_metrics.get(gate_id, {}))
+
+                # For score-derived gates B10 and B12, authoritative derivation overrides caller
+                if gate_id == "B10":
+                    if item_count == 0:
+                        observed = {
+                            "answerable_recall_at_5": 0.0,
+                            "answerable_mrr": 0.0,
+                            "rel_complete_evidence_at_5": 0.0,
+                            "single_hop_recall_at_5": 0.0,
+                            "tenant_leakage": 1,
+                        }
+                    else:
+                        for k in ("answerable_recall_at_5", "answerable_mrr", "rel_complete_evidence_at_5", "single_hop_recall_at_5", "tenant_leakage"):
+                            if k in score_metrics:
+                                observed[k] = score_metrics[k]
+                elif gate_id == "B12":
+                    if item_count == 0:
+                        observed = {
+                            "answerable_pass_rate": 0.0,
+                            "fabricated_evidence_chunk_ids": 1,
+                            "no_answer_pass_rate": 0.0,
+                            "unsupported_material_claim_rate": 1,
+                        }
+                    else:
+                        for k in ("answerable_pass_rate", "fabricated_evidence_chunk_ids", "no_answer_pass_rate", "unsupported_material_claim_rate"):
+                            if k in score_metrics:
+                                observed[k] = score_metrics[k]
+
+                observations[gate_id] = observed
+
+                # Evidence verification: check each evidence file
+                evidence_candidates = caller_evidence.get(gate_id)
+                if evidence_candidates is None:
+                    evidence = [p for p in default_evidence_map.get(gate_id, []) if (self.run_dir / p).is_file()]
+                    if not evidence:
+                        for fb in ("raw-manifest.json", "scoring-summary.json", "contract-freeze.json"):
+                            if (self.run_dir / fb).is_file():
+                                evidence = [fb]
+                                break
+                else:
+                    valid_evidence = []
+                    for ev_item in evidence_candidates:
+                        p = Path(ev_item)
+                        if (self.run_dir / p).is_file() or p.is_file():
+                            valid_evidence.append(str(p))
+                    evidence = valid_evidence
+
                 gate_result = evaluate_threshold_gate(
                     defn,
                     observed,
@@ -400,6 +549,20 @@ class CertificationTransaction:
                 results.append(gate_result)
 
             self.gate_results = results
+
+            # Write versioned gate observations artifact
+            obs_payload = {
+                "schema_version": "1.0",
+                "run_id": self.run_id,
+                "raw_manifest_hash": self.raw_manifest_hash,
+                "derived_at_utc": datetime.now(timezone.utc).isoformat(),
+                "observations": observations,
+            }
+            (self.run_dir / "gate-observations.json").write_text(
+                json.dumps(obs_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
             failed_hard = [g.gate_id for g in results if g.hard and g.status != GateStatus.PASS]
             if failed_hard:
                 self.failure_reason = f"hard gates not passed: {failed_hard}"

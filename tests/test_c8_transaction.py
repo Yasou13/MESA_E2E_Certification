@@ -218,7 +218,15 @@ def test_failure_at_gate_evaluation_refuses_finalization(tmp_path: Path) -> None
     tx.execute_raw_execution(make_raw)
     tx.execute_raw_sealing()
     tx.execute_oracle_audit()
-    tx.execute_scoring()
+    tx.execute_scoring(
+        scoring_fn=lambda r: {
+            "query_id": "Q-1",
+            "status": "FAIL",
+            "lane": "retrieval",
+            "recall_at_5": 0.50,
+            "mrr": 0.50,
+        }
+    )
 
     # Metrics fail B10 (e.g. recall below threshold)
     metrics = _pass_all_gates_metrics()
