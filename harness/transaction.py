@@ -418,6 +418,10 @@ class CertificationTransaction:
                 json.dumps(summary, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
+            (self.run_dir / "retrieval-summary.json").write_text(
+                json.dumps(summary, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             self.completed_phases.add(TransactionPhase.SCORING)
             self.current_step_idx += 1
             return report
@@ -642,11 +646,16 @@ class CertificationTransaction:
     ) -> dict[str, object]:
         self._require_phase(TransactionPhase.EVIDENCE_INDEX)
         try:
+            record_list = list(records)
+            if not record_list:
+                msg = "empty evidence index: at least one evidence artifact must be provided"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
             output_path = self.run_dir / "evidence-index.json"
             index_data = build_evidence_index(
                 run_dir=self.run_dir,
                 output_path=output_path,
-                records=records,
+                records=record_list,
                 run_id=self.run_id,
             )
             self.evidence_index = index_data
@@ -654,8 +663,11 @@ class CertificationTransaction:
             self.current_step_idx += 1
             return index_data
         except Exception as exc:
-            self._fail_transaction(f"evidence index failed: {exc}")
-            raise TransactionError(f"evidence index failed: {exc}") from exc
+            if not self.failed:
+                self._fail_transaction(f"evidence index failed: {exc}")
+            if not isinstance(exc, TransactionError):
+                raise TransactionError(f"evidence index failed: {exc}") from exc
+            raise
 
     def execute_run_id_consistency(
         self, reuse_authorizations: Iterable[dict[str, str]] = ()
@@ -693,22 +705,6 @@ class CertificationTransaction:
                 json.dumps(payload, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-            for h_name in (
-                "health-pre-test.json",
-                "health-post-test.json",
-                "resource-provider-summary.json",
-            ):
-                hp = self.run_dir / h_name
-                if not hp.is_file():
-                    hp.write_text(
-                        json.dumps(
-                            {"schema_version": "1.0", "run_id": self.run_id, "status": "PASS"},
-                            indent=2,
-                            sort_keys=True,
-                        )
-                        + "\n",
-                        encoding="utf-8",
-                    )
             self.completed_phases.add(TransactionPhase.HEALTH_VERIFICATION)
             self.current_step_idx += 1
             return payload
@@ -729,27 +725,12 @@ class CertificationTransaction:
 
             from harness.finalizer import REQUIRED_RELEASE_FILES
 
-            # Record final report md if missing
-            report_md_path = self.run_dir / "final-report.md"
-            if not report_md_path.is_file():
-                report_md_path.write_text(
-                    f"# Final Report\n\nRun: {self.run_id}\nStatus: PASS\n",
-                    encoding="utf-8",
-                )
-
-            # Ensure all required release files exist
-            for name in REQUIRED_RELEASE_FILES:
-                p = self.run_dir / name
-                if not p.is_file():
-                    p.write_text(
-                        json.dumps(
-                            {"schema_version": "1.0", "run_id": self.run_id, "status": "PASS"},
-                            indent=2,
-                            sort_keys=True,
-                        )
-                        + "\n",
-                        encoding="utf-8",
-                    )
+            # Fail closed if any required release file is missing - NEVER synthesize
+            missing_files = [name for name in sorted(REQUIRED_RELEASE_FILES) if not (self.run_dir / name).is_file()]
+            if missing_files:
+                msg = f"missing required release artifacts: {missing_files}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
 
             # Transition lifecycle to FINALIZING then PASS_NATIVE
             self.lifecycle.transition(RunStatus.FINALIZING)
@@ -775,4 +756,6 @@ class CertificationTransaction:
         except Exception as exc:
             if not self.failed:
                 self._fail_transaction(f"release finalization failed: {exc}")
+            if not isinstance(exc, TransactionError):
+                raise TransactionError(f"release finalization failed: {exc}") from exc
             raise

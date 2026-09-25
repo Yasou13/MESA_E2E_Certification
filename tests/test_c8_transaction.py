@@ -326,6 +326,25 @@ def test_full_successful_transaction_produces_valid_release(tmp_path: Path) -> N
     tx.execute_run_id_consistency()
     tx.execute_health_verification()
 
+    # Provide real required release artifacts produced during full run
+    (run_dir / "final-report.md").write_text(f"# Final Report\n\nRun: {RUN_ID}\nStatus: PASS\n", encoding="utf-8")
+    for name in [
+        "health-pre-test.json",
+        "health-post-test.json",
+        "resource-provider-summary.json",
+        "scorer-canary-results.json",
+        "determinism-manifest.json",
+        "graph-summary.json",
+        "frozen-identities.json",
+        "identity-map-summary.json",
+        "decision-summary.json",
+        "repair-summary.json",
+    ]:
+        (run_dir / name).write_text(
+            json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "status": "PASS"}, indent=2) + "\n",
+            encoding="utf-8",
+        )
+
     release_meta = tx.execute_release_finalization(release_dir)
     assert release_meta["run_id"] == RUN_ID
     promoted_dir = Path(release_meta["release_dir"])
