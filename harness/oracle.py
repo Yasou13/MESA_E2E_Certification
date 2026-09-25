@@ -41,8 +41,15 @@ def _normalized_field(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name.casefold())
 
 
-def audit_oracle_surfaces(surfaces: dict[str, Any]) -> dict[str, object]:
+def audit_oracle_surfaces(
+    surfaces: dict[str, Any],
+    *,
+    known_oracle_values: set[str] | list[str] | None = None,
+    raw_manifest: dict[str, Any] | None = None,
+    run_id: str | None = None,
+) -> dict[str, object]:
     findings: list[dict[str, str]] = []
+    oracle_val_set: set[str] = set(known_oracle_values or [])
 
     def visit(value: Any, path: str) -> None:
         if isinstance(value, dict):
@@ -72,14 +79,31 @@ def audit_oracle_surfaces(surfaces: dict[str, Any]) -> dict[str, object]:
                             "matched_token": label,
                         }
                     )
+            for token in oracle_val_set:
+                if not token:
+                    continue
+                if token == value or re.search(r"(?:\b|_)" + re.escape(token) + r"(?:\b|_)", value, re.IGNORECASE):
+                    findings.append(
+                        {
+                            "path": path,
+                            "kind": "known_oracle_value",
+                            "matched_token": token,
+                        }
+                    )
 
     visit(surfaces, "")
+    manifest_hash = raw_manifest.get("manifest_hash") if isinstance(raw_manifest, dict) else None
+    raw_artifacts = raw_manifest.get("entries") if isinstance(raw_manifest, dict) else []
     return {
         "schema_version": "1.0",
+        "auditor_version": "1.0.0",
+        "run_id": run_id,
         "status": "FAIL" if findings else "PASS",
         "finding_count": len(findings),
         "findings": findings,
         "values_redacted": True,
+        "raw_manifest_hash": manifest_hash,
+        "raw_artifacts": raw_artifacts,
     }
 
 
