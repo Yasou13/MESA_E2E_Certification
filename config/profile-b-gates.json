@@ -18,8 +18,105 @@
     "B14"
   ],
   "gates": {
+    "B0": {
+      "gate_id": "B0",
+      "name": "Clean exact code baselines and reproducible dependencies",
+      "hard": true,
+      "requirements": {
+        "ci_actions_passed": {"operator": "eq", "value": true},
+        "clean_baseline_verified": {"operator": "eq", "value": true},
+        "dedicated_branch_verified": {"operator": "eq", "value": true},
+        "dependencies_reproducible": {"operator": "eq", "value": true}
+      }
+    },
+    "B1": {
+      "gate_id": "B1",
+      "name": "VM resource minimum and clean isolated run storage",
+      "hard": true,
+      "requirements": {
+        "disk_min_gb": {"operator": "gte", "value": 50},
+        "isolated_storage_verified": {"operator": "eq", "value": true},
+        "ram_min_gb": {"operator": "gte", "value": 32}
+      }
+    },
+    "B2": {
+      "gate_id": "B2",
+      "name": "Real NVIDIA provider contract",
+      "hard": true,
+      "requirements": {
+        "gpt_oss_completion_verified": {"operator": "eq", "value": true},
+        "nemotron_dim_verified": {"operator": "eq", "value": true},
+        "real_provider_contract_verified": {"operator": "eq", "value": true}
+      }
+    },
+    "B3": {
+      "gate_id": "B3",
+      "name": "Production Docker config parity",
+      "hard": true,
+      "requirements": {
+        "docker_config_parity": {"operator": "eq", "value": true},
+        "frozen_provider_parity": {"operator": "eq", "value": true}
+      }
+    },
+    "B4": {
+      "gate_id": "B4",
+      "name": "MESA_Data raw integrity, canonicalization, and parsing coverage",
+      "hard": true,
+      "requirements": {
+        "eligible_document_count": {"operator": "gte", "value": 50},
+        "encoding_canonical_verified": {"operator": "eq", "value": true},
+        "raw_integrity_verified": {"operator": "eq", "value": true}
+      }
+    },
+    "B5": {
+      "gate_id": "B5",
+      "name": "Hash-bound H1 human approval of corpus and delivery permission",
+      "hard": true,
+      "requirements": {
+        "delivery_permission_granted": {"operator": "eq", "value": true},
+        "h1_approval_hash_bound": {"operator": "eq", "value": true}
+      }
+    },
+    "B6": {
+      "gate_id": "B6",
+      "name": "Native MESA_Data to MESA live contract canary passes",
+      "hard": true,
+      "requirements": {
+        "canary_passed": {"operator": "eq", "value": true},
+        "no_bridge_substitution": {"operator": "eq", "value": true}
+      }
+    },
+    "B7": {
+      "gate_id": "B7",
+      "name": "Full native delivery reaches terminal COMMITTED state",
+      "hard": true,
+      "requirements": {
+        "chunk_mapping_proven": {"operator": "eq", "value": true},
+        "delivery_terminal_committed": {"operator": "eq", "value": true},
+        "undelivered_chunk_count": {"operator": "eq", "value": 0}
+      }
+    },
+    "B8": {
+      "gate_id": "B8",
+      "name": "Restart persistence and idempotent republish behavior",
+      "hard": true,
+      "requirements": {
+        "idempotent_republish_proven": {"operator": "eq", "value": true},
+        "restart_persistence_proven": {"operator": "eq", "value": true}
+      }
+    },
+    "B9": {
+      "gate_id": "B9",
+      "name": "Isolation and ACL negative scope tests pass",
+      "hard": true,
+      "requirements": {
+        "cross_tenant_scope_leakage": {"operator": "eq", "value": 0},
+        "isolation_acl_passed": {"operator": "eq", "value": true}
+      }
+    },
     "B10": {
       "gate_id": "B10",
+      "name": "Frozen TEST retrieval metrics meet thresholds",
       "hard": true,
       "requirements": {
         "answerable_mrr": {"operator": "gte", "value": 0.7},
@@ -29,14 +126,45 @@
         "tenant_leakage": {"operator": "eq", "value": 0}
       }
     },
+    "B11": {
+      "gate_id": "B11",
+      "name": "Real Kùzu graph origin and causal ON/OFF contribution",
+      "hard": true,
+      "requirements": {
+        "graph_capability_operational": {"operator": "eq", "value": true},
+        "graph_causal_ablation_proven": {"operator": "eq", "value": true},
+        "graph_provenance_verified": {"operator": "eq", "value": true},
+        "graph_rel_contribution_count": {"operator": "gte", "value": 3}
+      }
+    },
     "B12": {
       "gate_id": "B12",
+      "name": "Context-only answer grounding and abstention thresholds met",
       "hard": true,
       "requirements": {
         "answerable_pass_rate": {"operator": "gte", "value": 0.8},
         "fabricated_evidence_chunk_ids": {"operator": "eq", "value": 0},
         "no_answer_pass_rate": {"operator": "gte", "value": 0.8},
         "unsupported_material_claim_rate": {"operator": "eq", "value": 0}
+      }
+    },
+    "B13": {
+      "gate_id": "B13",
+      "name": "No OOM/Killed/catastrophic resource failure",
+      "hard": true,
+      "requirements": {
+        "catastrophic_resource_failure": {"operator": "eq", "value": 0},
+        "oom_killed_count": {"operator": "eq", "value": 0},
+        "resource_usage_recorded": {"operator": "eq", "value": true}
+      }
+    },
+    "B14": {
+      "gate_id": "B14",
+      "name": "Evidence integrity and hash verification passes post-freeze",
+      "hard": true,
+      "requirements": {
+        "evidence_integrity_verified": {"operator": "eq", "value": true},
+        "post_freeze_mutations": {"operator": "eq", "value": 0}
       }
     }
   },

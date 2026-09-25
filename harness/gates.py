@@ -23,8 +23,20 @@ class GateDefinition(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     gate_id: str = Field(min_length=1)
-    hard: bool
-    requirements: dict[str, MetricRequirement] = Field(min_length=1)
+    name: str | None = None
+    hard: bool = True
+    requirements: dict[str, MetricRequirement] = Field(default_factory=dict)
+    wait_for_mesa: bool = False
+    unresolved_methodology: bool = False
+    notes: str | None = None
+
+    @model_validator(mode="after")
+    def validate_gate(self) -> "GateDefinition":
+        if not self.wait_for_mesa and not self.unresolved_methodology and not self.requirements:
+            raise ValueError(
+                f"Gate {self.gate_id} must have requirements unless wait_for_mesa or unresolved_methodology is set"
+            )
+        return self
 
 
 class GateConfig(BaseModel):
@@ -44,6 +56,11 @@ class GateConfig(BaseModel):
             raise ValueError(f"gate keys do not match gate_id: {mismatches}")
         if len(set(self.mandatory_gate_ids)) != len(self.mandatory_gate_ids):
             raise ValueError("mandatory_gate_ids contains duplicates")
+        missing_mandatory = set(self.mandatory_gate_ids) - set(self.gates.keys())
+        if missing_mandatory:
+            raise ValueError(
+                f"GATE_REGISTRY_INCOMPLETE: missing mandatory gate definitions: {sorted(missing_mandatory)}"
+            )
         return self
 
 
@@ -73,12 +90,34 @@ def evaluate_threshold_gate(
         metric: requirement.model_dump(mode="json")
         for metric, requirement in sorted(definition.requirements.items())
     }
-    if execution_status is not ExecutionStatus.COMPLETED:
+    if definition.wait_for_mesa:
+        return GateResult(
+            gate_id=definition.gate_id,
+            hard=definition.hard,
+            execution_status=execution_status,
+            status=GateStatus.BLOCKED,
+            required=required,
+            observed=dict(sorted(observed.items())),
+            reason="WAIT_FOR_MESA",
+            evidence=evidence,
+        )
+    if definition.unresolved_methodology:
         return GateResult(
             gate_id=definition.gate_id,
             hard=definition.hard,
             execution_status=execution_status,
             status=GateStatus.UNVERIFIED,
+            required=required,
+            observed=dict(sorted(observed.items())),
+            reason="UNRESOLVED_METHODOLOGY",
+            evidence=evidence,
+        )
+    if execution_status is not ExecutionStatus.COMPLETED:
+        return GateResult(
+            gate_id=definition.gate_id,
+            hard=definition.hard,
+            execution_status=execution_status,
+            status=GateStatus.FAIL,
             required=required,
             observed=observed,
             reason="execution_not_completed",
@@ -89,7 +128,7 @@ def evaluate_threshold_gate(
             gate_id=definition.gate_id,
             hard=definition.hard,
             execution_status=execution_status,
-            status=GateStatus.UNVERIFIED,
+            status=GateStatus.FAIL,
             required=required,
             observed=observed,
             reason="missing_gate_evidence",
@@ -101,7 +140,7 @@ def evaluate_threshold_gate(
             gate_id=definition.gate_id,
             hard=definition.hard,
             execution_status=execution_status,
-            status=GateStatus.UNVERIFIED,
+            status=GateStatus.FAIL,
             required=required,
             observed=observed,
             reason=f"missing_observed_metrics:{','.join(missing)}",
