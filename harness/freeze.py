@@ -40,6 +40,10 @@ class FreezeStatus(str, Enum):
     MISSING_FREEZE = "MISSING_FREEZE"
     INVALID_FREEZE = "INVALID_FREEZE"
     INVALIDATED_CODE_CHANGE = "INVALIDATED_CODE_CHANGE"
+    FREEZE_INVALID = "FREEZE_INVALID"
+    FREEZE_MISSING_REQUIRED_MATERIAL = "FREEZE_MISSING_REQUIRED_MATERIAL"
+    FREEZE_REPOSITORY_IDENTITY_MISSING = "FREEZE_REPOSITORY_IDENTITY_MISSING"
+    FREEZE_HASH_MISMATCH = "FREEZE_HASH_MISMATCH"
 
 
 class FreezeVerification:
@@ -165,19 +169,87 @@ def verify_contract_freeze(
             or checksum_parts[0] != _sha256(freeze)
         ):
             return FreezeVerification(
-                FreezeStatus.INVALID_FREEZE,
+                FreezeStatus.FREEZE_HASH_MISMATCH,
                 ["contract freeze checksum mismatch"],
             )
         payload = json.loads(freeze.read_text(encoding="utf-8"))
-        frozen_repositories = payload["repository_shas"]
-        materials = payload["materials"]
-    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
-        return FreezeVerification(FreezeStatus.INVALID_FREEZE, [str(exc)])
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return FreezeVerification(FreezeStatus.FREEZE_INVALID, [f"malformed freeze: {exc}"])
+
+    if not isinstance(payload, dict):
+        return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["freeze payload must be an object"])
+
+    if payload.get("schema_version") != "1.0":
+        return FreezeVerification(
+            FreezeStatus.FREEZE_INVALID,
+            [f"unsupported or missing schema_version: {payload.get('schema_version')}"],
+        )
+
+    run_id = payload.get("run_id")
+    if not isinstance(run_id, str) or not run_id.strip():
+        return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["missing or invalid run_id"])
+
+    frozen_repositories = payload.get("repository_shas")
+    if not isinstance(frozen_repositories, dict):
+        return FreezeVerification(
+            FreezeStatus.FREEZE_REPOSITORY_IDENTITY_MISSING,
+            ["repository_shas must be an object"],
+        )
+
+    missing_repositories = sorted(MANDATORY_REPOSITORIES - frozen_repositories.keys())
+    if missing_repositories:
+        return FreezeVerification(
+            FreezeStatus.FREEZE_REPOSITORY_IDENTITY_MISSING,
+            [f"missing mandatory repository SHAs: {missing_repositories}"],
+        )
+
+    for name, sha in frozen_repositories.items():
+        if not isinstance(sha, str) or len(sha) not in {40, 64} or HEX_DIGEST.fullmatch(sha) is None:
+            return FreezeVerification(
+                FreezeStatus.FREEZE_REPOSITORY_IDENTITY_MISSING,
+                [f"invalid repository SHA for {name}: {sha!r}"],
+            )
+
+    materials = payload.get("materials")
+    if not isinstance(materials, list):
+        return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["materials must be a list"])
+
+    seen_paths: dict[str, str] = {}
+    categories_present: set[str] = set()
+    for item in materials:
+        if not isinstance(item, dict):
+            return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["material entry must be an object"])
+        cat = item.get("category")
+        rel = item.get("path")
+        sha = item.get("sha256")
+        if not isinstance(cat, str) or not isinstance(rel, str) or not isinstance(sha, str):
+            return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["invalid types in material entry"])
+        if len(sha) != 64 or HEX_DIGEST.fullmatch(sha) is None:
+            return FreezeVerification(
+                FreezeStatus.FREEZE_INVALID,
+                [f"invalid material SHA256 for {rel}: {sha!r}"],
+            )
+        if rel in seen_paths:
+            return FreezeVerification(
+                FreezeStatus.FREEZE_INVALID,
+                [f"conflicting or duplicate material path: {rel}"],
+            )
+        seen_paths[rel] = sha
+        categories_present.add(cat)
+
+    missing_categories = sorted(MANDATORY_MATERIAL_CATEGORIES - categories_present)
+    if missing_categories:
+        return FreezeVerification(
+            FreezeStatus.FREEZE_MISSING_REQUIRED_MATERIAL,
+            [f"missing mandatory material categories: {missing_categories}"],
+        )
 
     drift: list[str] = []
     for name, frozen_sha in sorted(frozen_repositories.items()):
         current_sha = current_repository_shas.get(name)
-        if current_sha != frozen_sha:
+        if not current_sha:
+            drift.append(f"missing current repository SHA for {name}")
+        elif current_sha != frozen_sha:
             drift.append(
                 f"repository SHA drift for {name}: {frozen_sha} -> {current_sha}"
             )
@@ -190,7 +262,7 @@ def verify_contract_freeze(
             path.relative_to(root)
             expected_sha = item["sha256"]
         except (KeyError, TypeError, ValueError) as exc:
-            return FreezeVerification(FreezeStatus.INVALID_FREEZE, [str(exc)])
+            return FreezeVerification(FreezeStatus.FREEZE_INVALID, [str(exc)])
         if not path.is_file():
             drift.append(f"missing frozen material: {relative.as_posix()}")
             continue
