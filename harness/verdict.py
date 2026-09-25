@@ -141,3 +141,54 @@ def write_final_verdict(verdict: FinalVerdict, path: str | Path) -> None:
         verdict.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
     ) + "\n"
     Path(path).write_text(serialized, encoding="utf-8", newline="\n")
+
+
+def derive_production_verdict(
+    *,
+    run_id: str,
+    gates: Iterable[GateResult],
+    mandatory_gate_ids: set[str],
+    run_dir: str | Path,
+    freeze_path: str | Path,
+    checksum_path: str | Path,
+    repository_root: str | Path,
+    current_repository_shas: dict[str, str],
+    mandatory_artifact_names: Iterable[str],
+) -> FinalVerdict:
+    """Production entrypoint that recomputes trust directly from filesystem artifacts."""
+    from harness.freeze import verify_contract_freeze
+
+    run_path = Path(run_dir)
+    freeze_verif = verify_contract_freeze(
+        freeze_path=freeze_path,
+        checksum_path=checksum_path,
+        repository_root=repository_root,
+        current_repository_shas=current_repository_shas,
+    )
+
+    manifest_path = run_path / "run_manifest.json"
+    lifecycle_valid = False
+    if manifest_path.is_file():
+        try:
+            m = json.loads(manifest_path.read_text(encoding="utf-8"))
+            if m.get("status") in {"PASS_NATIVE", "FINALIZING", "COMPLETED"}:
+                lifecycle_valid = True
+            if m.get("lifecycle_valid") is False:
+                lifecycle_valid = False
+            if m.get("lifecycle_status") in {"FAIL", "INVALIDATED", "BLOCKED", "INVALID"}:
+                lifecycle_valid = False
+        except Exception:
+            lifecycle_valid = False
+
+    mandatory_artifacts = {
+        name: (run_path / name).is_file() for name in mandatory_artifact_names
+    }
+
+    return evaluate_final_verdict(
+        run_id=run_id,
+        gates=gates,
+        mandatory_gate_ids=mandatory_gate_ids,
+        mandatory_artifacts=mandatory_artifacts,
+        freeze_verification=freeze_verif,
+        lifecycle_valid=lifecycle_valid,
+    )
