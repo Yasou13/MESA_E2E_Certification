@@ -19,8 +19,11 @@
       "^(?:Kanun No:?\\s*)?(\\d+)(?:\\s*sayılı Kanun)?$"
     ],
     "article_number_patterns": [
-      "^(?:Madde|m\\.|md\\.)\\s*(\\d+)(?:/([a-z0-9]+))?$"
-    ]
+      "^(?:Madde|m\\.|md\\.)\\s*(\\d+)(?:/([a-z0-9]+))?$",
+      "^(\\d+)\\.\\s*madde$"
+    ],
+    "article_output_template": "madde-{number}{subpart}",
+    "article_subpart_separator": "-"
   },
   "abstention": {
     "expected_answer_marker": "YETERSİZ KANIT",
