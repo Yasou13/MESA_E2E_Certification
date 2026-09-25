@@ -41,6 +41,30 @@ def _normalized_field(name: str) -> str:
     return re.sub(r"[^a-z0-9]", "", name.casefold())
 
 
+def extract_raw_audit_surfaces(
+    run_dir: str | Path, raw_manifest: dict[str, Any]
+) -> dict[str, Any]:
+    """Derive recursive audit surfaces from sealed raw artifacts."""
+    surfaces: dict[str, Any] = {}
+    base_dir = Path(run_dir)
+    for entry in raw_manifest.get("entries", []):
+        file_path = base_dir / entry["path"]
+        if not file_path.is_file():
+            continue
+        try:
+            content = json.loads(file_path.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        # Scan all execution inputs/requests/prompts/context; exclude outputs
+        audit_payload = {
+            k: v
+            for k, v in content.items()
+            if k not in {"response", "raw_response", "parsed_response"}
+        }
+        surfaces[entry["path"]] = audit_payload
+    return surfaces
+
+
 def audit_oracle_surfaces(
     surfaces: dict[str, Any],
     *,
@@ -49,7 +73,27 @@ def audit_oracle_surfaces(
     run_id: str | None = None,
 ) -> dict[str, object]:
     findings: list[dict[str, str]] = []
-    oracle_val_set: set[str] = set(known_oracle_values or [])
+    oracle_val_set: set[str] = {str(v) for v in (known_oracle_values or []) if v}
+
+    if not surfaces and raw_manifest and not raw_manifest.get("entries"):
+        findings.append(
+            {
+                "path": "raw_manifest",
+                "kind": "empty_raw_execution",
+                "matched_token": "0_records",
+            }
+        )
+
+    def _check_oracle_val(text: str, path: str) -> None:
+        for token in oracle_val_set:
+            if token == text or re.search(r"(?:\b|_)" + re.escape(token) + r"(?:\b|_)", text, re.IGNORECASE):
+                findings.append(
+                    {
+                        "path": path,
+                        "kind": "known_oracle_value",
+                        "matched_token": token,
+                    }
+                )
 
     def visit(value: Any, path: str) -> None:
         if isinstance(value, dict):
@@ -65,6 +109,16 @@ def audit_oracle_surfaces(
                         }
                     )
                     continue
+                for label, pattern in FORBIDDEN_TEXT_PATTERNS:
+                    if pattern.search(key_text):
+                        findings.append(
+                            {
+                                "path": child_path,
+                                "kind": "forbidden_key_token",
+                                "matched_token": label,
+                            }
+                        )
+                _check_oracle_val(key_text, child_path)
                 visit(value[key], child_path)
         elif isinstance(value, list):
             for index, item in enumerate(value):
@@ -79,17 +133,9 @@ def audit_oracle_surfaces(
                             "matched_token": label,
                         }
                     )
-            for token in oracle_val_set:
-                if not token:
-                    continue
-                if token == value or re.search(r"(?:\b|_)" + re.escape(token) + r"(?:\b|_)", value, re.IGNORECASE):
-                    findings.append(
-                        {
-                            "path": path,
-                            "kind": "known_oracle_value",
-                            "matched_token": token,
-                        }
-                    )
+            _check_oracle_val(value, path)
+        elif isinstance(value, (int, float, bool)):
+            _check_oracle_val(str(value), path)
 
     visit(surfaces, "")
     manifest_hash = raw_manifest.get("manifest_hash") if isinstance(raw_manifest, dict) else None
