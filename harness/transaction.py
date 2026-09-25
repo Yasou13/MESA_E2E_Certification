@@ -309,16 +309,28 @@ class CertificationTransaction:
                         answer_obj=raw_payload["answer_obj"],
                         retrieved_chunk_ids=raw_payload.get("retrieved_chunk_ids", []),
                         identity_map=raw_payload.get("identity_map", {}),
+                        exact_model_visible_context=raw_payload.get("exact_model_visible_context"),
                     ).model_dump(mode="json")
                 elif "parsed_response" in raw_payload or "answer" in raw_payload:
+                    ans_text = raw_payload.get("parsed_response", {}).get("answer", raw_payload.get("answer", ""))
+                    ctx = raw_payload.get("exact_model_visible_context")
+                    from harness.answer_scorer import STOPWORDS, _normalized, _stringify_context
+                    unsupported_count = 0
+                    if ctx is not None:
+                        ctx_words = set(re.findall(r"\w+", _normalized(_stringify_context(ctx))))
+                        ans_words = [w for w in re.findall(r"\w+", _normalized(ans_text)) if w not in STOPWORDS]
+                        if any(w not in ctx_words for w in ans_words):
+                            unsupported_count = 1
                     scored = {
                         "query_id": query_id,
-                        "status": "PASS",
+                        "status": "FAIL" if unsupported_count > 0 else "PASS",
                         "lane": lane,
-                        "grounded_pass": True,
+                        "grounded_pass": unsupported_count == 0,
                         "evidence_supported": True,
-                        "facts_satisfied": True,
+                        "facts_satisfied": unsupported_count == 0,
                         "forbidden_claims_absent": True,
+                        "unsupported_material_claim_count": unsupported_count,
+                        "reasons": ["contains unsupported material"] if unsupported_count > 0 else [],
                     }
                 else:
                     scored = {
@@ -384,11 +396,20 @@ class CertificationTransaction:
             if answer_items:
                 ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if it.get("is_answerable", True)]
                 no_ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if not it.get("is_answerable", True)]
+                unsupported_count = sum(
+                    1 if (
+                        it.get("unsupported_material_claim_count", 0) > 0
+                        or any("unsupported material" in str(r) for r in it.get("reasons", []))
+                        or it.get("unsupported_material_claim_rate", 0) > 0
+                    ) else 0
+                    for it in answer_items
+                )
+                unsupported_rate = unsupported_count / len(answer_items) if answer_items else 0.0
                 metrics_computed.update({
                     "answerable_pass_rate": sum(ans_pass) / len(ans_pass) if ans_pass else (1.0 if not [it for it in answer_items if it.get("is_answerable", True)] else 0.0),
                     "no_answer_pass_rate": sum(no_ans_pass) / len(no_ans_pass) if no_ans_pass else 1.0,
                     "fabricated_evidence_chunk_ids": sum(it.get("fabricated_evidence_chunk_ids", 0) for it in answer_items),
-                    "unsupported_material_claim_rate": sum(it.get("unsupported_material_claim_rate", 0) for it in answer_items),
+                    "unsupported_material_claim_rate": unsupported_rate,
                 })
             elif evaluated_items:
                 pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]

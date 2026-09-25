@@ -248,6 +248,7 @@ class AnswerScore(VersionedRecord):
     evidence_supported: bool = False
     facts_satisfied: bool = False
     forbidden_claims_absent: bool = True
+    unsupported_material_claim_count: int = 0
 
 
 class ArtifactReference(VersionedRecord):
