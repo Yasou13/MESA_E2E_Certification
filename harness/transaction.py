@@ -7,6 +7,7 @@ from enum import Enum
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any, Callable, Iterable, Optional
 
 from harness.answer_scorer import score_answer
@@ -722,6 +723,14 @@ class CertificationTransaction:
                 "status": "PASS",
                 "oom_killed_count": 0,
             }
+            if payload.get("status") != "PASS":
+                msg = f"health verification status is not PASS: {payload.get('status')}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+            if payload.get("run_id") != self.run_id:
+                msg = f"health verification run_id mismatch: {payload.get('run_id')} != {self.run_id}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
             (self.run_dir / "provider-preflight-evidence.json").write_text(
                 json.dumps(payload, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
@@ -730,8 +739,11 @@ class CertificationTransaction:
             self.current_step_idx += 1
             return payload
         except Exception as exc:
-            self._fail_transaction(f"health verification failed: {exc}")
-            raise TransactionError(f"health verification failed: {exc}") from exc
+            if not self.failed:
+                self._fail_transaction(f"health verification failed: {exc}")
+            if not isinstance(exc, TransactionError):
+                raise TransactionError(f"health verification failed: {exc}") from exc
+            raise
 
     def execute_release_finalization(
         self, target_release_dir: str | Path
