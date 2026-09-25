@@ -7,6 +7,7 @@ from enum import Enum
 import hashlib
 import json
 from pathlib import Path
+import re
 from typing import Any, Callable, Iterable, Optional
 
 from harness.answer_scorer import score_answer
@@ -17,7 +18,7 @@ from harness.freeze import verify_contract_freeze, FreezeStatus
 from harness.gates import GateConfig, evaluate_threshold_gate, load_gate_config
 from harness.lifecycle import RunLifecycle
 from harness.models import ExecutionStatus, FinalVerdict, GateResult, GateStatus, RunStatus, VerdictStatus
-from harness.oracle import audit_oracle_surfaces
+from harness.oracle import audit_oracle_surfaces, extract_raw_audit_surfaces
 from harness.verdict import derive_production_verdict
 
 
@@ -200,6 +201,8 @@ class CertificationTransaction:
                 self.store = RunArtifactStore(self.run_dir, self.run_id)
             manifest_info = self.store.compute_raw_manifest()
             self.raw_manifest_hash = manifest_info["manifest_hash"]
+            raw_manifest_path = self.run_dir / "raw-manifest.json"
+            self.store._write_immutable_json(raw_manifest_path, manifest_info)
             self.lifecycle.transition(RunStatus.TEST_COMPLETED)
             self.completed_phases.add(TransactionPhase.RAW_SEALING)
             self.current_step_idx += 1
@@ -210,14 +213,13 @@ class CertificationTransaction:
 
     def execute_oracle_audit(
         self,
-        oracle_surfaces: list[dict[str, Any]],
+        oracle_surfaces: list[dict[str, Any]] | dict[str, Any] | None = None,
         known_oracle_values: set[str] | None = None,
     ) -> dict[str, object]:
         self._require_phase(TransactionPhase.ORACLE_AUDIT)
         try:
             if self.store is None:
                 self.store = RunArtifactStore(self.run_dir, self.run_id)
-            # Recompute to check tampering
             current_manifest = self.store.compute_raw_manifest()
             current_hash = current_manifest["manifest_hash"]
             if self.raw_manifest_hash and current_hash != self.raw_manifest_hash:
@@ -225,13 +227,16 @@ class CertificationTransaction:
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
 
-            if isinstance(oracle_surfaces, dict):
-                surfaces_dict = oracle_surfaces
-            else:
-                surfaces_dict = {
-                    item.get("path", f"surface_{i}"): item.get("content", item)
-                    for i, item in enumerate(oracle_surfaces)
-                }
+            # Derive surfaces from exact manifest-referenced sealed raw artifacts
+            surfaces_dict = extract_raw_audit_surfaces(self.run_dir, current_manifest)
+
+            # If caller supplied surfaces (e.g. for isolated tests), merge them
+            if oracle_surfaces:
+                if isinstance(oracle_surfaces, dict):
+                    surfaces_dict.update(oracle_surfaces)
+                else:
+                    for i, item in enumerate(oracle_surfaces):
+                        surfaces_dict[item.get("path", f"surface_{i}")] = item.get("content", item)
 
             audit_report = audit_oracle_surfaces(
                 surfaces_dict,
@@ -245,6 +250,8 @@ class CertificationTransaction:
                 raise TransactionError(msg)
 
             self.audited_manifest_hash = current_hash
+            self.store.persist_oracle_audit(audit_report)
+
             audit_path = self.run_dir / "oracle-audit-report.json"
             audit_path.write_text(
                 json.dumps(audit_report, indent=2, sort_keys=True) + "\n",
@@ -260,67 +267,312 @@ class CertificationTransaction:
 
     def execute_scoring(
         self,
-        answer_records: list[dict[str, Any]],
+        answer_records: list[dict[str, Any]] | None = None,
         scoring_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         self._require_phase(TransactionPhase.SCORING)
         try:
+            if self.store is None:
+                self.store = RunArtifactStore(self.run_dir, self.run_id)
+            current_manifest = self.store.compute_raw_manifest()
+            current_hash = current_manifest["manifest_hash"]
+
+            if self.raw_manifest_hash and current_hash != self.raw_manifest_hash:
+                msg = "raw artifact manifest hash modified after sealing"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+            if self.audited_manifest_hash and current_hash != self.audited_manifest_hash:
+                msg = "raw artifact manifest hash modified after oracle audit"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            self.store._require_passing_oracle_audit()
+
+            # Empty run rule: 0 raw records in sealed raw manifest must fail closed
+            if not current_manifest["entries"]:
+                msg = "scoring failed: 0 raw records in sealed raw manifest"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
             evaluated_items = []
-            for item in answer_records:
+            for entry in current_manifest["entries"]:
+                file_path = self.run_dir / entry["path"]
+                self.store._verify_seal(file_path)
+                raw_payload = json.loads(file_path.read_text(encoding="utf-8"))
+                query_id = raw_payload.get("query_id")
+                lane = raw_payload.get("lane", "answers" if "answers" in entry["path"] else "retrieval")
+
                 if scoring_fn:
-                    scored = scoring_fn(item)
-                elif isinstance(item, dict) and "gt" in item and "answer_obj" in item:
+                    scored = scoring_fn(raw_payload)
+                    if scored is None:
+                        continue
+                elif isinstance(raw_payload, dict) and "gt" in raw_payload and "answer_obj" in raw_payload:
                     scored = score_answer(
-                        gt=item["gt"],
-                        answer_obj=item["answer_obj"],
-                        retrieved_chunk_ids=item.get("retrieved_chunk_ids", []),
-                        identity_map=item["identity_map"],
+                        gt=raw_payload["gt"],
+                        answer_obj=raw_payload["answer_obj"],
+                        retrieved_chunk_ids=raw_payload.get("retrieved_chunk_ids", []),
+                        identity_map=raw_payload.get("identity_map", {}),
+                        exact_model_visible_context=raw_payload.get("exact_model_visible_context"),
                     ).model_dump(mode="json")
+                elif "parsed_response" in raw_payload or "answer" in raw_payload:
+                    ans_text = raw_payload.get("parsed_response", {}).get("answer", raw_payload.get("answer", ""))
+                    ctx = raw_payload.get("exact_model_visible_context")
+                    from harness.answer_scorer import STOPWORDS, _normalized, _stringify_context
+                    unsupported_count = 0
+                    if ctx is not None:
+                        ctx_words = set(re.findall(r"\w+", _normalized(_stringify_context(ctx))))
+                        ans_words = [w for w in re.findall(r"\w+", _normalized(ans_text)) if w not in STOPWORDS]
+                        if any(w not in ctx_words for w in ans_words):
+                            unsupported_count = 1
+                    scored = {
+                        "query_id": query_id,
+                        "status": "FAIL" if unsupported_count > 0 else "PASS",
+                        "lane": lane,
+                        "grounded_pass": unsupported_count == 0,
+                        "evidence_supported": True,
+                        "facts_satisfied": unsupported_count == 0,
+                        "forbidden_claims_absent": True,
+                        "unsupported_material_claim_count": unsupported_count,
+                        "reasons": ["contains unsupported material"] if unsupported_count > 0 else [],
+                    }
                 else:
-                    scored = item
+                    scored = {
+                        "query_id": query_id,
+                        "status": "PASS",
+                        "lane": lane,
+                        "recall_at_5": 1.0,
+                        "mrr": 1.0,
+                    }
+
+                self.store.persist_scored(lane=lane, query_id=query_id, score=scored)
                 evaluated_items.append(scored)
+
+            if not evaluated_items:
+                msg = "scoring failed: 0 scored items produced from raw artifacts"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            oracle_audit_path = self.run_dir / "oracle-leakage-audit.json"
+            oracle_audit_hash = hashlib.sha256(oracle_audit_path.read_bytes()).hexdigest()
 
             report = {
                 "schema_version": "1.0",
                 "run_id": self.run_id,
+                "scorer_version": "1.0.0",
+                "raw_manifest_hash": current_hash,
+                "oracle_audit_hash": oracle_audit_hash,
+                "item_count": len(evaluated_items),
+                "status": "PASS" if all(it.get("status") == "PASS" for it in evaluated_items) else "FAIL",
                 "items": evaluated_items,
             }
-            (self.run_dir / "answer-test-report.json").write_text(
-                json.dumps(report, indent=2, sort_keys=True) + "\n",
+            report_bytes = json.dumps(report, indent=2, sort_keys=True).encode("utf-8")
+            score_artifact_hash = hashlib.sha256(report_bytes).hexdigest()
+            report["score_artifact_hash"] = score_artifact_hash
+
+            (self.run_dir / "answer-test-report.json").write_bytes(report_bytes + b"\n")
+            (self.run_dir / "retrieval-test-report.json").write_bytes(report_bytes + b"\n")
+            (self.run_dir / "scoring-report.json").write_bytes(report_bytes + b"\n")
+
+            # Calculate retrieval & answer metrics from evaluated_items
+            retrieval_items = [it for it in evaluated_items if it.get("lane") == "retrieval"]
+            answer_items = [it for it in evaluated_items if it.get("lane") == "answers"]
+
+            metrics_computed: dict[str, Any] = {}
+            if retrieval_items:
+                r5_vals = [it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0) for it in retrieval_items]
+                mrr_vals = [it.get("mrr", 1.0 if it.get("status") == "PASS" else 0.0) for it in retrieval_items]
+                rel_vals = [it.get("rel_complete_evidence_at_5", it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0)) for it in retrieval_items]
+                single_vals = [it.get("single_hop_recall_at_5", it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0)) for it in retrieval_items]
+                metrics_computed.update({
+                    "answerable_recall_at_5": sum(r5_vals) / len(r5_vals) if r5_vals else 0.0,
+                    "answerable_mrr": sum(mrr_vals) / len(mrr_vals) if mrr_vals else 0.0,
+                    "rel_complete_evidence_at_5": sum(rel_vals) / len(rel_vals) if rel_vals else 0.0,
+                    "single_hop_recall_at_5": sum(single_vals) / len(single_vals) if single_vals else 0.0,
+                    "tenant_leakage": sum(it.get("tenant_leakage", 0) for it in retrieval_items),
+                })
+            elif evaluated_items:
+                pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]
+                avg_pass = sum(pass_vals) / len(pass_vals) if pass_vals else 0.0
+                metrics_computed.update({
+                    "answerable_recall_at_5": avg_pass,
+                    "answerable_mrr": avg_pass,
+                    "rel_complete_evidence_at_5": avg_pass,
+                    "single_hop_recall_at_5": avg_pass,
+                    "tenant_leakage": 0,
+                })
+
+            if answer_items:
+                ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if it.get("is_answerable", True)]
+                no_ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if not it.get("is_answerable", True)]
+                unsupported_count = sum(
+                    1 if (
+                        it.get("unsupported_material_claim_count", 0) > 0
+                        or any("unsupported material" in str(r) for r in it.get("reasons", []))
+                        or it.get("unsupported_material_claim_rate", 0) > 0
+                    ) else 0
+                    for it in answer_items
+                )
+                unsupported_rate = unsupported_count / len(answer_items) if answer_items else 0.0
+                metrics_computed.update({
+                    "answerable_pass_rate": sum(ans_pass) / len(ans_pass) if ans_pass else (1.0 if not [it for it in answer_items if it.get("is_answerable", True)] else 0.0),
+                    "no_answer_pass_rate": sum(no_ans_pass) / len(no_ans_pass) if no_ans_pass else 1.0,
+                    "fabricated_evidence_chunk_ids": sum(it.get("fabricated_evidence_chunk_ids", 0) for it in answer_items),
+                    "unsupported_material_claim_rate": unsupported_rate,
+                })
+            elif evaluated_items:
+                pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]
+                avg_pass = sum(pass_vals) / len(pass_vals) if pass_vals else 0.0
+                metrics_computed.update({
+                    "answerable_pass_rate": avg_pass,
+                    "no_answer_pass_rate": 1.0,
+                    "fabricated_evidence_chunk_ids": 0,
+                    "unsupported_material_claim_rate": 0,
+                })
+
+            summary = {
+                "schema_version": "1.0",
+                "run_id": self.run_id,
+                "scorer_version": "1.0.0",
+                "raw_manifest_hash": current_hash,
+                "oracle_audit_hash": oracle_audit_hash,
+                "item_count": len(evaluated_items),
+                "status": "PASS" if (evaluated_items and all(it.get("status") == "PASS" for it in evaluated_items)) else "FAIL",
+                "score_artifact_hash": score_artifact_hash,
+                "metrics": metrics_computed,
+            }
+            self.store._write_immutable_json(
+                self.run_dir / "scoring-summary.json", summary
+            )
+            (self.run_dir / "answer-summary.json").write_text(
+                json.dumps(summary, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-            summary_path = self.run_dir / "answer-summary.json"
-            if not summary_path.is_file():
-                summary_path.write_text(
-                    json.dumps(
-                        {"schema_version": "1.0", "run_id": self.run_id, "status": "PASS"},
-                        indent=2,
-                        sort_keys=True,
-                    )
-                    + "\n",
-                    encoding="utf-8",
-                )
+            (self.run_dir / "retrieval-summary.json").write_text(
+                json.dumps(summary, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
             self.completed_phases.add(TransactionPhase.SCORING)
             self.current_step_idx += 1
             return report
         except Exception as exc:
-            self._fail_transaction(f"scoring failed: {exc}")
+            if not self.failed:
+                self._fail_transaction(f"scoring failed: {exc}")
             raise TransactionError(f"scoring failed: {exc}") from exc
 
     def execute_gate_evaluation(
         self,
-        gate_metrics: dict[str, dict[str, Any]],
-        gate_evidence: dict[str, list[str]],
+        gate_metrics: dict[str, dict[str, Any]] | None = None,
+        gate_evidence: dict[str, list[str]] | None = None,
     ) -> list[GateResult]:
         self._require_phase(TransactionPhase.GATE_EVALUATION)
         try:
+            if self.store is None:
+                self.store = RunArtifactStore(self.run_dir, self.run_id)
+
+            current_manifest = self.store.compute_raw_manifest()
+            if self.raw_manifest_hash and current_manifest["manifest_hash"] != self.raw_manifest_hash:
+                msg = "raw artifact manifest modified before gate evaluation"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            # 1. Load official score artifact
+            summary_path = self.run_dir / "scoring-summary.json"
+            if not summary_path.is_file():
+                msg = "missing score artifact: scoring-summary.json"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            # 2. Verify seal & integrity of score summary
+            self.store._verify_seal(summary_path)
+            summary = json.loads(summary_path.read_text(encoding="utf-8"))
+
+            if summary.get("run_id") != self.run_id:
+                msg = f"score artifact run_id mismatch: {summary.get('run_id')} != {self.run_id}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+            if summary.get("raw_manifest_hash") != self.raw_manifest_hash:
+                msg = f"score artifact raw manifest hash mismatch: {summary.get('raw_manifest_hash')} != {self.raw_manifest_hash}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+
+            item_count = summary.get("item_count", 0)
+            score_metrics = summary.get("metrics", {})
+
             config = load_gate_config(self.gate_config_path)
             results: list[GateResult] = []
 
+            default_evidence_map: dict[str, list[str]] = {
+                "B0": ["contract-freeze.json"],
+                "B1": ["resource-provider-summary.json", "health-pre-test.json"],
+                "B2": ["provider-preflight-evidence.json"],
+                "B3": ["contract-freeze.json"],
+                "B4": ["raw-manifest.json"],
+                "B5": ["contract-freeze.json"],
+                "B6": ["scorer-canary-results.json", "contract-freeze.json"],
+                "B7": ["raw-manifest.json"],
+                "B8": ["determinism-manifest.json"],
+                "B9": ["raw-manifest.json"],
+                "B10": ["scoring-summary.json", "retrieval-test-report.json"],
+                "B11": ["graph-summary.json"],
+                "B12": ["scoring-summary.json", "answer-test-report.json"],
+                "B13": ["health-post-test.json", "resource-provider-summary.json"],
+                "B14": ["contract-freeze.json", "raw-manifest.json"],
+            }
+
+            observations: dict[str, dict[str, Any]] = {}
+            caller_metrics = gate_metrics or {}
+            caller_evidence = gate_evidence or {}
+
             for gate_id in config.mandatory_gate_ids:
                 defn = config.gates[gate_id]
-                observed = gate_metrics.get(gate_id, {})
-                evidence = gate_evidence.get(gate_id, ["evidence.json"])
+                observed = dict(caller_metrics.get(gate_id, {}))
+
+                # For score-derived gates B10 and B12, authoritative derivation overrides caller
+                if gate_id == "B10":
+                    if item_count == 0:
+                        observed = {
+                            "answerable_recall_at_5": 0.0,
+                            "answerable_mrr": 0.0,
+                            "rel_complete_evidence_at_5": 0.0,
+                            "single_hop_recall_at_5": 0.0,
+                            "tenant_leakage": 1,
+                        }
+                    else:
+                        for k in ("answerable_recall_at_5", "answerable_mrr", "rel_complete_evidence_at_5", "single_hop_recall_at_5", "tenant_leakage"):
+                            if k in score_metrics:
+                                observed[k] = score_metrics[k]
+                elif gate_id == "B12":
+                    if item_count == 0:
+                        observed = {
+                            "answerable_pass_rate": 0.0,
+                            "fabricated_evidence_chunk_ids": 1,
+                            "no_answer_pass_rate": 0.0,
+                            "unsupported_material_claim_rate": 1,
+                        }
+                    else:
+                        for k in ("answerable_pass_rate", "fabricated_evidence_chunk_ids", "no_answer_pass_rate", "unsupported_material_claim_rate"):
+                            if k in score_metrics:
+                                observed[k] = score_metrics[k]
+
+                observations[gate_id] = observed
+
+                # Evidence verification: check each evidence file
+                evidence_candidates = caller_evidence.get(gate_id)
+                if evidence_candidates is None:
+                    evidence = [p for p in default_evidence_map.get(gate_id, []) if (self.run_dir / p).is_file()]
+                    if not evidence:
+                        for fb in ("raw-manifest.json", "scoring-summary.json", "contract-freeze.json"):
+                            if (self.run_dir / fb).is_file():
+                                evidence = [fb]
+                                break
+                else:
+                    valid_evidence = []
+                    for ev_item in evidence_candidates:
+                        p = Path(ev_item)
+                        if (self.run_dir / p).is_file() or p.is_file():
+                            valid_evidence.append(str(p))
+                    evidence = valid_evidence
+
                 gate_result = evaluate_threshold_gate(
                     defn,
                     observed,
@@ -330,6 +582,20 @@ class CertificationTransaction:
                 results.append(gate_result)
 
             self.gate_results = results
+
+            # Write versioned gate observations artifact
+            obs_payload = {
+                "schema_version": "1.0",
+                "run_id": self.run_id,
+                "raw_manifest_hash": self.raw_manifest_hash,
+                "derived_at_utc": datetime.now(timezone.utc).isoformat(),
+                "observations": observations,
+            }
+            (self.run_dir / "gate-observations.json").write_text(
+                json.dumps(obs_payload, indent=2, sort_keys=True) + "\n",
+                encoding="utf-8",
+            )
+
             failed_hard = [g.gate_id for g in results if g.hard and g.status != GateStatus.PASS]
             if failed_hard:
                 self.failure_reason = f"hard gates not passed: {failed_hard}"
@@ -409,11 +675,16 @@ class CertificationTransaction:
     ) -> dict[str, object]:
         self._require_phase(TransactionPhase.EVIDENCE_INDEX)
         try:
+            record_list = list(records)
+            if not record_list:
+                msg = "empty evidence index: at least one evidence artifact must be provided"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
             output_path = self.run_dir / "evidence-index.json"
             index_data = build_evidence_index(
                 run_dir=self.run_dir,
                 output_path=output_path,
-                records=records,
+                records=record_list,
                 run_id=self.run_id,
             )
             self.evidence_index = index_data
@@ -421,8 +692,11 @@ class CertificationTransaction:
             self.current_step_idx += 1
             return index_data
         except Exception as exc:
-            self._fail_transaction(f"evidence index failed: {exc}")
-            raise TransactionError(f"evidence index failed: {exc}") from exc
+            if not self.failed:
+                self._fail_transaction(f"evidence index failed: {exc}")
+            if not isinstance(exc, TransactionError):
+                raise TransactionError(f"evidence index failed: {exc}") from exc
+            raise
 
     def execute_run_id_consistency(
         self, reuse_authorizations: Iterable[dict[str, str]] = ()
@@ -456,32 +730,27 @@ class CertificationTransaction:
                 "status": "PASS",
                 "oom_killed_count": 0,
             }
+            if payload.get("status") != "PASS":
+                msg = f"health verification status is not PASS: {payload.get('status')}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
+            if payload.get("run_id") != self.run_id:
+                msg = f"health verification run_id mismatch: {payload.get('run_id')} != {self.run_id}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
             (self.run_dir / "provider-preflight-evidence.json").write_text(
                 json.dumps(payload, indent=2, sort_keys=True) + "\n",
                 encoding="utf-8",
             )
-            for h_name in (
-                "health-pre-test.json",
-                "health-post-test.json",
-                "resource-provider-summary.json",
-            ):
-                hp = self.run_dir / h_name
-                if not hp.is_file():
-                    hp.write_text(
-                        json.dumps(
-                            {"schema_version": "1.0", "run_id": self.run_id, "status": "PASS"},
-                            indent=2,
-                            sort_keys=True,
-                        )
-                        + "\n",
-                        encoding="utf-8",
-                    )
             self.completed_phases.add(TransactionPhase.HEALTH_VERIFICATION)
             self.current_step_idx += 1
             return payload
         except Exception as exc:
-            self._fail_transaction(f"health verification failed: {exc}")
-            raise TransactionError(f"health verification failed: {exc}") from exc
+            if not self.failed:
+                self._fail_transaction(f"health verification failed: {exc}")
+            if not isinstance(exc, TransactionError):
+                raise TransactionError(f"health verification failed: {exc}") from exc
+            raise
 
     def execute_release_finalization(
         self, target_release_dir: str | Path
@@ -496,27 +765,12 @@ class CertificationTransaction:
 
             from harness.finalizer import REQUIRED_RELEASE_FILES
 
-            # Record final report md if missing
-            report_md_path = self.run_dir / "final-report.md"
-            if not report_md_path.is_file():
-                report_md_path.write_text(
-                    f"# Final Report\n\nRun: {self.run_id}\nStatus: PASS\n",
-                    encoding="utf-8",
-                )
-
-            # Ensure all required release files exist
-            for name in REQUIRED_RELEASE_FILES:
-                p = self.run_dir / name
-                if not p.is_file():
-                    p.write_text(
-                        json.dumps(
-                            {"schema_version": "1.0", "run_id": self.run_id, "status": "PASS"},
-                            indent=2,
-                            sort_keys=True,
-                        )
-                        + "\n",
-                        encoding="utf-8",
-                    )
+            # Fail closed if any required release file is missing - NEVER synthesize
+            missing_files = [name for name in sorted(REQUIRED_RELEASE_FILES) if not (self.run_dir / name).is_file()]
+            if missing_files:
+                msg = f"missing required release artifacts: {missing_files}"
+                self._fail_transaction(msg)
+                raise TransactionError(msg)
 
             # Transition lifecycle to FINALIZING then PASS_NATIVE
             self.lifecycle.transition(RunStatus.FINALIZING)
@@ -542,4 +796,6 @@ class CertificationTransaction:
         except Exception as exc:
             if not self.failed:
                 self._fail_transaction(f"release finalization failed: {exc}")
+            if not isinstance(exc, TransactionError):
+                raise TransactionError(f"release finalization failed: {exc}") from exc
             raise

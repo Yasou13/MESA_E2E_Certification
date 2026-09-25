@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 import pytest
 
+from harness.artifacts import RunArtifactStore
 from harness.freeze import (
     MANDATORY_MATERIAL_CATEGORIES,
     create_contract_freeze,
@@ -203,11 +204,29 @@ def test_failure_at_gate_evaluation_refuses_finalization(tmp_path: Path) -> None
 
     def make_raw(d: Path) -> None:
         (d / "raw.txt").write_text("raw", encoding="utf-8")
+        store = RunArtifactStore(d, RUN_ID)
+        store.persist_raw_retrieval(
+            query_id="Q-1",
+            request={"query": "raw"},
+            response={"results": [{"chunk_id": "M-1"}]},
+            transport_status=200,
+            timestamp_utc=datetime.now(timezone.utc),
+            latency_ms=10.0,
+            runtime_lock_sha256="a" * 64,
+        )
 
     tx.execute_raw_execution(make_raw)
     tx.execute_raw_sealing()
-    tx.execute_oracle_audit([])
-    tx.execute_scoring([])
+    tx.execute_oracle_audit()
+    tx.execute_scoring(
+        scoring_fn=lambda r: {
+            "query_id": "Q-1",
+            "status": "FAIL",
+            "lane": "retrieval",
+            "recall_at_5": 0.50,
+            "mrr": 0.50,
+        }
+    )
 
     # Metrics fail B10 (e.g. recall below threshold)
     metrics = _pass_all_gates_metrics()
@@ -252,15 +271,21 @@ def test_full_successful_transaction_produces_valid_release(tmp_path: Path) -> N
 
     def make_raw(d: Path) -> None:
         (d / "query_trace.txt").write_text("ok", encoding="utf-8")
-        (d / "retrieval-test-report.json").write_text(
-            json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "summary": {"overall_recall_at_5": 0.9}}),
-            encoding="utf-8"
+        store = RunArtifactStore(d, RUN_ID)
+        store.persist_raw_retrieval(
+            query_id="Q-1",
+            request={"query": "test query"},
+            response={"results": [{"chunk_id": "chunk_1"}]},
+            transport_status=200,
+            timestamp_utc=datetime.now(timezone.utc),
+            latency_ms=10.0,
+            runtime_lock_sha256="a" * 64,
         )
 
     tx.execute_raw_execution(make_raw)
     tx.execute_raw_sealing()
-    tx.execute_oracle_audit([])
-    tx.execute_scoring([])
+    tx.execute_oracle_audit()
+    tx.execute_scoring()
 
     metrics = _pass_all_gates_metrics()
     tx.execute_gate_evaluation(metrics, {})
@@ -300,6 +325,25 @@ def test_full_successful_transaction_produces_valid_release(tmp_path: Path) -> N
     tx.execute_evidence_index(records)
     tx.execute_run_id_consistency()
     tx.execute_health_verification()
+
+    # Provide real required release artifacts produced during full run
+    (run_dir / "final-report.md").write_text(f"# Final Report\n\nRun: {RUN_ID}\nStatus: PASS\n", encoding="utf-8")
+    for name in [
+        "health-pre-test.json",
+        "health-post-test.json",
+        "resource-provider-summary.json",
+        "scorer-canary-results.json",
+        "determinism-manifest.json",
+        "graph-summary.json",
+        "frozen-identities.json",
+        "identity-map-summary.json",
+        "decision-summary.json",
+        "repair-summary.json",
+    ]:
+        (run_dir / name).write_text(
+            json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "status": "PASS"}, indent=2) + "\n",
+            encoding="utf-8",
+        )
 
     release_meta = tx.execute_release_finalization(release_dir)
     assert release_meta["run_id"] == RUN_ID

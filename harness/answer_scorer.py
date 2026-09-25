@@ -58,6 +58,18 @@ def _normalized(text: str) -> str:
     return turkish_casefold(normalize_text(text))
 
 
+def _stringify_context(context: Any) -> str:
+    if context is None:
+        return ""
+    if isinstance(context, str):
+        return context
+    if isinstance(context, (list, tuple, set)):
+        return " ".join(_stringify_context(x) for x in context)
+    if isinstance(context, dict):
+        return " ".join(_stringify_context(v) for v in context.values())
+    return str(context)
+
+
 def _contains_denial(text: str, target: str = "") -> bool:
     normalized = _normalized(text)
     norm_target = _normalized(target) if target else ""
@@ -114,6 +126,7 @@ def _mapping_error(gt: GroundTruthItem, error: UnknownIdentityError) -> AnswerSc
         evidence_supported=False,
         facts_satisfied=False,
         forbidden_claims_absent=False,
+        unsupported_material_claim_count=0,
     )
 
 
@@ -122,6 +135,8 @@ def score_answer(
     answer_obj: AnswerResponse,
     retrieved_chunk_ids: list[str],
     identity_map: IdentityMap,
+    *,
+    exact_model_visible_context: Any = None,
 ) -> AnswerScore:
     """Score an answer without converting semantic ambiguity into PASS."""
     try:
@@ -293,13 +308,21 @@ def score_answer(
 
             # Check for unsupported additional material in the claim itself
             source_texts = " ".join(span.exact_text for span in fact.supported_by) + " " + fact.claim
+            if exact_model_visible_context is not None:
+                source_texts += " " + _stringify_context(exact_model_visible_context)
+            for p in patterns:
+                if p.value:
+                    source_texts += " " + p.value
+                if p.values:
+                    source_texts += " " + " ".join(p.values)
+
             source_words = set(re.findall(r"\w+", _normalized(source_texts)))
             claim_words = [
                 w for w in re.findall(r"\w+", _normalized(claim.text))
-                if len(w) > 2 and w not in STOPWORDS
+                if w not in STOPWORDS
             ]
             unsupported_words = [w for w in claim_words if w not in source_words]
-            if len(unsupported_words) >= 3:
+            if unsupported_words:
                 unresolved.append(
                     f"claim {claim.fact_ids} contains unsupported material: {' '.join(unsupported_words[:5])}"
                 )
@@ -337,6 +360,7 @@ def score_answer(
         reasons.append("grounded PASS invariants were not satisfied")
 
     is_pass = status == "PASS"
+    unsupported_claim_count = len([u for u in unresolved if "contains unsupported material" in u])
     return AnswerScore(
         query_id=gt.query_id,
         is_answerable=True,
@@ -348,4 +372,5 @@ def score_answer(
         evidence_supported=evidence_supported,
         facts_satisfied=facts_satisfied,
         forbidden_claims_absent=forbidden_absent,
+        unsupported_material_claim_count=unsupported_claim_count,
     )
