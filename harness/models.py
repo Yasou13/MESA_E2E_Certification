@@ -259,6 +259,7 @@ class ArtifactReference(VersionedRecord):
     source_run_id: str = Field(min_length=1)
     immutable: bool
     sealed: bool
+    artifact_type: Optional[str] = None
 
     @field_validator("timestamp_utc")
     @classmethod
@@ -266,6 +267,35 @@ class ArtifactReference(VersionedRecord):
         if value.tzinfo is None or value.utcoffset() is None:
             raise ValueError("timestamp_utc must be timezone-aware")
         return value
+
+
+class EvidenceIndex(VersionedRecord):
+    run_id: str = Field(min_length=1)
+    created_at_utc: Optional[datetime] = None
+    artifact_count: int = 0
+    artifacts: list[ArtifactReference] = Field(default_factory=list)
+    index_hash: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
+    status: Optional[str] = None
+
+    @field_validator("created_at_utc")
+    @classmethod
+    def timestamp_must_be_timezone_aware(
+        cls, value: Optional[datetime]
+    ) -> Optional[datetime]:
+        if value is not None and (value.tzinfo is None or value.utcoffset() is None):
+            raise ValueError("created_at_utc must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def validate_index_integrity(self) -> "EvidenceIndex":
+        if self.artifacts and self.artifact_count != len(self.artifacts):
+            raise ValueError(
+                f"artifact_count {self.artifact_count} != len(artifacts) {len(self.artifacts)}"
+            )
+        paths = [item.path for item in self.artifacts]
+        if len(paths) != len(set(paths)):
+            raise ValueError("duplicate artifact paths in evidence index")
+        return self
 
 
 class GateResult(VersionedRecord):

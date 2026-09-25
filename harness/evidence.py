@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path
@@ -9,7 +10,7 @@ from typing import Any, Iterable
 
 from pydantic import ValidationError
 
-from harness.models import ArtifactReference
+from harness.models import ArtifactReference, EvidenceIndex
 
 
 class EvidenceIndexError(RuntimeError):
@@ -117,8 +118,12 @@ def build_evidence_index(
     run_dir: str | Path,
     output_path: str | Path,
     records: Iterable[dict[str, Any]],
+    *,
+    run_id: str | None = None,
+    created_at: datetime | None = None,
 ) -> dict[str, object]:
     root = Path(run_dir)
+    inferred_run_id = run_id or root.name
     artifacts: list[ArtifactReference] = []
     seen: set[str] = set()
     for raw_record in records:
@@ -141,17 +146,30 @@ def build_evidence_index(
                 f"invalid evidence metadata for {relative}: {exc}"
             ) from exc
 
-    serialized_artifacts = [
-        artifact.model_dump(mode="json", exclude_none=True)
-        for artifact in sorted(artifacts, key=lambda item: item.path)
+    sorted_artifacts = sorted(artifacts, key=lambda item: item.path)
+    entries_for_hash = [
+        {"path": art.path, "sha256": art.sha256} for art in sorted_artifacts
     ]
-    payload = {
-        "schema_version": "1.0",
-        "artifact_count": len(serialized_artifacts),
-        "artifacts": serialized_artifacts,
-    }
+    canonical_bytes = json.dumps(
+        entries_for_hash, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    ).encode("utf-8")
+    index_hash = hashlib.sha256(canonical_bytes).hexdigest()
+
+    creation_time = created_at or datetime.now(timezone.utc)
+    if creation_time.tzinfo is None or creation_time.utcoffset() is None:
+        creation_time = creation_time.replace(tzinfo=timezone.utc)
+
+    index_model = EvidenceIndex(
+        schema_version="1.0",
+        run_id=inferred_run_id,
+        created_at_utc=creation_time,
+        artifact_count=len(sorted_artifacts),
+        artifacts=sorted_artifacts,
+        index_hash=index_hash,
+    )
+    result = index_model.model_dump(mode="json", exclude_none=True)
     serialized = json.dumps(
-        payload, ensure_ascii=False, indent=2, sort_keys=True
+        result, ensure_ascii=False, indent=2, sort_keys=True
     ) + "\n"
     Path(output_path).write_text(serialized, encoding="utf-8", newline="\n")
-    return payload
+    return result

@@ -11,8 +11,10 @@ import shutil
 import tempfile
 from typing import Any, Mapping
 
+from pydantic import ValidationError
+
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, MANDATORY_REPOSITORIES
-from harness.models import VerdictStatus
+from harness.models import EvidenceIndex, VerdictStatus
 
 
 REQUIRED_RELEASE_FILES = {
@@ -148,6 +150,28 @@ def _load_and_validate_source(
         raise ReleaseFinalizationError(
             f"sensitive field is forbidden in {name}: {sensitive_path}"
         )
+
+    if name == "evidence-index.json":
+        try:
+            ev_model = EvidenceIndex.model_validate(payload)
+        except ValidationError as exc:
+            raise ReleaseFinalizationError(f"evidence-index.json fails schema: {exc}") from exc
+        if ev_model.index_hash:
+            entries_for_hash = [
+                {"path": art.path, "sha256": art.sha256}
+                for art in sorted(ev_model.artifacts, key=lambda item: item.path)
+            ]
+            canonical_bytes = json.dumps(
+                entries_for_hash, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+            ).encode("utf-8")
+            observed_index_hash = hashlib.sha256(canonical_bytes).hexdigest()
+            if observed_index_hash != ev_model.index_hash:
+                raise ReleaseFinalizationError("evidence-index index_hash integrity mismatch")
+        for art in ev_model.artifacts:
+            if art.source_run_id != run_id:
+                raise ReleaseFinalizationError(
+                    f"unauthorized foreign source_run_id in evidence index: {art.source_run_id} for {art.path}"
+                )
     return content
 
 
