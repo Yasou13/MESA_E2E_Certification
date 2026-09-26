@@ -161,6 +161,7 @@ def test_a03_missing_mandatory_frozen_material(tmp_path: Path) -> None:
             "MESA_Data": "b" * 40,
             "MESA_E2E_Certification": "c" * 40,
         },
+        "runtime_identities": {"python": "test"},
         "materials": [{"category": cat, "path": f"{cat}.txt", "sha256": "a" * 64} for cat in cats],
     }
     freeze_path.write_text(json.dumps(payload), encoding="utf-8")

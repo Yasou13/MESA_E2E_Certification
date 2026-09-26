@@ -20,7 +20,7 @@ NOW = datetime(2026, 9, 26, tzinfo=timezone.utc)
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def transaction(tmp_path, request=None, response=None):
+def transaction(tmp_path, request=None, response=None, *, empty=False):
     rid = "RUN-independent"
     root = tmp_path / "materials"
     root.mkdir()
@@ -40,6 +40,8 @@ def transaction(tmp_path, request=None, response=None):
     tx.execute_bootstrap()
     tx.execute_freeze(f, s, repository_root=root, current_repository_shas=shas)
     def raw(d):
+        if empty:
+            return
         RunArtifactStore(d, rid).persist_raw_retrieval(query_id="Q-audit",
             request=request or {"query": "Independent query"},
             response=response or {"results": []}, transport_status=200,
@@ -80,5 +82,4 @@ def placeholder_sources(tmp_path):
         "producer": "independent", "phase": "test", "timestamp_utc": NOW,
         "source_run_id": run.name, "immutable": True, "sealed": True}], run_id=run.name)
     return {name: run / name for name in REQUIRED_RELEASE_FILES}
-
 

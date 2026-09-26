@@ -97,6 +97,27 @@ class CertificationTransaction:
             raise TransactionError(
                 f"Transaction has failed at a previous phase: {self.failure_reason}"
             )
+        if not 0 <= self.current_step_idx < len(PHASE_SEQUENCE):
+            raise TransactionError("phase sequence already completed or corrupted")
+        if self.completed_phases != set(PHASE_SEQUENCE[:self.current_step_idx]):
+            raise TransactionError("phase history does not match current phase")
+        replay = RunLifecycle(self.run_id)
+        try:
+            for event in self.lifecycle.history:
+                if event["from"] != replay.status.value:
+                    raise ValueError("discontinuous lifecycle history")
+                replay.transition(RunStatus(event["to"]))
+            expected_status = (
+                RunStatus.CREATED if self.current_step_idx == 0 else
+                RunStatus.HARNESS_READY if self.current_step_idx == 1 else
+                RunStatus.CONTRACT_FROZEN if self.current_step_idx == 2 else
+                RunStatus.TEST_RUNNING if self.current_step_idx == 3 else
+                RunStatus.TEST_COMPLETED
+            )
+            if replay.status != self.lifecycle.status or replay.status != expected_status:
+                raise ValueError("lifecycle status does not match phase")
+        except (KeyError, ValueError, RuntimeError) as exc:
+            raise TransactionError(f"invalid lifecycle: {exc}") from exc
         expected_phase = PHASE_SEQUENCE[self.current_step_idx]
         if phase != expected_phase:
             raise TransactionError(
