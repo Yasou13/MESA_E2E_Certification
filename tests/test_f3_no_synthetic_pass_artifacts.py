@@ -215,7 +215,7 @@ def test_7_transaction_never_creates_fake_pass_placeholder(tmp_path: Path) -> No
 
 
 # 8. only real producer-created valid artifacts -> accepted
-def test_8_only_real_valid_artifacts_accepted(tmp_path: Path) -> None:
+def test_8_status_only_placeholders_are_rejected(tmp_path: Path) -> None:
     from tests.independent_support import placeholder_sources
     sources = placeholder_sources(tmp_path)
     with pytest.raises(ReleaseFinalizationError, match="mandatory gate|unverified"):

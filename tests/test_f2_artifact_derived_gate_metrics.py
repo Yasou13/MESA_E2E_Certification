@@ -82,7 +82,7 @@ def test_1_caller_fake_passing_metrics_rejected(tmp_path: Path) -> None:
 
 
 # 2. official score artifact contains failing Recall@5 -> B10 FAIL
-def test_2_official_score_artifact_failing_recall_causes_b10_fail(tmp_path: Path) -> None:
+def test_2_caller_recall_is_unverified(tmp_path: Path) -> None:
     tx, run_dir = _setup_tx_with_raw(tmp_path)
     # Recall 0.50 is below mandatory threshold 0.80
     tx.execute_scoring(scoring_fn=lambda r: {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.50, "mrr": 0.50})
@@ -158,7 +158,7 @@ def test_7_empty_score_artifact_hard_gate_cannot_pass(tmp_path: Path) -> None:
 
 
 # 8. all official score artifacts valid -> observations computed and gates evaluated
-def test_8_all_official_score_artifacts_valid_evaluates(tmp_path: Path) -> None:
+def test_8_caller_score_callback_is_not_authoritative(tmp_path: Path) -> None:
     tx, run_dir = _setup_tx_with_raw(tmp_path)
     tx.execute_scoring(scoring_fn=lambda r: {
         "query_id": "Q-1",

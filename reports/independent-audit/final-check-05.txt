@@ -1,0 +1,1 @@
+PASS: no high-confidence secret formats in tracked text files

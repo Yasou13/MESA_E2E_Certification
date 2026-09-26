@@ -1,0 +1,32 @@
+...........FF.                                                           [100%]
+=================================== FAILURES ===================================
+___________________ test_placeholder_pass_bundle_is_rejected ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-3/test_placeholder_pass_bundle_i0')
+
+    def test_placeholder_pass_bundle_is_rejected(tmp_path):
+        sources = placeholder_sources(tmp_path)
+>       with pytest.raises(ReleaseFinalizationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ReleaseFinalizationError
+
+tests/test_independent_audit.py:149: Failed
+____________ test_real_index_mutated_artifact_rejected_by_finalizer ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-3/test_real_index_mutated_artifa0')
+
+    def test_real_index_mutated_artifact_rejected_by_finalizer(tmp_path):
+        sources = placeholder_sources(tmp_path)
+        p = sources["answer-summary.json"]
+        payload = json.loads(p.read_text())
+        payload["mutated"] = True
+        p.write_text(json.dumps(payload))
+>       with pytest.raises(ReleaseFinalizationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ReleaseFinalizationError
+
+tests/test_independent_audit.py:159: Failed
+=========================== short test summary info ============================
+FAILED tests/test_independent_audit.py::test_placeholder_pass_bundle_is_rejected
+FAILED tests/test_independent_audit.py::test_real_index_mutated_artifact_rejected_by_finalizer
+2 failed, 12 passed in 0.19s

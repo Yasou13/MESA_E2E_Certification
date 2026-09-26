@@ -198,7 +198,7 @@ def test_c2_all_gates_pass_but_lifecycle_invalid_fails(tmp_path: Path) -> None:
         )
 
 
-def test_c2_all_mandatory_conditions_valid_pass_native(tmp_path: Path) -> None:
+def test_c2_placeholder_conditions_cannot_certify(tmp_path: Path) -> None:
     sources = _make_sources(tmp_path)
     # A one-gate registry plus placeholder artifacts is not a valid certification.
     with pytest.raises(ReleaseFinalizationError, match="evidence index|mandatory gate|unverified"):

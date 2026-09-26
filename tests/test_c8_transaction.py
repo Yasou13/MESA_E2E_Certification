@@ -259,7 +259,7 @@ def test_failure_at_gate_evaluation_refuses_finalization(tmp_path: Path) -> None
         tx.execute_release_finalization(tmp_path / "release")
 
 
-def test_full_successful_transaction_produces_valid_release(tmp_path: Path) -> None:
+def test_unverified_transaction_cannot_produce_release(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     release_dir = tmp_path / "release"
     tx = CertificationTransaction(RUN_ID, run_dir)

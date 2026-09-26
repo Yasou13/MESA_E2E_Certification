@@ -347,7 +347,7 @@ def test_13_b12_gate_reflects_unsupported_claims(tmp_path: Path) -> None:
 
 
 # 14. non-empty answerable test set with 0 unsupported claims -> B12 PASS
-def test_14_non_empty_clean_set_passes_b12(tmp_path: Path) -> None:
+def test_14_caller_clean_scores_cannot_pass_b12(tmp_path: Path) -> None:
     from harness.artifacts import RunArtifactStore
     from harness.transaction import CertificationTransaction
 

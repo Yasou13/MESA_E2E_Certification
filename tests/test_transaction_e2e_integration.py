@@ -97,7 +97,7 @@ def _pass_all_gates_metrics() -> dict[str, dict]:
 
 
 # T1: Clean passing transaction with real retrieval, real answers, full gates, all 17 required artifacts -> verify_release_bundle PASS
-def test_t1_clean_passing_transaction(tmp_path: Path) -> None:
+def test_t1_placeholder_transaction_remains_blocked(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     release_dir = tmp_path / "release"
     freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
@@ -479,7 +479,7 @@ def test_t11_fails_at_release_finalization_if_artifact_missing(tmp_path: Path) -
 
 
 # T12: Multi-lane workload (both retrieval and answer items in raw manifest) correctly separates and computes both B10 and B12 gate metrics
-def test_t12_multi_lane_workload_computes_b10_and_b12(tmp_path: Path) -> None:
+def test_t12_multi_lane_capture_does_not_invent_metrics(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
 

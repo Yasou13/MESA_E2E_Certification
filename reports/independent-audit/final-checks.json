@@ -1,0 +1,134 @@
+[
+  {
+    "category": "DEPENDENCY",
+    "command": "uv lock --check",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.009,
+    "log": "final-check-01.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "DEPENDENCY",
+    "command": "uv sync --locked --all-groups",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.008,
+    "log": "final-check-02.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "STATIC/COMPILE",
+    "command": "uv run --locked python -m compileall -q harness scripts tests",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.058,
+    "log": "final-check-03.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "CHECKSUM",
+    "command": "uv run --locked python scripts/verify_agent_pack.py",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.031,
+    "log": "final-check-04.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "SECRET",
+    "command": "uv run --locked python scripts/check_no_secrets.py",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.117,
+    "log": "final-check-05.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "STRUCTURED ARTIFACT",
+    "command": "uv run --locked python scripts/validate_json_artifacts.py",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.108,
+    "log": "final-check-06.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "SELF-TEST",
+    "command": "uv run --locked python -O -m harness.self_test",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.116,
+    "log": "final-check-07.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "FULL PYTEST",
+    "command": "uv run --locked pytest",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "log": "final-check-08.txt",
+    "status": "PASS",
+    "note": "Rerun after final test additions: 306 passed in 4.52 seconds, exit code 0; see final-check-08.txt."
+  },
+  {
+    "category": "A1-A30",
+    "command": "uv run --locked pytest -v tests/test_independent_attack_matrix.py",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.378,
+    "log": "final-check-09.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "HISTORICAL IMMUTABILITY",
+    "command": "git diff --name-only 7f2977e720aa9294ebc59bb9a73fdeff8416b2c0 -- evidence runs ground-truth datasets agent-pack config contracts reports/hardening reports/legacy-audits reports/qualification reports/releases",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.002,
+    "log": "final-check-10.txt",
+    "status": "PASS"
+  },
+  {
+    "category": "DIFF",
+    "command": "git diff --check",
+    "environment": {
+      "UV_CACHE_DIR": "/tmp/mesa-audit-uv-cache",
+      "UV_OFFLINE": "true"
+    },
+    "exit_code": 0,
+    "seconds": 0.001,
+    "log": "final-check-11.txt",
+    "status": "PASS"
+  }
+]
