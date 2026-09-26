@@ -42,9 +42,11 @@ def _confined_path(run_dir: Path, relative: str) -> Path:
     root = run_dir.resolve()
     path = (root / relative).resolve()
     try:
-        path.relative_to(root)
+        canonical = path.relative_to(root).as_posix()
     except ValueError as exc:
         raise EvidenceIndexError(f"artifact path escapes run directory: {relative}") from exc
+    if canonical != relative:
+        raise EvidenceIndexError(f"artifact path must be canonical: {relative}")
     return path
 
 

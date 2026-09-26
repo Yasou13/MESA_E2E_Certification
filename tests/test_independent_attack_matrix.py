@@ -107,7 +107,8 @@ def test_attack(attack, tmp_path):
             with pytest.raises(TransactionError, match="manifest"):
                 tx.execute_gate_evaluation()
         else:
-            assert all(g.status.value != "PASS" for g in tx.execute_gate_evaluation())
+            with pytest.raises(TransactionError, match="score item count mismatch"):
+                tx.execute_gate_evaluation()
         return
     if attack == "A27":
         tx.gate_config_path.write_text(tx.gate_config_path.read_text()+" ")

@@ -357,7 +357,7 @@ class CertificationTransaction:
                 "items": evaluated_items,
             }
             report_bytes = json.dumps(report, indent=2, sort_keys=True).encode("utf-8")
-            score_artifact_hash = hashlib.sha256(report_bytes).hexdigest()
+            score_artifact_hash = hashlib.sha256(report_bytes + b"\n").hexdigest()
             report["score_artifact_hash"] = score_artifact_hash
 
             (self.run_dir / "answer-test-report.json").write_bytes(report_bytes + b"\n")
@@ -434,6 +434,19 @@ class CertificationTransaction:
                 msg = f"score artifact raw manifest hash mismatch: {summary.get('raw_manifest_hash')} != {self.raw_manifest_hash}"
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
+
+            self.store._require_passing_oracle_audit()
+            oracle_hash = hashlib.sha256((self.run_dir / "oracle-leakage-audit.json").read_bytes()).hexdigest()
+            if summary.get("oracle_audit_hash") != oracle_hash:
+                raise TransactionError("ORACLE_AUDIT_STALE: score artifact audit hash mismatch")
+            report_path = self.run_dir / "scoring-report.json"
+            if not report_path.is_file() or hashlib.sha256(report_path.read_bytes()).hexdigest() != summary.get("score_artifact_hash"):
+                raise TransactionError("score report hash mismatch")
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            if report.get("item_count") != summary.get("item_count") or len(report.get("items", [])) != summary.get("item_count"):
+                raise TransactionError("score item count mismatch")
+            if summary.get("scorer_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
+                raise TransactionError("scorer source hash mismatch")
 
             item_count = summary.get("item_count", 0)
             score_metrics = summary.get("metrics", {})
