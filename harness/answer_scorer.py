@@ -277,6 +277,7 @@ def score_answer(
             all_claim_evidence_supported = False
 
     satisfied_fact_ids: set[str] = set()
+    supported_claim_indexes: set[int] = set()
     for fact_id, fact in required_by_id.items():
         patterns = [
             pattern
@@ -307,35 +308,34 @@ def score_answer(
                 continue
 
             # Check for unsupported additional material in the claim itself
-            source_texts = " ".join(span.exact_text for span in fact.supported_by) + " " + fact.claim
-            if exact_model_visible_context is not None:
-                source_texts += " " + _stringify_context(exact_model_visible_context)
-            for p in patterns:
-                if p.value:
-                    source_texts += " " + p.value
-                if p.values:
-                    source_texts += " " + " ".join(p.values)
+            # Vocabulary overlap cannot prove a legal proposition. Only a
+            # complete source-linked claim/span is deterministic support here;
+            # paraphrases remain unresolved pending an approved evaluator.
+            def proposition(text: str) -> str:
+                return _normalized(text).strip().rstrip(".!?; ")
 
-            source_words = set(re.findall(r"\w+", _normalized(source_texts)))
-            claim_words = [
-                w for w in re.findall(r"\w+", _normalized(claim.text))
-                if w not in STOPWORDS
-            ]
-            unsupported_words = [w for w in claim_words if w not in source_words]
-            if unsupported_words:
+            supported_texts = {proposition(fact.claim)} | {
+                proposition(span.exact_text) for span in fact.supported_by
+                if span.source_chunk_id in normalized_claim_evidence[index]
+            }
+            if proposition(claim.text) not in supported_texts:
                 unresolved.append(
-                    f"claim {claim.fact_ids} contains unsupported material: {' '.join(unsupported_words[:5])}"
+                    f"claim {claim.fact_ids} contains unsupported material or unresolved paraphrase"
                 )
                 continue
 
             fact_passed = True
-            break
+            supported_claim_indexes.add(index)
         if fact_passed:
             satisfied_fact_ids.add(fact_id)
         else:
             reasons.append(
                 f"required fact {fact_id} is denied, unsupported, or unmatched"
             )
+
+    for index in range(len(answer_obj.claims)):
+        if index not in supported_claim_indexes:
+            unresolved.append(f"claim {index} contains unsupported material")
 
     facts_satisfied = bool(required_by_id) and satisfied_fact_ids == set(
         required_by_id
