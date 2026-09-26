@@ -200,11 +200,10 @@ def test_c2_all_gates_pass_but_lifecycle_invalid_fails(tmp_path: Path) -> None:
 
 def test_c2_all_mandatory_conditions_valid_pass_native(tmp_path: Path) -> None:
     sources = _make_sources(tmp_path)
-    dest = finalize_release(
-        run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases"
-    )
-    assert dest.exists()
-    assert (dest / "gate-results.json").is_file()
+    # A one-gate registry plus placeholder artifacts is not a valid certification.
+    with pytest.raises(ReleaseFinalizationError, match="evidence index|mandatory gate|unverified"):
+        finalize_release(run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases")
+    assert not (tmp_path / "releases" / RUN_ID).exists()
 
 
 def test_c2_serialized_final_verdict_tampered_from_fail_to_pass_detected(

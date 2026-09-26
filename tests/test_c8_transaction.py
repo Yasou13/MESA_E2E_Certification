@@ -251,10 +251,11 @@ def test_failure_at_gate_evaluation_refuses_finalization(tmp_path: Path) -> None
     ]
     tx.execute_evidence_index(records)
     tx.execute_run_id_consistency()
-    tx.execute_health_verification()
+    with pytest.raises(TransactionError, match="health verification failed"):
+        tx.execute_health_verification()
 
     # Finalization must be refused!
-    with pytest.raises(TransactionError, match="Cannot finalize release with non-PASS verdict"):
+    with pytest.raises(TransactionError, match="Transaction has failed"):
         tx.execute_release_finalization(tmp_path / "release")
 
 
@@ -290,65 +291,14 @@ def test_full_successful_transaction_produces_valid_release(tmp_path: Path) -> N
     metrics = _pass_all_gates_metrics()
     tx.execute_gate_evaluation(metrics, {})
     verdict = tx.execute_verdict_derivation()
-    assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
-
-    raw_path = run_dir / "query_trace.txt"
-    raw_hash = hashlib.sha256(raw_path.read_bytes()).hexdigest()
-    ret_path = run_dir / "retrieval-test-report.json"
-    ret_hash = hashlib.sha256(ret_path.read_bytes()).hexdigest()
-
-    now = datetime.now(timezone.utc)
-    records = [
-        {
-            "path": "query_trace.txt",
-            "sha256": raw_hash,
-            "producer": "harness",
-            "phase": "test",
-            "timestamp_utc": now,
-            "source_run_id": RUN_ID,
-            "immutable": True,
-            "sealed": True,
-            "artifact_type": "evidence",
-        },
-        {
-            "path": "retrieval-test-report.json",
-            "sha256": ret_hash,
-            "producer": "harness",
-            "phase": "test",
-            "timestamp_utc": now,
-            "source_run_id": RUN_ID,
-            "immutable": True,
-            "sealed": True,
-            "artifact_type": "evidence",
-        }
-    ]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    # Provide real required release artifacts produced during full run
-    (run_dir / "final-report.md").write_text(f"# Final Report\n\nRun: {RUN_ID}\nStatus: PASS\n", encoding="utf-8")
-    for name in [
-        "health-pre-test.json",
-        "health-post-test.json",
-        "resource-provider-summary.json",
-        "scorer-canary-results.json",
-        "determinism-manifest.json",
-        "graph-summary.json",
-        "frozen-identities.json",
-        "identity-map-summary.json",
-        "decision-summary.json",
-        "repair-summary.json",
-    ]:
-        (run_dir / name).write_text(
-            json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "status": "PASS"}, indent=2) + "\n",
-            encoding="utf-8",
-        )
-
-    release_meta = tx.execute_release_finalization(release_dir)
-    assert release_meta["run_id"] == RUN_ID
-    promoted_dir = Path(release_meta["release_dir"])
-    assert promoted_dir.is_dir()
-    assert (promoted_dir / "gate-results.json").is_file()
-    assert (promoted_dir / "SHA256SUMS.txt").is_file()
-    assert TransactionPhase.COMPLETED in tx.completed_phases
+    assert verdict.status == VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION
+    assert all(g.status.value == "UNVERIFIED" for g in tx.gate_results)
+    # A complete-looking placeholder bundle must not authorize publication.
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    attack_dir = tmp_path / "placeholder-attack"
+    attack_dir.mkdir()
+    sources = placeholder_sources(attack_dir)
+    with pytest.raises(ReleaseFinalizationError):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=release_dir)
+    assert not (release_dir / "RUN-independent").exists()

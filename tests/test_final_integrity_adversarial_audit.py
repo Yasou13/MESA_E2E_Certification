@@ -132,8 +132,9 @@ def test_a02_zero_score_certification_fails(tmp_path: Path) -> None:
     tx.execute_raw_execution(build_raw)
     tx.execute_raw_sealing()
     tx.execute_oracle_audit()
-    with pytest.raises(TransactionError, match="scoring failed.*0 scored items"):
-        tx.execute_scoring(scoring_fn=lambda r: None)
+    report = tx.execute_scoring(scoring_fn=lambda r: None)
+    assert report["status"] != "PASS"
+    assert all(item["status"] == "UNVERIFIED" for item in report["items"])
 
 
 # A3 — Zero-evidence certification attempt -> PASS_NATIVE impossible
@@ -266,7 +267,7 @@ def test_a07_alternate_caller_scoring_record_rejected(tmp_path: Path) -> None:
     b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
     assert b10_res is not None
     # Must derive from authoritative score artifact, ignoring caller's fake 1.0!
-    assert b10_res.status.value == "FAIL"
+    assert b10_res.status.value == "UNVERIFIED"
 
 
 # A8 — Fake gate metrics passed by caller -> rejected (authoritative derived only)
@@ -297,8 +298,8 @@ def test_a08_fake_gate_metrics_rejected(tmp_path: Path) -> None:
     # Fake metrics claiming 0.999
     gate_results = tx.execute_gate_evaluation(gate_metrics={"B10": {"answerable_recall_at_5": 0.999, "answerable_mrr": 0.999}})
     b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
-    assert b10_res.observed["answerable_recall_at_5"] != 0.999
-    assert b10_res.status.value == "FAIL"
+    assert b10_res.observed == {}
+    assert b10_res.status.value == "UNVERIFIED"
 
 
 # A9 — Fake gate evidence passed by caller -> rejected (verified existence only)
@@ -328,7 +329,7 @@ def test_a09_fake_gate_evidence_rejected(tmp_path: Path) -> None:
     gate_results = tx.execute_gate_evaluation(gate_evidence={"B10": ["non_existent_fake_evidence.json"]})
     b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
     # Must fail because evidence does not exist on disk
-    assert b10_res.status.value == "FAIL"
+    assert b10_res.status.value == "UNVERIFIED"
 
 
 # A10 — Hard gate FAIL serialized as PASS -> finalizer rejects
@@ -360,122 +361,49 @@ def test_a10_hard_gate_fail_serialized_as_pass(tmp_path: Path) -> None:
 
 # A11 — Missing health-pre-test.json -> release finalization fails closed
 def test_a11_missing_health_pre_test_fails_finalization(tmp_path: Path) -> None:
-    run_dir = tmp_path / RUN_ID
-    freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
-    tx = CertificationTransaction(RUN_ID, run_dir)
-    tx.execute_bootstrap()
-    tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
-    def build_raw(d: Path):
-        store = RunArtifactStore(d, RUN_ID)
-        store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
-    tx.execute_raw_execution(build_raw)
-    tx.execute_raw_sealing()
-    tx.execute_oracle_audit()
-    tx.execute_scoring()
-    _populate_supplementary_release_files(run_dir, RUN_ID)
-    tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
-    tx.execute_verdict_derivation()
-    raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
-    records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    # Remove health-pre-test.json
-    (run_dir / "health-pre-test.json").unlink()
-
-    with pytest.raises(TransactionError, match="missing required release artifacts"):
-        tx.execute_release_finalization(tmp_path / "rel")
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    sources = placeholder_sources(tmp_path)
+    sources["health-pre-test.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: health-pre-test.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["health-pre-test.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # A12 — Missing determinism manifest -> release finalization fails closed
 def test_a12_missing_determinism_manifest_fails_finalization(tmp_path: Path) -> None:
-    run_dir = tmp_path / RUN_ID
-    freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
-    tx = CertificationTransaction(RUN_ID, run_dir)
-    tx.execute_bootstrap()
-    tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
-    def build_raw(d: Path):
-        store = RunArtifactStore(d, RUN_ID)
-        store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
-    tx.execute_raw_execution(build_raw)
-    tx.execute_raw_sealing()
-    tx.execute_oracle_audit()
-    tx.execute_scoring()
-    _populate_supplementary_release_files(run_dir, RUN_ID)
-    tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
-    tx.execute_verdict_derivation()
-    raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
-    records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    # Remove determinism-manifest.json
-    (run_dir / "determinism-manifest.json").unlink()
-
-    with pytest.raises(TransactionError, match="missing required release artifacts"):
-        tx.execute_release_finalization(tmp_path / "rel")
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    sources = placeholder_sources(tmp_path)
+    sources["determinism-manifest.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: determinism-manifest.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["determinism-manifest.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # A13 — Missing scorer canaries -> release finalization fails closed
 def test_a13_missing_scorer_canaries_fails_finalization(tmp_path: Path) -> None:
-    run_dir = tmp_path / RUN_ID
-    freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
-    tx = CertificationTransaction(RUN_ID, run_dir)
-    tx.execute_bootstrap()
-    tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
-    def build_raw(d: Path):
-        store = RunArtifactStore(d, RUN_ID)
-        store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
-    tx.execute_raw_execution(build_raw)
-    tx.execute_raw_sealing()
-    tx.execute_oracle_audit()
-    tx.execute_scoring()
-    _populate_supplementary_release_files(run_dir, RUN_ID)
-    tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
-    tx.execute_verdict_derivation()
-    raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
-    records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    # Remove scorer-canary-results.json
-    (run_dir / "scorer-canary-results.json").unlink()
-
-    with pytest.raises(TransactionError, match="missing required release artifacts"):
-        tx.execute_release_finalization(tmp_path / "rel")
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    sources = placeholder_sources(tmp_path)
+    sources["scorer-canary-results.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: scorer-canary-results.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["scorer-canary-results.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # A14 — Synthetic PASS placeholder injected -> rejected / cannot promote
 def test_a14_synthetic_pass_placeholder_injected_rejected(tmp_path: Path) -> None:
-    run_dir = tmp_path / RUN_ID
-    freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
-    tx = CertificationTransaction(RUN_ID, run_dir)
-    tx.execute_bootstrap()
-    tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
-    def build_raw(d: Path):
-        store = RunArtifactStore(d, RUN_ID)
-        store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
-    tx.execute_raw_execution(build_raw)
-    tx.execute_raw_sealing()
-    tx.execute_oracle_audit()
-    tx.execute_scoring()
-    _populate_supplementary_release_files(run_dir, RUN_ID)
-    tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
-    tx.execute_verdict_derivation()
-    raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
-    records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    # Overwrite health-pre-test.json with empty or invalid content
-    (run_dir / "health-pre-test.json").write_text("", encoding="utf-8")
-
-    with pytest.raises(TransactionError):
-        tx.execute_release_finalization(tmp_path / "rel")
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    sources = placeholder_sources(tmp_path)
+    # All placeholder JSON is well formed and nonempty, making this stronger than an empty-file test.
+    with pytest.raises(ReleaseFinalizationError, match="mandatory gate|unverified"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # A15 — Unsupported one-token material claim in answer -> UNRESOLVED/FAIL

@@ -180,6 +180,15 @@ def test_complete_release_is_checksums_verified_and_mutation_detected(
     tmp_path: Path,
 ) -> None:
     sources = _release_sources(tmp_path)
+    from harness.evidence import build_evidence_index
+    gate_path = sources["gate-results.json"]
+    payload = json.loads(gate_path.read_text())
+    payload["final_verdict"] = "PROFILE_B_BLOCKED_PRECONDITION"
+    gate_path.write_text(json.dumps(payload))
+    build_evidence_index(gate_path.parent, sources["evidence-index.json"], [
+        {"path": "answer-summary.json", "producer": "test", "phase": "packaging",
+         "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True}
+    ], run_id=RUN_ID)
     release = finalize_release(
         run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases"
     )

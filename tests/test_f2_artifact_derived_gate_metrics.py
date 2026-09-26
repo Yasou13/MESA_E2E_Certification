@@ -88,8 +88,8 @@ def test_2_official_score_artifact_failing_recall_causes_b10_fail(tmp_path: Path
     tx.execute_scoring(scoring_fn=lambda r: {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.50, "mrr": 0.50})
     results = tx.execute_gate_evaluation()
     b10_res = next(g for g in results if g.gate_id == "B10")
-    assert b10_res.status == GateStatus.FAIL
-    assert "threshold_not_met" in b10_res.reason or "missing" in b10_res.reason or b10_res.status == GateStatus.FAIL
+    assert b10_res.status == GateStatus.UNVERIFIED
+    assert b10_res.reason == "authoritative_metric_producer_unavailable"
 
 
 # 3. serialized metric artifact tampered -> detected
@@ -175,7 +175,7 @@ def test_8_all_official_score_artifacts_valid_evaluates(tmp_path: Path) -> None:
     results = tx.execute_gate_evaluation()
     assert len(results) >= 15
     b10_res = next(g for g in results if g.gate_id == "B10")
-    assert b10_res.status == GateStatus.PASS
+    assert b10_res.status == GateStatus.UNVERIFIED
 
 
 # 9. threshold change after freeze -> invalidation

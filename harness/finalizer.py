@@ -15,6 +15,8 @@ from pydantic import ValidationError
 
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, MANDATORY_REPOSITORIES
 from harness.models import EvidenceIndex, VerdictStatus
+from harness.gates import PROFILE_B_GATE_IDS, PRODUCTION_METRIC_PRODUCERS
+from harness.evidence import _confined_path, EvidenceIndexError, sha256_file
 
 
 REQUIRED_RELEASE_FILES = {
@@ -350,6 +352,30 @@ def finalize_release(
         if name.endswith(".json"):
             json_payloads[name] = json.loads(content)
     _validate_pass_claim(json_payloads)
+
+    # Verify the real index producer's references against source bytes, not just
+    # the self-consistency of its serialized digest list.
+    index = EvidenceIndex.model_validate(json_payloads["evidence-index.json"])
+    if not index.artifacts or not index.index_hash or index.artifact_count != len(index.artifacts):
+        raise ReleaseFinalizationError("empty or incomplete evidence index")
+    evidence_root = Path(sources["evidence-index.json"]).parent
+    for artifact in index.artifacts:
+        try:
+            path = _confined_path(evidence_root, artifact.path)
+        except EvidenceIndexError as exc:
+            raise ReleaseFinalizationError(str(exc)) from exc
+        if not path.is_file() or path.is_symlink() or sha256_file(path) != artifact.sha256:
+            raise ReleaseFinalizationError(f"evidence artifact missing or hash mismatch: {artifact.path}")
+
+    if json_payloads["gate-results.json"]["final_verdict"] == VerdictStatus.PROFILE_B_PASS_NATIVE.value:
+        gates = json_payloads["gate-results.json"]["gates"]
+        if {g["gate_id"] for g in gates} != PROFILE_B_GATE_IDS:
+            raise ReleaseFinalizationError("mandatory gate registry must contain exactly B0-B14")
+        unavailable = sorted(PROFILE_B_GATE_IDS - PRODUCTION_METRIC_PRODUCERS)
+        if unavailable:
+            raise ReleaseFinalizationError(
+                f"unverified authoritative metric producers for mandatory gates: {unavailable}"
+            )
 
     staging_path: Path | None = None
     try:
