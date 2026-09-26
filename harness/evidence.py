@@ -184,6 +184,13 @@ def validate_run_id_consistency(
                         has_run_id = True
                         if str(rec_run_id) != run_id:
                             record_mismatch(str(rec_run_id), subpath=f"{relative}:{line_idx}")
+                    elif not is_allowlisted():
+                        record_mismatch("MISSING", subpath=f"{relative}:{line_idx}")
+                    meta_id = record.get("metadata", {}).get("run_id") if isinstance(record.get("metadata"), dict) else None
+                    if meta_id is not None and str(meta_id) != run_id:
+                        record_mismatch(str(meta_id), subpath=f"{relative}:{line_idx}.metadata")
+                elif not is_allowlisted():
+                    record_mismatch("MISSING", subpath=f"{relative}:{line_idx}")
 
             if not has_records and not is_allowlisted():
                 parse_errors.append(f"empty jsonl content: {relative}")
@@ -214,6 +221,8 @@ def validate_run_id_consistency(
                 for item in payload:
                     if isinstance(item, dict) and "run_id" in item and item["run_id"] is not None:
                         observed_run_ids.append(str(item["run_id"]))
+                    elif not is_allowlisted():
+                        observed_run_ids.append("MISSING")
 
             if not observed_run_ids:
                 if not is_allowlisted():
