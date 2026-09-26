@@ -161,6 +161,7 @@ def test_a03_missing_mandatory_frozen_material(tmp_path: Path) -> None:
             "MESA_Data": "b" * 40,
             "MESA_E2E_Certification": "c" * 40,
         },
+        "runtime_identities": {"python": "test"},
         "materials": [{"category": cat, "path": f"{cat}.txt", "sha256": "a" * 64} for cat in cats],
     }
     freeze_path.write_text(json.dumps(payload), encoding="utf-8")
@@ -584,6 +585,10 @@ def test_a12_real_evidence_index_producer_accepted_by_finalizer(tmp_path: Path) 
                 p.write_text(json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "status": "PASS"}), encoding="utf-8")
 
     release_dir = tmp_path / "release"
+    gate_path = run_dir / "gate-results.json"
+    gate_payload = json.loads(gate_path.read_text())
+    gate_payload["final_verdict"] = "PROFILE_B_BLOCKED_PRECONDITION"
+    gate_path.write_text(json.dumps(gate_payload))
     dest = finalize_release(
         run_id=RUN_ID,
         sources={name: run_dir / name for name in REQUIRED_RELEASE_FILES},

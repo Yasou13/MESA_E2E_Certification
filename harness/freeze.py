@@ -114,6 +114,8 @@ def create_contract_freeze(
         for path in sorted(material_paths[category], key=lambda item: item.as_posix()):
             if not path.is_file():
                 raise FreezeError(f"freeze material is missing: {path}")
+            if not path.stat().st_size:
+                raise FreezeError(f"freeze material is empty: {path}")
             materials.append(
                 {
                     "category": category,
@@ -178,6 +180,9 @@ def verify_contract_freeze(
 
     if not isinstance(payload, dict):
         return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["freeze payload must be an object"])
+
+    if not isinstance(payload.get("runtime_identities"), dict) or not payload["runtime_identities"]:
+        return FreezeVerification(FreezeStatus.FREEZE_INVALID, ["runtime identities must not be empty"])
 
     if payload.get("schema_version") != "1.0":
         return FreezeVerification(
@@ -265,6 +270,9 @@ def verify_contract_freeze(
             return FreezeVerification(FreezeStatus.FREEZE_INVALID, [str(exc)])
         if not path.is_file():
             drift.append(f"missing frozen material: {relative.as_posix()}")
+            continue
+        if not path.stat().st_size:
+            drift.append(f"empty frozen material: {relative.as_posix()}")
             continue
         observed = _sha256(path)
         if observed != expected_sha:

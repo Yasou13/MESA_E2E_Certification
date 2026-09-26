@@ -157,6 +157,12 @@ def derive_production_verdict(
 ) -> FinalVerdict:
     """Production entrypoint that recomputes trust directly from filesystem artifacts."""
     from harness.freeze import verify_contract_freeze
+    from harness.gates import PROFILE_B_GATE_IDS, PRODUCTION_METRIC_PRODUCERS
+
+    gate_list = list(gates)
+    if mandatory_gate_ids != PROFILE_B_GATE_IDS or {g.gate_id for g in gate_list} != PROFILE_B_GATE_IDS:
+        return _verdict(run_id, VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
+                        ["mandatory production gate registry must be exactly B0-B14"], gate_list)
 
     run_path = Path(run_dir)
     freeze_verif = verify_contract_freeze(
@@ -184,11 +190,15 @@ def derive_production_verdict(
         name: (run_path / name).is_file() for name in mandatory_artifact_names
     }
 
-    return evaluate_final_verdict(
+    verdict = evaluate_final_verdict(
         run_id=run_id,
-        gates=gates,
+        gates=gate_list,
         mandatory_gate_ids=mandatory_gate_ids,
         mandatory_artifacts=mandatory_artifacts,
         freeze_verification=freeze_verif,
         lifecycle_valid=lifecycle_valid,
     )
+    if verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE and PROFILE_B_GATE_IDS - PRODUCTION_METRIC_PRODUCERS:
+        return _verdict(run_id, VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
+                        ["authoritative metric producers unavailable; caller gate claims cannot certify"], gate_list)
+    return verdict

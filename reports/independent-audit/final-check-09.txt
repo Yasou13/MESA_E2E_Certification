@@ -1,0 +1,39 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0 -- /home/yasin/Desktop/MESA_E2E_Certification/.venv/bin/python
+cachedir: .pytest_cache
+rootdir: /home/yasin/Desktop/MESA_E2E_Certification
+configfile: pyproject.toml
+collecting ... collected 30 items
+
+tests/test_independent_attack_matrix.py::test_attack[A1] PASSED          [  3%]
+tests/test_independent_attack_matrix.py::test_attack[A2] PASSED          [  6%]
+tests/test_independent_attack_matrix.py::test_attack[A3] PASSED          [ 10%]
+tests/test_independent_attack_matrix.py::test_attack[A4] PASSED          [ 13%]
+tests/test_independent_attack_matrix.py::test_attack[A5] PASSED          [ 16%]
+tests/test_independent_attack_matrix.py::test_attack[A6] PASSED          [ 20%]
+tests/test_independent_attack_matrix.py::test_attack[A7] PASSED          [ 23%]
+tests/test_independent_attack_matrix.py::test_attack[A8] PASSED          [ 26%]
+tests/test_independent_attack_matrix.py::test_attack[A9] PASSED          [ 30%]
+tests/test_independent_attack_matrix.py::test_attack[A10] PASSED         [ 33%]
+tests/test_independent_attack_matrix.py::test_attack[A11] PASSED         [ 36%]
+tests/test_independent_attack_matrix.py::test_attack[A12] PASSED         [ 40%]
+tests/test_independent_attack_matrix.py::test_attack[A13] PASSED         [ 43%]
+tests/test_independent_attack_matrix.py::test_attack[A14] PASSED         [ 46%]
+tests/test_independent_attack_matrix.py::test_attack[A15] PASSED         [ 50%]
+tests/test_independent_attack_matrix.py::test_attack[A16] PASSED         [ 53%]
+tests/test_independent_attack_matrix.py::test_attack[A17] PASSED         [ 56%]
+tests/test_independent_attack_matrix.py::test_attack[A18] PASSED         [ 60%]
+tests/test_independent_attack_matrix.py::test_attack[A19] PASSED         [ 63%]
+tests/test_independent_attack_matrix.py::test_attack[A20] PASSED         [ 66%]
+tests/test_independent_attack_matrix.py::test_attack[A21] PASSED         [ 70%]
+tests/test_independent_attack_matrix.py::test_attack[A22] PASSED         [ 73%]
+tests/test_independent_attack_matrix.py::test_attack[A23] PASSED         [ 76%]
+tests/test_independent_attack_matrix.py::test_attack[A24] PASSED         [ 80%]
+tests/test_independent_attack_matrix.py::test_attack[A25] PASSED         [ 83%]
+tests/test_independent_attack_matrix.py::test_attack[A26] PASSED         [ 86%]
+tests/test_independent_attack_matrix.py::test_attack[A27] PASSED         [ 90%]
+tests/test_independent_attack_matrix.py::test_attack[A28] PASSED         [ 93%]
+tests/test_independent_attack_matrix.py::test_attack[A29] PASSED         [ 96%]
+tests/test_independent_attack_matrix.py::test_attack[A30] PASSED         [100%]
+
+============================== 30 passed in 0.23s ==============================

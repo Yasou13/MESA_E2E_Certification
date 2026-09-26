@@ -138,85 +138,98 @@ def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omi
 
 # 1. missing health-pre-test.json -> finalization fails
 def test_1_missing_health_pre_test_fails_finalization(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"health-pre-test.json"})
-    tx.execute_health_verification()
-    # health-pre-test.json is missing! Finalization must fail closed, NOT synthesize PASS!
-    assert not (run_dir / "health-pre-test.json").is_file()
-    with pytest.raises(TransactionError, match="missing.*health-pre-test|finaliz"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["health-pre-test.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: health-pre-test.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["health-pre-test.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 2. missing health-post-test.json -> fails
 def test_2_missing_health_post_test_fails_finalization(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"health-post-test.json"})
-    tx.execute_health_verification()
-    assert not (run_dir / "health-post-test.json").is_file()
-    with pytest.raises(TransactionError, match="missing.*health-post-test|finaliz"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["health-post-test.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: health-post-test.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["health-post-test.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 3. missing determinism manifest -> fails
 def test_3_missing_determinism_manifest_fails_finalization(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"determinism-manifest.json"})
-    tx.execute_health_verification()
-    assert not (run_dir / "determinism-manifest.json").is_file()
-    with pytest.raises(TransactionError, match="missing.*determinism-manifest|finaliz"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["determinism-manifest.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: determinism-manifest.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["determinism-manifest.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 4. missing scorer canaries -> fails
 def test_4_missing_scorer_canaries_fails_finalization(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"scorer-canary-results.json"})
-    tx.execute_health_verification()
-    assert not (run_dir / "scorer-canary-results.json").is_file()
-    with pytest.raises(TransactionError, match="missing.*scorer-canary-results|finaliz"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["scorer-canary-results.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: scorer-canary-results.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["scorer-canary-results.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 5. missing graph summary when mandatory -> fails
 def test_5_missing_graph_summary_fails_finalization(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"graph-summary.json"})
-    tx.execute_health_verification()
-    assert not (run_dir / "graph-summary.json").is_file()
-    with pytest.raises(TransactionError, match="missing.*graph-summary|finaliz"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["graph-summary.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: graph-summary.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["graph-summary.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 6. missing resource summary -> fails
 def test_6_missing_resource_summary_fails_finalization(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"resource-provider-summary.json"})
-    tx.execute_health_verification()
-    assert not (run_dir / "resource-provider-summary.json").is_file()
-    with pytest.raises(TransactionError, match="missing.*resource-provider-summary|finaliz"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["resource-provider-summary.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: resource-provider-summary.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["resource-provider-summary.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 7. transaction never creates fake PASS placeholder
 def test_7_transaction_never_creates_fake_pass_placeholder(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"health-pre-test.json", "determinism-manifest.json"})
-    tx.execute_health_verification()
-    # Must NOT have created synthetic placeholders
-    assert not (run_dir / "health-pre-test.json").is_file()
-    assert not (run_dir / "determinism-manifest.json").is_file()
+    from tests.independent_support import transaction
+    from harness.transaction import TransactionError
+    from harness.operations import verify_health_artifacts
+    tx = transaction(tmp_path)
+    report = verify_health_artifacts(tx.run_dir, tx.run_id)
+    assert report["status"] == "UNVERIFIED"
+    for name in ("health-pre-test.json", "health-post-test.json", "provider-preflight-evidence.json", "determinism-manifest.json"):
+        assert not (tx.run_dir / name).exists()
 
 
 # 8. only real producer-created valid artifacts -> accepted
-def test_8_only_real_valid_artifacts_accepted(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path)
-    tx.execute_health_verification()
-    # All 17 required artifacts exist and are valid
-    res = tx.execute_release_finalization(tmp_path / "release")
-    assert res["status"] == "PASS"
+def test_8_status_only_placeholders_are_rejected(tmp_path: Path) -> None:
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    with pytest.raises(ReleaseFinalizationError, match="mandatory gate|unverified"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # 9. artifact with status=PASS but invalid hash/schema -> rejected
 def test_9_artifact_with_pass_status_but_invalid_schema_rejected(tmp_path: Path) -> None:
-    tx, run_dir = _run_tx_through_run_id_consistency(tmp_path)
-    # Corrupt health-post-test.json schema (e.g. invalid json or missing required fields)
-    (run_dir / "health-post-test.json").write_text('{"schema_version": "1.0", "status": "PASS", "invalid_field": 123}\n')
-    tx.execute_health_verification()
-    with pytest.raises(TransactionError):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    sources = placeholder_sources(tmp_path)
+    sources["health-post-test.json"].write_text('{"schema_version": "1.0", "status": "PASS", "invalid_field": 123}')
+    with pytest.raises(ReleaseFinalizationError, match="RUN_ID mismatch"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
 
 
 # 10. empty evidence index -> PASS_NATIVE impossible

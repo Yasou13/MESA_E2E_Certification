@@ -97,6 +97,27 @@ class CertificationTransaction:
             raise TransactionError(
                 f"Transaction has failed at a previous phase: {self.failure_reason}"
             )
+        if not 0 <= self.current_step_idx < len(PHASE_SEQUENCE):
+            raise TransactionError("phase sequence already completed or corrupted")
+        if self.completed_phases != set(PHASE_SEQUENCE[:self.current_step_idx]):
+            raise TransactionError("phase history does not match current phase")
+        replay = RunLifecycle(self.run_id)
+        try:
+            for event in self.lifecycle.history:
+                if event["from"] != replay.status.value:
+                    raise ValueError("discontinuous lifecycle history")
+                replay.transition(RunStatus(event["to"]))
+            expected_status = (
+                RunStatus.CREATED if self.current_step_idx == 0 else
+                RunStatus.HARNESS_READY if self.current_step_idx == 1 else
+                RunStatus.CONTRACT_FROZEN if self.current_step_idx == 2 else
+                RunStatus.TEST_RUNNING if self.current_step_idx == 3 else
+                RunStatus.TEST_COMPLETED
+            )
+            if replay.status != self.lifecycle.status or replay.status != expected_status:
+                raise ValueError("lifecycle status does not match phase")
+        except (KeyError, ValueError, RuntimeError) as exc:
+            raise TransactionError(f"invalid lifecycle: {exc}") from exc
         expected_phase = PHASE_SEQUENCE[self.current_step_idx]
         if phase != expected_phase:
             raise TransactionError(
@@ -166,6 +187,7 @@ class CertificationTransaction:
 
             self.freeze_path = target_freeze
             self.checksum_path = target_checksum
+            self._gate_config_hash = hashlib.sha256(self.gate_config_path.read_bytes()).hexdigest()
             self.repository_root = Path(repository_root)
             self.current_repository_shas = dict(current_repository_shas)
 
@@ -233,10 +255,9 @@ class CertificationTransaction:
             # If caller supplied surfaces (e.g. for isolated tests), merge them
             if oracle_surfaces:
                 if isinstance(oracle_surfaces, dict):
-                    surfaces_dict.update(oracle_surfaces)
+                    surfaces_dict = {"sealed_raw": surfaces_dict, "supplemental": oracle_surfaces}
                 else:
-                    for i, item in enumerate(oracle_surfaces):
-                        surfaces_dict[item.get("path", f"surface_{i}")] = item.get("content", item)
+                    surfaces_dict = {"sealed_raw": surfaces_dict, "supplemental": oracle_surfaces}
 
             audit_report = audit_oracle_surfaces(
                 surfaces_dict,
@@ -302,47 +323,16 @@ class CertificationTransaction:
                 query_id = raw_payload.get("query_id")
                 lane = raw_payload.get("lane", "answers" if "answers" in entry["path"] else "retrieval")
 
-                if scoring_fn:
-                    scored = scoring_fn(raw_payload)
-                    if scored is None:
-                        continue
-                elif isinstance(raw_payload, dict) and "gt" in raw_payload and "answer_obj" in raw_payload:
-                    scored = score_answer(
-                        gt=raw_payload["gt"],
-                        answer_obj=raw_payload["answer_obj"],
-                        retrieved_chunk_ids=raw_payload.get("retrieved_chunk_ids", []),
-                        identity_map=raw_payload.get("identity_map", {}),
-                        exact_model_visible_context=raw_payload.get("exact_model_visible_context"),
-                    ).model_dump(mode="json")
-                elif "parsed_response" in raw_payload or "answer" in raw_payload:
-                    ans_text = raw_payload.get("parsed_response", {}).get("answer", raw_payload.get("answer", ""))
-                    ctx = raw_payload.get("exact_model_visible_context")
-                    from harness.answer_scorer import STOPWORDS, _normalized, _stringify_context
-                    unsupported_count = 0
-                    if ctx is not None:
-                        ctx_words = set(re.findall(r"\w+", _normalized(_stringify_context(ctx))))
-                        ans_words = [w for w in re.findall(r"\w+", _normalized(ans_text)) if w not in STOPWORDS]
-                        if any(w not in ctx_words for w in ans_words):
-                            unsupported_count = 1
-                    scored = {
-                        "query_id": query_id,
-                        "status": "FAIL" if unsupported_count > 0 else "PASS",
-                        "lane": lane,
-                        "grounded_pass": unsupported_count == 0,
-                        "evidence_supported": True,
-                        "facts_satisfied": unsupported_count == 0,
-                        "forbidden_claims_absent": True,
-                        "unsupported_material_claim_count": unsupported_count,
-                        "reasons": ["contains unsupported material"] if unsupported_count > 0 else [],
-                    }
-                else:
-                    scored = {
-                        "query_id": query_id,
-                        "status": "PASS",
-                        "lane": lane,
-                        "recall_at_5": 1.0,
-                        "mrr": 1.0,
-                    }
+                # The MESA response/context adapters and frozen GT join are not
+                # independently verified yet. Raw bytes alone cannot establish
+                # correctness; neither a callback nor a word-overlap heuristic is
+                # an official scorer. Keep this phase inspectable but non-PASS.
+                scored = {
+                    "query_id": query_id,
+                    "lane": lane,
+                    "status": "UNVERIFIED",
+                    "reasons": ["WAIT_FOR_MESA: frozen scorer/input binding unavailable"],
+                }
 
                 self.store.persist_scored(lane=lane, query_id=query_id, score=scored)
                 evaluated_items.append(scored)
@@ -358,7 +348,8 @@ class CertificationTransaction:
             report = {
                 "schema_version": "1.0",
                 "run_id": self.run_id,
-                "scorer_version": "1.0.0",
+                "scorer_version": "unverified-adapter-1",
+                "scorer_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "raw_manifest_hash": current_hash,
                 "oracle_audit_hash": oracle_audit_hash,
                 "item_count": len(evaluated_items),
@@ -366,73 +357,22 @@ class CertificationTransaction:
                 "items": evaluated_items,
             }
             report_bytes = json.dumps(report, indent=2, sort_keys=True).encode("utf-8")
-            score_artifact_hash = hashlib.sha256(report_bytes).hexdigest()
+            score_artifact_hash = hashlib.sha256(report_bytes + b"\n").hexdigest()
             report["score_artifact_hash"] = score_artifact_hash
 
             (self.run_dir / "answer-test-report.json").write_bytes(report_bytes + b"\n")
             (self.run_dir / "retrieval-test-report.json").write_bytes(report_bytes + b"\n")
             (self.run_dir / "scoring-report.json").write_bytes(report_bytes + b"\n")
 
-            # Calculate retrieval & answer metrics from evaluated_items
-            retrieval_items = [it for it in evaluated_items if it.get("lane") == "retrieval"]
-            answer_items = [it for it in evaluated_items if it.get("lane") == "answers"]
-
+            # Missing measured populations have no metrics. In particular an
+            # answer lane must never manufacture retrieval or NO_ANSWER results.
             metrics_computed: dict[str, Any] = {}
-            if retrieval_items:
-                r5_vals = [it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0) for it in retrieval_items]
-                mrr_vals = [it.get("mrr", 1.0 if it.get("status") == "PASS" else 0.0) for it in retrieval_items]
-                rel_vals = [it.get("rel_complete_evidence_at_5", it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0)) for it in retrieval_items]
-                single_vals = [it.get("single_hop_recall_at_5", it.get("recall_at_5", 1.0 if it.get("status") == "PASS" else 0.0)) for it in retrieval_items]
-                metrics_computed.update({
-                    "answerable_recall_at_5": sum(r5_vals) / len(r5_vals) if r5_vals else 0.0,
-                    "answerable_mrr": sum(mrr_vals) / len(mrr_vals) if mrr_vals else 0.0,
-                    "rel_complete_evidence_at_5": sum(rel_vals) / len(rel_vals) if rel_vals else 0.0,
-                    "single_hop_recall_at_5": sum(single_vals) / len(single_vals) if single_vals else 0.0,
-                    "tenant_leakage": sum(it.get("tenant_leakage", 0) for it in retrieval_items),
-                })
-            elif evaluated_items:
-                pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]
-                avg_pass = sum(pass_vals) / len(pass_vals) if pass_vals else 0.0
-                metrics_computed.update({
-                    "answerable_recall_at_5": avg_pass,
-                    "answerable_mrr": avg_pass,
-                    "rel_complete_evidence_at_5": avg_pass,
-                    "single_hop_recall_at_5": avg_pass,
-                    "tenant_leakage": 0,
-                })
-
-            if answer_items:
-                ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if it.get("is_answerable", True)]
-                no_ans_pass = [1.0 if it.get("status") == "PASS" else 0.0 for it in answer_items if not it.get("is_answerable", True)]
-                unsupported_count = sum(
-                    1 if (
-                        it.get("unsupported_material_claim_count", 0) > 0
-                        or any("unsupported material" in str(r) for r in it.get("reasons", []))
-                        or it.get("unsupported_material_claim_rate", 0) > 0
-                    ) else 0
-                    for it in answer_items
-                )
-                unsupported_rate = unsupported_count / len(answer_items) if answer_items else 0.0
-                metrics_computed.update({
-                    "answerable_pass_rate": sum(ans_pass) / len(ans_pass) if ans_pass else (1.0 if not [it for it in answer_items if it.get("is_answerable", True)] else 0.0),
-                    "no_answer_pass_rate": sum(no_ans_pass) / len(no_ans_pass) if no_ans_pass else 1.0,
-                    "fabricated_evidence_chunk_ids": sum(it.get("fabricated_evidence_chunk_ids", 0) for it in answer_items),
-                    "unsupported_material_claim_rate": unsupported_rate,
-                })
-            elif evaluated_items:
-                pass_vals = [1.0 if it.get("status") == "PASS" else 0.0 for it in evaluated_items]
-                avg_pass = sum(pass_vals) / len(pass_vals) if pass_vals else 0.0
-                metrics_computed.update({
-                    "answerable_pass_rate": avg_pass,
-                    "no_answer_pass_rate": 1.0,
-                    "fabricated_evidence_chunk_ids": 0,
-                    "unsupported_material_claim_rate": 0,
-                })
 
             summary = {
                 "schema_version": "1.0",
                 "run_id": self.run_id,
-                "scorer_version": "1.0.0",
+                "scorer_version": "unverified-adapter-1",
+                "scorer_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
                 "raw_manifest_hash": current_hash,
                 "oracle_audit_hash": oracle_audit_hash,
                 "item_count": len(evaluated_items),
@@ -495,91 +435,51 @@ class CertificationTransaction:
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
 
+            self.store._require_passing_oracle_audit()
+            oracle_hash = hashlib.sha256((self.run_dir / "oracle-leakage-audit.json").read_bytes()).hexdigest()
+            if summary.get("oracle_audit_hash") != oracle_hash:
+                raise TransactionError("ORACLE_AUDIT_STALE: score artifact audit hash mismatch")
+            report_path = self.run_dir / "scoring-report.json"
+            if not report_path.is_file() or hashlib.sha256(report_path.read_bytes()).hexdigest() != summary.get("score_artifact_hash"):
+                raise TransactionError("score report hash mismatch")
+            report = json.loads(report_path.read_text(encoding="utf-8"))
+            if report.get("item_count") != summary.get("item_count") or len(report.get("items", [])) != summary.get("item_count"):
+                raise TransactionError("score item count mismatch")
+            if summary.get("scorer_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
+                raise TransactionError("scorer source hash mismatch")
+
             item_count = summary.get("item_count", 0)
             score_metrics = summary.get("metrics", {})
 
             config = load_gate_config(self.gate_config_path)
             results: list[GateResult] = []
 
-            default_evidence_map: dict[str, list[str]] = {
-                "B0": ["contract-freeze.json"],
-                "B1": ["resource-provider-summary.json", "health-pre-test.json"],
-                "B2": ["provider-preflight-evidence.json"],
-                "B3": ["contract-freeze.json"],
-                "B4": ["raw-manifest.json"],
-                "B5": ["contract-freeze.json"],
-                "B6": ["scorer-canary-results.json", "contract-freeze.json"],
-                "B7": ["raw-manifest.json"],
-                "B8": ["determinism-manifest.json"],
-                "B9": ["raw-manifest.json"],
-                "B10": ["scoring-summary.json", "retrieval-test-report.json"],
-                "B11": ["graph-summary.json"],
-                "B12": ["scoring-summary.json", "answer-test-report.json"],
-                "B13": ["health-post-test.json", "resource-provider-summary.json"],
-                "B14": ["contract-freeze.json", "raw-manifest.json"],
-            }
+            verification = verify_contract_freeze(
+                self.freeze_path, self.checksum_path,
+                repository_root=self.repository_root,
+                current_repository_shas=self.current_repository_shas,
+            )
+            if verification.status != FreezeStatus.PASS:
+                raise TransactionError(f"freeze invalid before gates: {verification.drift}")
+            if hashlib.sha256(self.gate_config_path.read_bytes()).hexdigest() != self._gate_config_hash:
+                raise TransactionError("threshold config changed after freeze")
 
             observations: dict[str, dict[str, Any]] = {}
-            caller_metrics = gate_metrics or {}
-            caller_evidence = gate_evidence or {}
-
             for gate_id in config.mandatory_gate_ids:
                 defn = config.gates[gate_id]
-                observed = dict(caller_metrics.get(gate_id, {}))
-
-                # For score-derived gates B10 and B12, authoritative derivation overrides caller
-                if gate_id == "B10":
-                    if item_count == 0:
-                        observed = {
-                            "answerable_recall_at_5": 0.0,
-                            "answerable_mrr": 0.0,
-                            "rel_complete_evidence_at_5": 0.0,
-                            "single_hop_recall_at_5": 0.0,
-                            "tenant_leakage": 1,
-                        }
-                    else:
-                        for k in ("answerable_recall_at_5", "answerable_mrr", "rel_complete_evidence_at_5", "single_hop_recall_at_5", "tenant_leakage"):
-                            if k in score_metrics:
-                                observed[k] = score_metrics[k]
-                elif gate_id == "B12":
-                    if item_count == 0:
-                        observed = {
-                            "answerable_pass_rate": 0.0,
-                            "fabricated_evidence_chunk_ids": 1,
-                            "no_answer_pass_rate": 0.0,
-                            "unsupported_material_claim_rate": 1,
-                        }
-                    else:
-                        for k in ("answerable_pass_rate", "fabricated_evidence_chunk_ids", "no_answer_pass_rate", "unsupported_material_claim_rate"):
-                            if k in score_metrics:
-                                observed[k] = score_metrics[k]
-
+                # No current producer proves these gate observations from a
+                # verified MESA contract. Do not adopt caller metrics or an
+                # unrelated existing path as evidence. Keep each gate explicit.
+                observed: dict[str, Any] = {}
                 observations[gate_id] = observed
-
-                # Evidence verification: check each evidence file
-                evidence_candidates = caller_evidence.get(gate_id)
-                if evidence_candidates is None:
-                    evidence = [p for p in default_evidence_map.get(gate_id, []) if (self.run_dir / p).is_file()]
-                    if not evidence:
-                        for fb in ("raw-manifest.json", "scoring-summary.json", "contract-freeze.json"):
-                            if (self.run_dir / fb).is_file():
-                                evidence = [fb]
-                                break
-                else:
-                    valid_evidence = []
-                    for ev_item in evidence_candidates:
-                        p = Path(ev_item)
-                        if (self.run_dir / p).is_file() or p.is_file():
-                            valid_evidence.append(str(p))
-                    evidence = valid_evidence
-
-                gate_result = evaluate_threshold_gate(
-                    defn,
-                    observed,
-                    ExecutionStatus.COMPLETED,
-                    evidence,
-                )
-                results.append(gate_result)
+                results.append(GateResult(
+                    gate_id=gate_id, hard=defn.hard,
+                    execution_status=ExecutionStatus.COMPLETED,
+                    status=GateStatus.UNVERIFIED,
+                    required={k: v.model_dump(mode="json") for k, v in defn.requirements.items()},
+                    observed=observed, evidence=[],
+                    reason="authoritative_metric_producer_unavailable",
+                ))
 
             self.gate_results = results
 
@@ -724,24 +624,10 @@ class CertificationTransaction:
     ) -> dict[str, Any]:
         self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
         try:
-            payload = health_payload or {
-                "schema_version": "1.0",
-                "run_id": self.run_id,
-                "status": "PASS",
-                "oom_killed_count": 0,
-            }
-            if payload.get("status") != "PASS":
-                msg = f"health verification status is not PASS: {payload.get('status')}"
-                self._fail_transaction(msg)
-                raise TransactionError(msg)
-            if payload.get("run_id") != self.run_id:
-                msg = f"health verification run_id mismatch: {payload.get('run_id')} != {self.run_id}"
-                self._fail_transaction(msg)
-                raise TransactionError(msg)
-            (self.run_dir / "provider-preflight-evidence.json").write_text(
-                json.dumps(payload, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
-            )
+            from harness.operations import verify_health_artifacts
+            payload = verify_health_artifacts(self.run_dir, self.run_id)
+            if payload["status"] != "PASS":
+                raise TransactionError(f"health verification failed: {payload['reasons']}")
             self.completed_phases.add(TransactionPhase.HEALTH_VERIFICATION)
             self.current_step_idx += 1
             return payload

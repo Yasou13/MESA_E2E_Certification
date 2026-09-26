@@ -249,6 +249,9 @@ class RunArtifactStore:
             if lane_dir.is_dir():
                 for json_file in sorted(lane_dir.glob("*.json")):
                     sha = self._verify_seal(json_file)
+                    payload = json.loads(json_file.read_text(encoding="utf-8"))
+                    if not isinstance(payload, dict) or payload.get("run_id") != self.run_id:
+                        raise ArtifactStoreError(f"raw artifact run_id mismatch: {json_file.name}")
                     rel_path = json_file.relative_to(self.run_dir).as_posix()
                     entries.append({"path": rel_path, "sha256": sha})
         entries.sort(key=lambda item: item["path"])
@@ -285,6 +288,8 @@ class RunArtifactStore:
         path = self.run_dir / "oracle-leakage-audit.json"
         self._verify_seal(path)
         report = json.loads(path.read_text(encoding="utf-8"))
+        if report.get("run_id") != self.run_id:
+            raise ArtifactOrderError("oracle audit run_id mismatch")
         if report.get("status") != "PASS" or report.get("finding_count") != 0:
             raise ArtifactOrderError(
                 f"oracle audit must PASS before scoring: {report.get('status')}"

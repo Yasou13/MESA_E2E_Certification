@@ -211,6 +211,34 @@ def write_health_snapshot(snapshot: HealthSnapshot, path: str | Path) -> None:
     Path(path).write_text(serialized, encoding="utf-8", newline="\n")
 
 
+def verify_health_artifacts(run_dir: Path, run_id: str) -> dict[str, object]:
+    """Re-evaluate measurements; never accept a serialized status by itself."""
+    try:
+        for name, phase in (("health-pre-test.json", HealthPhase.PRE_TEST),
+                            ("health-post-test.json", HealthPhase.POST_TEST)):
+            snapshot = HealthSnapshot.model_validate_json((run_dir / name).read_text())
+            if snapshot.run_id != run_id or snapshot.phase != phase:
+                raise ValueError(f"wrong identity/phase in {name}")
+            recomputed = capture_health_snapshot(
+                run_id=run_id, phase=phase, timestamp_utc=snapshot.timestamp_utc,
+                services=snapshot.services, provider_reachable=snapshot.provider_reachable,
+                host_metrics=snapshot.host_metrics,
+            )
+            if recomputed.status != OperationalStatus.PASS or not snapshot.host_metrics:
+                raise ValueError(f"unverified health measurements in {name}")
+        samples = [ResourceSample.model_validate_json(line) for line in
+                   (run_dir / "resource-telemetry.jsonl").read_text().splitlines() if line.strip()]
+        events = [ResourcePressureEvent.model_validate_json(line) for line in
+                  (run_dir / "resource-pressure-events.jsonl").read_text().splitlines() if line.strip()]
+        if any(r.run_id != run_id for r in [*samples, *events]):
+            raise ValueError("resource measurement run_id mismatch")
+        result = evaluate_resource_status(samples, events)
+        return {**result, "run_id": run_id}
+    except (OSError, ValueError) as exc:
+        return {"schema_version": "1.0", "run_id": run_id,
+                "status": "UNVERIFIED", "reasons": [f"missing/invalid health measurement: {exc}"]}
+
+
 def evaluate_resource_status(
     samples: list[ResourceSample], events: list[ResourcePressureEvent]
 ) -> dict[str, object]:

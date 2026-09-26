@@ -1,0 +1,1717 @@
+...........F.........F......................F........................... [ 28%]
+.F..........................FF...............F.....F..FFFFFFFFF......... [ 57%]
+.....FF.F....FFF.FFFF................................................... [ 86%]
+...........F.........F....F....FF                                        [100%]
+=================================== FAILURES ===================================
+_________ test_a12_real_evidence_index_producer_accepted_by_finalizer __________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a12_real_evidence_index_p0')
+
+    def test_a12_real_evidence_index_producer_accepted_by_finalizer(tmp_path: Path) -> None:
+        from harness.finalizer import REQUIRED_RELEASE_FILES
+
+        run_dir = tmp_path / RUN_ID
+        run_dir.mkdir(parents=True, exist_ok=True)
+        art_file = run_dir / "art.json"
+        art_file.write_text(json.dumps({"run_id": RUN_ID, "status": "PASS"}), encoding="utf-8")
+
+        records = [
+            {
+                "path": "art.json",
+                "sha256": hashlib.sha256(art_file.read_bytes()).hexdigest(),
+                "producer": "harness",
+                "phase": "test",
+                "timestamp_utc": NOW,
+                "source_run_id": RUN_ID,
+                "immutable": True,
+                "sealed": True,
+                "artifact_type": "evidence",
+            }
+        ]
+        build_evidence_index(
+            run_dir=run_dir,
+            output_path=run_dir / "evidence-index.json",
+            records=records,
+            run_id=RUN_ID,
+            created_at=NOW,
+        )
+
+        # Populate remaining release files with valid PASS metadata
+        categories = sorted(MANDATORY_MATERIAL_CATEGORIES)
+        for name in REQUIRED_RELEASE_FILES:
+            p = run_dir / name
+            if not p.is_file():
+                if name == "final-report.md":
+                    p.write_text(f"# Report\n\nRun: {RUN_ID}\nStatus: PASS\n", encoding="utf-8")
+                elif name == "gate-results.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "final_verdict": "PROFILE_B_PASS_NATIVE",
+                                "mandatory_gate_ids": ["B10"],
+                                "gates": [
+                                    {
+                                        "gate_id": "B10",
+                                        "hard": True,
+                                        "status": "PASS",
+                                        "requirements": {"m": {"operator": "gte", "value": 0.7}},
+                                        "observed": {"m": 0.85},
+                                    }
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                elif name == "contract-freeze.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "status": "PASS",
+                                "freeze_valid": True,
+                                "repository_shas": {
+                                    "MESA": "a" * 40,
+                                    "MESA_Data": "b" * 40,
+                                    "MESA_E2E_Certification": "c" * 40,
+                                },
+                                "materials": [
+                                    {"category": cat, "path": f"{cat}.txt", "sha256": "0" * 64}
+                                    for cat in categories
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                elif name == "run_manifest.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "status": "PASS_NATIVE",
+                                "lifecycle_valid": True,
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                elif name == "determinism-manifest.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "oracle_audit_status": "PASS",
+                                "oracle_audit_stale": False,
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                else:
+                    p.write_text(json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "status": "PASS"}), encoding="utf-8")
+
+        release_dir = tmp_path / "release"
+>       dest = finalize_release(
+            run_id=RUN_ID,
+            sources={name: run_dir / name for name in REQUIRED_RELEASE_FILES},
+            release_root=release_dir,
+        )
+
+tests/test_adversarial_self_audit.py:587:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+run_id = 'RUN-20260925T150000Z-audit'
+sources = {'graph-summary.json': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a12_real_evidence_index_p0/RUN-20260925T150000Z-a.../pytest-of-yasin/pytest-5/test_a12_real_evidence_index_p0/RUN-20260925T150000Z-audit/scorer-canary-results.json'), ...}
+release_root = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a12_real_evidence_index_p0/release')
+
+    def finalize_release(
+        *, run_id: str, sources: Mapping[str, str | Path], release_root: str | Path
+    ) -> Path:
+        """Validate, checksum, and atomically promote a sanitized release bundle."""
+
+        if _SAFE_RUN_ID.fullmatch(run_id) is None:
+            raise ReleaseFinalizationError("unsafe RUN_ID")
+        supplied = set(sources)
+        missing = sorted(REQUIRED_RELEASE_FILES - supplied)
+        extra = sorted(supplied - REQUIRED_RELEASE_FILES)
+        if missing:
+            raise ReleaseFinalizationError(f"missing mandatory release artifacts: {missing}")
+        if extra:
+            raise ReleaseFinalizationError(f"unexpected release artifacts: {extra}")
+
+        destination_root = Path(release_root)
+        destination_root.mkdir(parents=True, exist_ok=True)
+        destination = destination_root / run_id
+        if destination.exists() or destination.is_symlink():
+            raise ReleaseFinalizationError(f"release destination already exists: {run_id}")
+
+        validated: dict[str, bytes] = {}
+        json_payloads: dict[str, dict[str, Any]] = {}
+        for name in sorted(REQUIRED_RELEASE_FILES):
+            content = _load_and_validate_source(
+                name=name, source=Path(sources[name]), run_id=run_id
+            )
+            validated[name] = content
+            if name.endswith(".json"):
+                json_payloads[name] = json.loads(content)
+        _validate_pass_claim(json_payloads)
+
+        # Verify the real index producer's references against source bytes, not just
+        # the self-consistency of its serialized digest list.
+        index = EvidenceIndex.model_validate(json_payloads["evidence-index.json"])
+        if not index.artifacts or not index.index_hash or index.artifact_count != len(index.artifacts):
+            raise ReleaseFinalizationError("empty or incomplete evidence index")
+        evidence_root = Path(sources["evidence-index.json"]).parent
+        for artifact in index.artifacts:
+            try:
+                path = _confined_path(evidence_root, artifact.path)
+            except EvidenceIndexError as exc:
+                raise ReleaseFinalizationError(str(exc)) from exc
+            if not path.is_file() or path.is_symlink() or sha256_file(path) != artifact.sha256:
+                raise ReleaseFinalizationError(f"evidence artifact missing or hash mismatch: {artifact.path}")
+
+        if json_payloads["gate-results.json"]["final_verdict"] == VerdictStatus.PROFILE_B_PASS_NATIVE.value:
+            gates = json_payloads["gate-results.json"]["gates"]
+            if {g["gate_id"] for g in gates} != PROFILE_B_GATE_IDS:
+>               raise ReleaseFinalizationError("mandatory gate registry must contain exactly B0-B14")
+E               harness.finalizer.ReleaseFinalizationError: mandatory gate registry must contain exactly B0-B14
+
+harness/finalizer.py:373: ReleaseFinalizationError
+__________________ test_regex_and_literal_modes_are_distinct ___________________
+
+identity_map = <harness.identity.IdentityMap object at 0x7da4b464e650>
+
+    def test_regex_and_literal_modes_are_distinct(identity_map: IdentityMap) -> None:
+        base = dict(
+            query_id="Q-2",
+            query_class="SINGLE_DIRECT",
+            question="question",
+            expected_source_chunk_ids=["S-1"],
+            required_facts=[_fact("f1", "S-1", "Hâkim hukuku uygular")],
+        )
+        response = _answer("Hâkim somut olayda hukuku uygular", ["f1"], ["M-1"])
+        regex_gt = GroundTruthItem(
+            **base,
+            acceptable_answer_patterns=[
+                _pattern("f1", r"hâkim.*hukuku", PatternMode.REGEX)
+            ],
+        )
+        literal_gt = GroundTruthItem(
+            **base,
+            acceptable_answer_patterns=[
+                _pattern("f1", r"hâkim.*hukuku", PatternMode.LITERAL)
+            ],
+        )
+
+>       assert score_answer(regex_gt, response, ["M-1"], identity_map).status == "PASS"
+E       AssertionError: assert <ScoringStatus.FAIL: 'FAIL'> == 'PASS'
+E
+E         - PASS
+E         + FAIL
+
+tests/test_answer_scorer_v2.py:105: AssertionError
+______________ test_c2_all_mandatory_conditions_valid_pass_native ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c2_all_mandatory_conditio0')
+
+    def test_c2_all_mandatory_conditions_valid_pass_native(tmp_path: Path) -> None:
+        sources = _make_sources(tmp_path)
+>       dest = finalize_release(
+            run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases"
+        )
+
+tests/test_c2_gate_verdict_finalizer.py:203:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+run_id = 'RUN-20260924T120000Z-c2'
+sources = {'graph-summary.json': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c2_all_mandatory_conditio0/source/graph-summary.j...on': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c2_all_mandatory_conditio0/source/scorer-canary-results.json'), ...}
+release_root = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c2_all_mandatory_conditio0/releases')
+
+    def finalize_release(
+        *, run_id: str, sources: Mapping[str, str | Path], release_root: str | Path
+    ) -> Path:
+        """Validate, checksum, and atomically promote a sanitized release bundle."""
+
+        if _SAFE_RUN_ID.fullmatch(run_id) is None:
+            raise ReleaseFinalizationError("unsafe RUN_ID")
+        supplied = set(sources)
+        missing = sorted(REQUIRED_RELEASE_FILES - supplied)
+        extra = sorted(supplied - REQUIRED_RELEASE_FILES)
+        if missing:
+            raise ReleaseFinalizationError(f"missing mandatory release artifacts: {missing}")
+        if extra:
+            raise ReleaseFinalizationError(f"unexpected release artifacts: {extra}")
+
+        destination_root = Path(release_root)
+        destination_root.mkdir(parents=True, exist_ok=True)
+        destination = destination_root / run_id
+        if destination.exists() or destination.is_symlink():
+            raise ReleaseFinalizationError(f"release destination already exists: {run_id}")
+
+        validated: dict[str, bytes] = {}
+        json_payloads: dict[str, dict[str, Any]] = {}
+        for name in sorted(REQUIRED_RELEASE_FILES):
+            content = _load_and_validate_source(
+                name=name, source=Path(sources[name]), run_id=run_id
+            )
+            validated[name] = content
+            if name.endswith(".json"):
+                json_payloads[name] = json.loads(content)
+        _validate_pass_claim(json_payloads)
+
+        # Verify the real index producer's references against source bytes, not just
+        # the self-consistency of its serialized digest list.
+        index = EvidenceIndex.model_validate(json_payloads["evidence-index.json"])
+        if not index.artifacts or not index.index_hash or index.artifact_count != len(index.artifacts):
+>           raise ReleaseFinalizationError("empty or incomplete evidence index")
+E           harness.finalizer.ReleaseFinalizationError: empty or incomplete evidence index
+
+harness/finalizer.py:360: ReleaseFinalizationError
+_____________ test_c5_01_real_producer_accepted_by_real_finalizer ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c5_01_real_producer_accep0')
+
+    def test_c5_01_real_producer_accepted_by_real_finalizer(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        run_dir.mkdir(parents=True, exist_ok=True)
+        index_path = run_dir / "evidence-index.json"
+        _produce_real_index(run_dir, index_path)
+
+        sources = _make_release_sources(tmp_path, index_path)
+>       dest = finalize_release(
+            run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases"
+        )
+
+tests/test_c5_evidence_index.py:143:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+run_id = 'RUN-20260924T120000Z-c5'
+sources = {'graph-summary.json': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c5_01_real_producer_accep0/source/graph-summary.j...on': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c5_01_real_producer_accep0/source/scorer-canary-results.json'), ...}
+release_root = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_c5_01_real_producer_accep0/releases')
+
+    def finalize_release(
+        *, run_id: str, sources: Mapping[str, str | Path], release_root: str | Path
+    ) -> Path:
+        """Validate, checksum, and atomically promote a sanitized release bundle."""
+
+        if _SAFE_RUN_ID.fullmatch(run_id) is None:
+            raise ReleaseFinalizationError("unsafe RUN_ID")
+        supplied = set(sources)
+        missing = sorted(REQUIRED_RELEASE_FILES - supplied)
+        extra = sorted(supplied - REQUIRED_RELEASE_FILES)
+        if missing:
+            raise ReleaseFinalizationError(f"missing mandatory release artifacts: {missing}")
+        if extra:
+            raise ReleaseFinalizationError(f"unexpected release artifacts: {extra}")
+
+        destination_root = Path(release_root)
+        destination_root.mkdir(parents=True, exist_ok=True)
+        destination = destination_root / run_id
+        if destination.exists() or destination.is_symlink():
+            raise ReleaseFinalizationError(f"release destination already exists: {run_id}")
+
+        validated: dict[str, bytes] = {}
+        json_payloads: dict[str, dict[str, Any]] = {}
+        for name in sorted(REQUIRED_RELEASE_FILES):
+            content = _load_and_validate_source(
+                name=name, source=Path(sources[name]), run_id=run_id
+            )
+            validated[name] = content
+            if name.endswith(".json"):
+                json_payloads[name] = json.loads(content)
+        _validate_pass_claim(json_payloads)
+
+        # Verify the real index producer's references against source bytes, not just
+        # the self-consistency of its serialized digest list.
+        index = EvidenceIndex.model_validate(json_payloads["evidence-index.json"])
+        if not index.artifacts or not index.index_hash or index.artifact_count != len(index.artifacts):
+            raise ReleaseFinalizationError("empty or incomplete evidence index")
+        evidence_root = Path(sources["evidence-index.json"]).parent
+        for artifact in index.artifacts:
+            try:
+                path = _confined_path(evidence_root, artifact.path)
+            except EvidenceIndexError as exc:
+                raise ReleaseFinalizationError(str(exc)) from exc
+            if not path.is_file() or path.is_symlink() or sha256_file(path) != artifact.sha256:
+                raise ReleaseFinalizationError(f"evidence artifact missing or hash mismatch: {artifact.path}")
+
+        if json_payloads["gate-results.json"]["final_verdict"] == VerdictStatus.PROFILE_B_PASS_NATIVE.value:
+            gates = json_payloads["gate-results.json"]["gates"]
+            if {g["gate_id"] for g in gates} != PROFILE_B_GATE_IDS:
+>               raise ReleaseFinalizationError("mandatory gate registry must contain exactly B0-B14")
+E               harness.finalizer.ReleaseFinalizationError: mandatory gate registry must contain exactly B0-B14
+
+harness/finalizer.py:373: ReleaseFinalizationError
+_____________ test_failure_at_gate_evaluation_refuses_finalization _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_failure_at_gate_evaluatio0')
+
+    def test_failure_at_gate_evaluation_refuses_finalization(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        freeze_path, checksum_path, shas = _valid_freeze(tmp_path, RUN_ID)
+        tx.execute_freeze(
+            freeze_path, checksum_path, repository_root=tmp_path, current_repository_shas=shas
+        )
+
+        def make_raw(d: Path) -> None:
+            (d / "raw.txt").write_text("raw", encoding="utf-8")
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "raw"},
+                response={"results": [{"chunk_id": "M-1"}]},
+                transport_status=200,
+                timestamp_utc=datetime.now(timezone.utc),
+                latency_ms=10.0,
+                runtime_lock_sha256="a" * 64,
+            )
+
+        tx.execute_raw_execution(make_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring(
+            scoring_fn=lambda r: {
+                "query_id": "Q-1",
+                "status": "FAIL",
+                "lane": "retrieval",
+                "recall_at_5": 0.50,
+                "mrr": 0.50,
+            }
+        )
+
+        # Metrics fail B10 (e.g. recall below threshold)
+        metrics = _pass_all_gates_metrics()
+        metrics["B10"]["answerable_recall_at_5"] = 0.50 # Threshold is 0.80!
+        tx.execute_gate_evaluation(metrics, {})
+
+        verdict = tx.execute_verdict_derivation()
+        assert verdict.status != VerdictStatus.PROFILE_B_PASS_NATIVE
+
+        records = [
+            {
+                "path": "raw.txt",
+                "sha256": "b" * 64,
+                "producer": "harness",
+                "phase": "test",
+                "timestamp_utc": datetime.now(timezone.utc),
+                "source_run_id": RUN_ID,
+                "immutable": True,
+                "sealed": True,
+                "artifact_type": "evidence",
+            }
+        ]
+        tx.execute_evidence_index(records)
+        tx.execute_run_id_consistency()
+>       tx.execute_health_verification()
+
+tests/test_c8_transaction.py:254:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <harness.transaction.CertificationTransaction object at 0x7da4b4607e50>
+health_payload = None
+
+    def execute_health_verification(
+        self, health_payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
+        try:
+            from harness.operations import verify_health_artifacts
+            payload = verify_health_artifacts(self.run_dir, self.run_id)
+            if payload["status"] != "PASS":
+>               raise TransactionError(f"health verification failed: {payload['reasons']}")
+E               harness.transaction.TransactionError: health verification failed: ["missing/invalid health measurement: [Errno 2] No such file or directory: '/tmp/pytest-of-yasin/pytest-5/test_failure_at_gate_evaluatio0/RUN-20260925T140000Z-c8test/health-pre-test.json'"]
+
+harness/transaction.py:596: TransactionError
+___________ test_full_successful_transaction_produces_valid_release ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_full_successful_transacti0')
+
+    def test_full_successful_transaction_produces_valid_release(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        release_dir = tmp_path / "release"
+        tx = CertificationTransaction(RUN_ID, run_dir)
+
+        tx.execute_bootstrap()
+        freeze_path, checksum_path, shas = _valid_freeze(tmp_path, RUN_ID)
+        tx.execute_freeze(
+            freeze_path, checksum_path, repository_root=tmp_path, current_repository_shas=shas
+        )
+
+        def make_raw(d: Path) -> None:
+            (d / "query_trace.txt").write_text("ok", encoding="utf-8")
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=datetime.now(timezone.utc),
+                latency_ms=10.0,
+                runtime_lock_sha256="a" * 64,
+            )
+
+        tx.execute_raw_execution(make_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+
+        metrics = _pass_all_gates_metrics()
+        tx.execute_gate_evaluation(metrics, {})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_c8_transaction.py:293: AssertionError
+________ test_2_official_score_artifact_failing_recall_causes_b10_fail _________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_2_official_score_artifact0')
+
+    def test_2_official_score_artifact_failing_recall_causes_b10_fail(tmp_path: Path) -> None:
+        tx, run_dir = _setup_tx_with_raw(tmp_path)
+        # Recall 0.50 is below mandatory threshold 0.80
+        tx.execute_scoring(scoring_fn=lambda r: {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.50, "mrr": 0.50})
+        results = tx.execute_gate_evaluation()
+        b10_res = next(g for g in results if g.gate_id == "B10")
+>       assert b10_res.status == GateStatus.FAIL
+E       AssertionError: assert <GateStatus.U... 'UNVERIFIED'> == <GateStatus.FAIL: 'FAIL'>
+E
+E         - FAIL
+E         + UNVERIFIED
+
+tests/test_f2_artifact_derived_gate_metrics.py:91: AssertionError
+_____________ test_8_all_official_score_artifacts_valid_evaluates ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_8_all_official_score_arti0')
+
+    def test_8_all_official_score_artifacts_valid_evaluates(tmp_path: Path) -> None:
+        tx, run_dir = _setup_tx_with_raw(tmp_path)
+        tx.execute_scoring(scoring_fn=lambda r: {
+            "query_id": "Q-1",
+            "status": "PASS",
+            "lane": "retrieval",
+            "recall_at_5": 1.0,
+            "mrr": 1.0,
+            "answerable_recall_at_5": 1.0,
+            "answerable_mrr": 1.0,
+            "rel_complete_evidence_at_5": 1.0,
+            "single_hop_recall_at_5": 1.0,
+            "tenant_leakage": 0,
+        })
+        results = tx.execute_gate_evaluation()
+        assert len(results) >= 15
+        b10_res = next(g for g in results if g.gate_id == "B10")
+>       assert b10_res.status == GateStatus.PASS
+E       AssertionError: assert <GateStatus.U... 'UNVERIFIED'> == <GateStatus.PASS: 'PASS'>
+E
+E         - PASS
+E         + UNVERIFIED
+
+tests/test_f2_artifact_derived_gate_metrics.py:178: AssertionError
+______________ test_1_missing_health_pre_test_fails_finalization _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_1_missing_health_pre_test0')
+
+    def test_1_missing_health_pre_test_fails_finalization(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"health-pre-test.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:141:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_1_missing_health_pre_test0')
+run_id = 'RUN-20260925T170000Z-f3test'
+omit_artifacts = {'health-pre-test.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+______________ test_2_missing_health_post_test_fails_finalization ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_2_missing_health_post_tes0')
+
+    def test_2_missing_health_post_test_fails_finalization(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"health-post-test.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:151:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_2_missing_health_post_tes0')
+run_id = 'RUN-20260925T170000Z-f3test'
+omit_artifacts = {'health-post-test.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+____________ test_3_missing_determinism_manifest_fails_finalization ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_3_missing_determinism_man0')
+
+    def test_3_missing_determinism_manifest_fails_finalization(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"determinism-manifest.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:160:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_3_missing_determinism_man0')
+run_id = 'RUN-20260925T170000Z-f3test'
+omit_artifacts = {'determinism-manifest.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+______________ test_4_missing_scorer_canaries_fails_finalization _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_4_missing_scorer_canaries0')
+
+    def test_4_missing_scorer_canaries_fails_finalization(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"scorer-canary-results.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:169:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_4_missing_scorer_canaries0')
+run_id = 'RUN-20260925T170000Z-f3test'
+omit_artifacts = {'scorer-canary-results.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+_______________ test_5_missing_graph_summary_fails_finalization ________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_5_missing_graph_summary_f0')
+
+    def test_5_missing_graph_summary_fails_finalization(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"graph-summary.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:178:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_5_missing_graph_summary_f0')
+run_id = 'RUN-20260925T170000Z-f3test', omit_artifacts = {'graph-summary.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+______________ test_6_missing_resource_summary_fails_finalization ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_6_missing_resource_summar0')
+
+    def test_6_missing_resource_summary_fails_finalization(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"resource-provider-summary.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:187:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_6_missing_resource_summar0')
+run_id = 'RUN-20260925T170000Z-f3test'
+omit_artifacts = {'resource-provider-summary.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+____________ test_7_transaction_never_creates_fake_pass_placeholder ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_7_transaction_never_creat0')
+
+    def test_7_transaction_never_creates_fake_pass_placeholder(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path, omit_artifacts={"health-pre-test.json", "determinism-manifest.json"})
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:196:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_7_transaction_never_creat0')
+run_id = 'RUN-20260925T170000Z-f3test'
+omit_artifacts = {'determinism-manifest.json', 'health-pre-test.json'}
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+__________________ test_8_only_real_valid_artifacts_accepted ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_8_only_real_valid_artifac0')
+
+    def test_8_only_real_valid_artifacts_accepted(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:205:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_8_only_real_valid_artifac0')
+run_id = 'RUN-20260925T170000Z-f3test', omit_artifacts = None
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+_________ test_9_artifact_with_pass_status_but_invalid_schema_rejected _________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_9_artifact_with_pass_stat0')
+
+    def test_9_artifact_with_pass_status_but_invalid_schema_rejected(tmp_path: Path) -> None:
+>       tx, run_dir = _run_tx_through_run_id_consistency(tmp_path)
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_f3_no_synthetic_pass_artifacts.py:214:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_9_artifact_with_pass_stat0')
+run_id = 'RUN-20260925T170000Z-f3test', omit_artifacts = None
+
+    def _run_tx_through_run_id_consistency(tmp_path: Path, run_id: str = RUN_ID, omit_artifacts: set[str] | None = None) -> tuple[CertificationTransaction, Path]:
+        run_dir = tmp_path / run_id
+        freeze_path, checksum_path, freeze_dir, repo_shas = _make_freeze(tmp_path, run_id)
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=freeze_dir, current_repository_shas=repo_shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics(), gate_evidence={})
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_f3_no_synthetic_pass_artifacts.py:115: AssertionError
+_________________ test_13_b12_gate_reflects_unsupported_claims _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_13_b12_gate_reflects_unsu0')
+
+    def test_13_b12_gate_reflects_unsupported_claims(tmp_path: Path) -> None:
+        from harness.artifacts import RunArtifactStore
+        from harness.transaction import CertificationTransaction
+        from harness.models import VerdictStatus
+
+        run_id = "RUN-20260925T170000Z-f4test"
+        run_dir = tmp_path / run_id
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+
+        # Create dummy freeze
+        from tests.test_f1_raw_oracle_scoring_binding import _make_freeze
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, run_id)
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        # Persist raw answer with unsupported claim
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc="2026-09-25T12:00:00Z",
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+            from harness.artifacts import AnswerExecutionCapture
+            capture = AnswerExecutionCapture.from_context(
+                query_id="Q-1",
+                timestamp_utc="2026-09-25T12:00:00Z",
+                exact_model_visible_context="Ceza 5 yıldır",
+                context_evidence_ids=["M-1"],
+                system_prompt="sys",
+                user_prompt="usr",
+                provider="test",
+                model="test",
+                request_parameters={},
+                raw_response={},
+                parsed_response={"answer": "Ceza 5 yıldır sürgün", "evidence_chunk_ids": ["M-1"]},
+                context_contract_version="1.0",
+            )
+            store.persist_raw_answer(capture)
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+
+        gt_dict = {
+            "query_id": "Q-1",
+            "query_class": "SINGLE_DIRECT",
+            "question": "Ceza nedir?",
+            "expected_source_chunk_ids": ["S-1"],
+            "required_facts": [{"fact_id": "f1", "claim": "Ceza 5 yıldır", "supported_by": [{"source_chunk_id": "S-1", "exact_text": "Ceza 5 yıldır"}]}],
+            "acceptable_answer_patterns": [{"mode": "literal", "value": "ceza 5 yıl", "fact_ids": ["f1"]}],
+            "is_answerable": True,
+        }
+
+        # Custom scoring fn using real score_answer
+        imap = IdentityMap()
+        imap.add_mapping("M-1", "S-1")
+        def custom_scorer(raw_payload: dict):
+            if "parsed_response" in raw_payload:
+                ans = AnswerResponse(
+                    answer=raw_payload["parsed_response"]["answer"],
+                    evidence_chunk_ids=raw_payload["parsed_response"]["evidence_chunk_ids"],
+                    claims=[AnswerClaim(fact_ids=["f1"], text=raw_payload["parsed_response"]["answer"], evidence_chunk_ids=["M-1"])]
+                )
+                gt_item = GroundTruthItem.model_validate(gt_dict)
+                sc = score_answer(gt_item, ans, ["M-1"], imap)
+                dumped = sc.model_dump(mode="json")
+                dumped["lane"] = "answers"
+                return dumped
+            else:
+                return {"query_id": "Q-1", "status": "PASS", "lane": "retrieval", "recall_at_5": 1.0, "mrr": 1.0}
+
+        tx.execute_scoring(scoring_fn=custom_scorer)
+        gate_results = tx.execute_gate_evaluation()
+        b12_result = next((g for g in gate_results if g.gate_id == "B12"), None)
+        assert b12_result is not None
+        # B12 must FAIL because unsupported_material_claim_rate > 0
+        assert b12_result.status.value != "PASS"
+>       assert b12_result.observed.get("unsupported_material_claim_rate", 0) > 0
+E       AssertionError: assert 0 > 0
+E        +  where 0 = <built-in method get of dict object at 0x7da4b4557ac0>('unsupported_material_claim_rate', 0)
+E        +    where <built-in method get of dict object at 0x7da4b4557ac0> = {}.get
+E        +      where {} = GateResult(schema_version='1.0', gate_id='B12', hard=True, execution_status=<ExecutionStatus.COMPLETED: 'COMPLETED'>, ...m_rate': {'operator': 'eq', 'value': 0}}, observed={}, reason='authoritative_metric_producer_unavailable', evidence=[]).observed
+
+tests/test_f4_unsupported_answer_claims.py:346: AssertionError
+____________________ test_14_non_empty_clean_set_passes_b12 ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_14_non_empty_clean_set_pa0')
+
+    def test_14_non_empty_clean_set_passes_b12(tmp_path: Path) -> None:
+        from harness.artifacts import RunArtifactStore
+        from harness.transaction import CertificationTransaction
+
+        run_id = "RUN-20260925T170000Z-f4test2"
+        run_dir = tmp_path / run_id
+        tx = CertificationTransaction(run_id, run_dir)
+        tx.execute_bootstrap()
+
+        from tests.test_f1_raw_oracle_scoring_binding import _make_freeze
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, run_id)
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, run_id)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc="2026-09-25T12:00:00Z",
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+            from harness.artifacts import AnswerExecutionCapture
+            capture = AnswerExecutionCapture.from_context(
+                query_id="Q-1",
+                timestamp_utc="2026-09-25T12:00:00Z",
+                exact_model_visible_context="Ceza 5 yıldır",
+                context_evidence_ids=["M-1"],
+                system_prompt="sys",
+                user_prompt="usr",
+                provider="test",
+                model="test",
+                request_parameters={},
+                raw_response={},
+                parsed_response={"answer": "Ceza 5 yıldır", "evidence_chunk_ids": ["M-1"]},
+                context_contract_version="1.0",
+            )
+            store.persist_raw_answer(capture)
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+
+        gt_dict = {
+            "query_id": "Q-1",
+            "query_class": "SINGLE_DIRECT",
+            "question": "Ceza nedir?",
+            "expected_source_chunk_ids": ["S-1"],
+            "required_facts": [{"fact_id": "f1", "claim": "Ceza 5 yıldır", "supported_by": [{"source_chunk_id": "S-1", "exact_text": "Ceza 5 yıldır"}]}],
+            "acceptable_answer_patterns": [{"mode": "literal", "value": "ceza 5 yıl", "fact_ids": ["f1"]}],
+            "is_answerable": True,
+        }
+
+        imap = IdentityMap()
+        imap.add_mapping("M-1", "S-1")
+        def custom_scorer(raw_payload: dict):
+            if "parsed_response" in raw_payload:
+                ans = AnswerResponse(
+                    answer=raw_payload["parsed_response"]["answer"],
+                    evidence_chunk_ids=raw_payload["parsed_response"]["evidence_chunk_ids"],
+                    claims=[AnswerClaim(fact_ids=["f1"], text=raw_payload["parsed_response"]["answer"], evidence_chunk_ids=["M-1"])]
+                )
+                gt_item = GroundTruthItem.model_validate(gt_dict)
+                sc = score_answer(gt_item, ans, ["M-1"], imap)
+                dumped = sc.model_dump(mode="json")
+                dumped["lane"] = "answers"
+                return dumped
+            else:
+                return {"query_id": "Q-1", "status": "PASS", "lane": "retrieval", "recall_at_5": 1.0, "mrr": 1.0}
+
+        tx.execute_scoring(scoring_fn=custom_scorer)
+        gate_results = tx.execute_gate_evaluation()
+        b12_result = next((g for g in gate_results if g.gate_id == "B12"), None)
+        assert b12_result is not None
+>       assert b12_result.status.value == "PASS"
+E       AssertionError: assert 'UNVERIFIED' == 'PASS'
+E
+E         - PASS
+E         + UNVERIFIED
+
+tests/test_f4_unsupported_answer_claims.py:425: AssertionError
+___________________ test_a02_zero_score_certification_fails ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a02_zero_score_certificat0')
+
+    def test_a02_zero_score_certification_fails(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+>       with pytest.raises(TransactionError, match="scoring failed.*0 scored items"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TransactionError
+
+tests/test_final_integrity_adversarial_audit.py:135: Failed
+______________ test_a07_alternate_caller_scoring_record_rejected _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a07_alternate_caller_scor0')
+
+    def test_a07_alternate_caller_scoring_record_rejected(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        def failing_scorer(raw_payload: dict):
+            return {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.0, "mrr": 0.0}
+        tx.execute_scoring(scoring_fn=failing_scorer)
+
+        # Caller tries to pass passing gate_metrics to override real failing score
+        gate_results = tx.execute_gate_evaluation(gate_metrics={"B10": {"answerable_mrr": 1.0, "answerable_recall_at_5": 1.0}})
+        b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
+        assert b10_res is not None
+        # Must derive from authoritative score artifact, ignoring caller's fake 1.0!
+>       assert b10_res.status.value == "FAIL"
+E       AssertionError: assert 'UNVERIFIED' == 'FAIL'
+E
+E         - FAIL
+E         + UNVERIFIED
+
+tests/test_final_integrity_adversarial_audit.py:269: AssertionError
+_____________________ test_a08_fake_gate_metrics_rejected ______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a08_fake_gate_metrics_rej0')
+
+    def test_a08_fake_gate_metrics_rejected(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        def failing_scorer(raw_payload: dict):
+            return {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.1, "mrr": 0.1}
+        tx.execute_scoring(scoring_fn=failing_scorer)
+
+        # Fake metrics claiming 0.999
+        gate_results = tx.execute_gate_evaluation(gate_metrics={"B10": {"answerable_recall_at_5": 0.999, "answerable_mrr": 0.999}})
+        b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
+>       assert b10_res.observed["answerable_recall_at_5"] != 0.999
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'answerable_recall_at_5'
+
+tests/test_final_integrity_adversarial_audit.py:300: KeyError
+_____________________ test_a09_fake_gate_evidence_rejected _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a09_fake_gate_evidence_re0')
+
+    def test_a09_fake_gate_evidence_rejected(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+
+        # Pass non-existent file in gate_evidence
+        gate_results = tx.execute_gate_evaluation(gate_evidence={"B10": ["non_existent_fake_evidence.json"]})
+        b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
+        # Must fail because evidence does not exist on disk
+>       assert b10_res.status.value == "FAIL"
+E       AssertionError: assert 'UNVERIFIED' == 'FAIL'
+E
+E         - FAIL
+E         + UNVERIFIED
+
+tests/test_final_integrity_adversarial_audit.py:331: AssertionError
+_____________ test_a11_missing_health_pre_test_fails_finalization ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a11_missing_health_pre_te0')
+
+    def test_a11_missing_health_pre_test_fails_finalization(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        _populate_supplementary_release_files(run_dir, RUN_ID)
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
+        tx.execute_verdict_derivation()
+        raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
+        records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
+        tx.execute_evidence_index(records)
+        tx.execute_run_id_consistency()
+>       tx.execute_health_verification()
+
+tests/test_final_integrity_adversarial_audit.py:382:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <harness.transaction.CertificationTransaction object at 0x7da4b45e6c60>
+health_payload = None
+
+    def execute_health_verification(
+        self, health_payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
+        try:
+            from harness.operations import verify_health_artifacts
+            payload = verify_health_artifacts(self.run_dir, self.run_id)
+            if payload["status"] != "PASS":
+>               raise TransactionError(f"health verification failed: {payload['reasons']}")
+E               harness.transaction.TransactionError: health verification failed: ["missing/invalid health measurement: 6 validation errors for HealthSnapshot\nphase\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\ntimestamp_utc\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nprovider_reachable\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nservices\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nhost_metrics\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nreasons\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"]
+
+harness/transaction.py:596: TransactionError
+___________ test_a12_missing_determinism_manifest_fails_finalization ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a12_missing_determinism_m0')
+
+    def test_a12_missing_determinism_manifest_fails_finalization(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        _populate_supplementary_release_files(run_dir, RUN_ID)
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
+        tx.execute_verdict_derivation()
+        raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
+        records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
+        tx.execute_evidence_index(records)
+        tx.execute_run_id_consistency()
+>       tx.execute_health_verification()
+
+tests/test_final_integrity_adversarial_audit.py:412:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <harness.transaction.CertificationTransaction object at 0x7da4b464a5d0>
+health_payload = None
+
+    def execute_health_verification(
+        self, health_payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
+        try:
+            from harness.operations import verify_health_artifacts
+            payload = verify_health_artifacts(self.run_dir, self.run_id)
+            if payload["status"] != "PASS":
+>               raise TransactionError(f"health verification failed: {payload['reasons']}")
+E               harness.transaction.TransactionError: health verification failed: ["missing/invalid health measurement: 6 validation errors for HealthSnapshot\nphase\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\ntimestamp_utc\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nprovider_reachable\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nservices\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nhost_metrics\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nreasons\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"]
+
+harness/transaction.py:596: TransactionError
+_____________ test_a13_missing_scorer_canaries_fails_finalization ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a13_missing_scorer_canari0')
+
+    def test_a13_missing_scorer_canaries_fails_finalization(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        _populate_supplementary_release_files(run_dir, RUN_ID)
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
+        tx.execute_verdict_derivation()
+        raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
+        records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
+        tx.execute_evidence_index(records)
+        tx.execute_run_id_consistency()
+>       tx.execute_health_verification()
+
+tests/test_final_integrity_adversarial_audit.py:442:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <harness.transaction.CertificationTransaction object at 0x7da4b464a8a0>
+health_payload = None
+
+    def execute_health_verification(
+        self, health_payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
+        try:
+            from harness.operations import verify_health_artifacts
+            payload = verify_health_artifacts(self.run_dir, self.run_id)
+            if payload["status"] != "PASS":
+>               raise TransactionError(f"health verification failed: {payload['reasons']}")
+E               harness.transaction.TransactionError: health verification failed: ["missing/invalid health measurement: 6 validation errors for HealthSnapshot\nphase\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\ntimestamp_utc\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nprovider_reachable\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nservices\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nhost_metrics\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nreasons\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"]
+
+harness/transaction.py:596: TransactionError
+____________ test_a14_synthetic_pass_placeholder_injected_rejected _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_a14_synthetic_pass_placeh0')
+
+    def test_a14_synthetic_pass_placeholder_injected_rejected(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(query_id="Q-1", request={"query": "test"}, response={"results": [{"chunk_id": "c1"}]}, transport_status=200, timestamp_utc=NOW, latency_ms=10.0, runtime_lock_sha256="0" * 64)
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        _populate_supplementary_release_files(run_dir, RUN_ID)
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
+        tx.execute_verdict_derivation()
+        raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
+        records = [{"path": "raw/retrieval/Q-1.json", "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(), "producer": "harness", "phase": "test", "timestamp_utc": NOW, "source_run_id": RUN_ID, "immutable": True, "sealed": True, "artifact_type": "evidence"}]
+        tx.execute_evidence_index(records)
+        tx.execute_run_id_consistency()
+>       tx.execute_health_verification()
+
+tests/test_final_integrity_adversarial_audit.py:472:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+self = <harness.transaction.CertificationTransaction object at 0x7da4b464b110>
+health_payload = None
+
+    def execute_health_verification(
+        self, health_payload: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
+        try:
+            from harness.operations import verify_health_artifacts
+            payload = verify_health_artifacts(self.run_dir, self.run_id)
+            if payload["status"] != "PASS":
+>               raise TransactionError(f"health verification failed: {payload['reasons']}")
+E               harness.transaction.TransactionError: health verification failed: ["missing/invalid health measurement: 6 validation errors for HealthSnapshot\nphase\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\ntimestamp_utc\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nprovider_reachable\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nservices\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nhost_metrics\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing\nreasons\n  Field required [type=missing, input_value={'schema_version': '1.0',...-adv', 'status': 'PASS'}, input_type=dict]\n    For further information visit https://errors.pydantic.dev/2.13/v/missing"]
+
+harness/transaction.py:596: TransactionError
+______ test_complete_release_is_checksums_verified_and_mutation_detected _______
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_complete_release_is_check0')
+
+    def test_complete_release_is_checksums_verified_and_mutation_detected(
+        tmp_path: Path,
+    ) -> None:
+        sources = _release_sources(tmp_path)
+>       release = finalize_release(
+            run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases"
+        )
+
+tests/test_operations_finalizer.py:183:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
+
+run_id = 'RUN-20260924T120000Z-test'
+sources = {'graph-summary.json': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_complete_release_is_check0/source/graph-summary.j...on': PosixPath('/tmp/pytest-of-yasin/pytest-5/test_complete_release_is_check0/source/scorer-canary-results.json'), ...}
+release_root = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_complete_release_is_check0/releases')
+
+    def finalize_release(
+        *, run_id: str, sources: Mapping[str, str | Path], release_root: str | Path
+    ) -> Path:
+        """Validate, checksum, and atomically promote a sanitized release bundle."""
+
+        if _SAFE_RUN_ID.fullmatch(run_id) is None:
+            raise ReleaseFinalizationError("unsafe RUN_ID")
+        supplied = set(sources)
+        missing = sorted(REQUIRED_RELEASE_FILES - supplied)
+        extra = sorted(supplied - REQUIRED_RELEASE_FILES)
+        if missing:
+            raise ReleaseFinalizationError(f"missing mandatory release artifacts: {missing}")
+        if extra:
+            raise ReleaseFinalizationError(f"unexpected release artifacts: {extra}")
+
+        destination_root = Path(release_root)
+        destination_root.mkdir(parents=True, exist_ok=True)
+        destination = destination_root / run_id
+        if destination.exists() or destination.is_symlink():
+            raise ReleaseFinalizationError(f"release destination already exists: {run_id}")
+
+        validated: dict[str, bytes] = {}
+        json_payloads: dict[str, dict[str, Any]] = {}
+        for name in sorted(REQUIRED_RELEASE_FILES):
+            content = _load_and_validate_source(
+                name=name, source=Path(sources[name]), run_id=run_id
+            )
+            validated[name] = content
+            if name.endswith(".json"):
+                json_payloads[name] = json.loads(content)
+        _validate_pass_claim(json_payloads)
+
+        # Verify the real index producer's references against source bytes, not just
+        # the self-consistency of its serialized digest list.
+        index = EvidenceIndex.model_validate(json_payloads["evidence-index.json"])
+        if not index.artifacts or not index.index_hash or index.artifact_count != len(index.artifacts):
+>           raise ReleaseFinalizationError("empty or incomplete evidence index")
+E           harness.finalizer.ReleaseFinalizationError: empty or incomplete evidence index
+
+harness/finalizer.py:360: ReleaseFinalizationError
+______________________ test_t1_clean_passing_transaction _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_t1_clean_passing_transact0')
+
+    def test_t1_clean_passing_transaction(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        release_dir = tmp_path / "release"
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1", "score": 1.0, "rank": 1}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+            capture = AnswerExecutionCapture.from_context(
+                query_id="Q-1",
+                timestamp_utc=NOW,
+                exact_model_visible_context="Ceza 5 yıldır",
+                context_evidence_ids=["chunk_1"],
+                system_prompt="sys",
+                user_prompt="usr",
+                provider="test",
+                model="test",
+                request_parameters={},
+                raw_response={},
+                parsed_response={"answer": "Ceza 5 yıldır", "evidence_chunk_ids": ["chunk_1"]},
+                context_contract_version="1.0",
+            )
+            store.persist_raw_answer(capture)
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+
+        # Pre-populate provider evidence so real evidence exists for all gates
+        _populate_supplementary_release_files(run_dir, RUN_ID)
+
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_transaction_e2e_integration.py:146: AssertionError
+__________ test_t6_fails_at_gate_evaluation_if_score_below_threshold ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_t6_fails_at_gate_evaluati0')
+
+    def test_t6_fails_at_gate_evaluation_if_score_below_threshold(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+
+        def low_scorer(raw_payload: dict):
+            return {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.2, "mrr": 0.2}
+
+        tx.execute_scoring(scoring_fn=low_scorer)
+        gate_results = tx.execute_gate_evaluation()
+        b10_result = next((g for g in gate_results if g.gate_id == "B10"), None)
+        assert b10_result is not None
+>       assert b10_result.status.value == "FAIL"
+E       AssertionError: assert 'UNVERIFIED' == 'FAIL'
+E
+E         - FAIL
+E         + UNVERIFIED
+
+tests/test_transaction_e2e_integration.py:303: AssertionError
+__________ test_t11_fails_at_release_finalization_if_artifact_missing __________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_t11_fails_at_release_fina0')
+
+    def test_t11_fails_at_release_finalization_if_artifact_missing(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+
+        # Pre-populate provider evidence so real evidence exists for all gates
+        _populate_supplementary_release_files(run_dir, RUN_ID)
+
+        tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
+        verdict = tx.execute_verdict_derivation()
+>       assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+E       AssertionError: assert <VerdictStatu...PRECONDITION'> == <VerdictStatu..._PASS_NATIVE'>
+E
+E         - PROFILE_B_PASS_NATIVE
+E         + PROFILE_B_BLOCKED_PRECONDITION
+
+tests/test_transaction_e2e_integration.py:518: AssertionError
+______________ test_t12_multi_lane_workload_computes_b10_and_b12 _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-5/test_t12_multi_lane_workload_c0')
+
+    def test_t12_multi_lane_workload_computes_b10_and_b12(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test query"},
+                response={"results": [{"chunk_id": "chunk_1", "score": 1.0, "rank": 1}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+            capture = AnswerExecutionCapture.from_context(
+                query_id="Q-1",
+                timestamp_utc=NOW,
+                exact_model_visible_context="Ceza 5 yıldır",
+                context_evidence_ids=["chunk_1"],
+                system_prompt="sys",
+                user_prompt="usr",
+                provider="test",
+                model="test",
+                request_parameters={},
+                raw_response={},
+                parsed_response={"answer": "Ceza 5 yıldır", "evidence_chunk_ids": ["chunk_1"]},
+                context_contract_version="1.0",
+            )
+            store.persist_raw_answer(capture)
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        scoring_rep = tx.execute_scoring()
+        assert scoring_rep["item_count"] == 2
+
+        # Check that scoring summary has metrics for both lanes
+        scoring_summary = json.loads((run_dir / "scoring-summary.json").read_text(encoding="utf-8"))
+        metrics = scoring_summary["metrics"]
+>       assert "answerable_recall_at_5" in metrics
+E       AssertionError: assert 'answerable_recall_at_5' in {}
+
+tests/test_transaction_e2e_integration.py:590: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_adversarial_self_audit.py::test_a12_real_evidence_index_producer_accepted_by_finalizer
+FAILED tests/test_answer_scorer_v2.py::test_regex_and_literal_modes_are_distinct
+FAILED tests/test_c2_gate_verdict_finalizer.py::test_c2_all_mandatory_conditions_valid_pass_native
+FAILED tests/test_c5_evidence_index.py::test_c5_01_real_producer_accepted_by_real_finalizer
+FAILED tests/test_c8_transaction.py::test_failure_at_gate_evaluation_refuses_finalization
+FAILED tests/test_c8_transaction.py::test_full_successful_transaction_produces_valid_release
+FAILED tests/test_f2_artifact_derived_gate_metrics.py::test_2_official_score_artifact_failing_recall_causes_b10_fail
+FAILED tests/test_f2_artifact_derived_gate_metrics.py::test_8_all_official_score_artifacts_valid_evaluates
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_1_missing_health_pre_test_fails_finalization
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_2_missing_health_post_test_fails_finalization
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_3_missing_determinism_manifest_fails_finalization
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_4_missing_scorer_canaries_fails_finalization
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_5_missing_graph_summary_fails_finalization
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_6_missing_resource_summary_fails_finalization
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_7_transaction_never_creates_fake_pass_placeholder
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_8_only_real_valid_artifacts_accepted
+FAILED tests/test_f3_no_synthetic_pass_artifacts.py::test_9_artifact_with_pass_status_but_invalid_schema_rejected
+FAILED tests/test_f4_unsupported_answer_claims.py::test_13_b12_gate_reflects_unsupported_claims
+FAILED tests/test_f4_unsupported_answer_claims.py::test_14_non_empty_clean_set_passes_b12
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a02_zero_score_certification_fails
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a07_alternate_caller_scoring_record_rejected
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a08_fake_gate_metrics_rejected
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a09_fake_gate_evidence_rejected
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a11_missing_health_pre_test_fails_finalization
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a12_missing_determinism_manifest_fails_finalization
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a13_missing_scorer_canaries_fails_finalization
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a14_synthetic_pass_placeholder_injected_rejected
+FAILED tests/test_operations_finalizer.py::test_complete_release_is_checksums_verified_and_mutation_detected
+FAILED tests/test_transaction_e2e_integration.py::test_t1_clean_passing_transaction
+FAILED tests/test_transaction_e2e_integration.py::test_t6_fails_at_gate_evaluation_if_score_below_threshold
+FAILED tests/test_transaction_e2e_integration.py::test_t11_fails_at_release_finalization_if_artifact_missing
+FAILED tests/test_transaction_e2e_integration.py::test_t12_multi_lane_workload_computes_b10_and_b12
+32 failed, 217 passed in 4.54s

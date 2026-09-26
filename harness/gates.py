@@ -12,6 +12,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 from harness.models import ExecutionStatus, GateResult, GateStatus
 
 
+PROFILE_B_GATE_IDS = frozenset(f"B{i}" for i in range(15))
+# This registry is intentionally empty until producers are implemented against
+# independently verified, frozen runtime contracts. Threshold comparison is
+# not a measurement producer. Adding a producer requires production-path tests.
+PRODUCTION_METRIC_PRODUCERS: frozenset[str] = frozenset()
+
+
 class MetricRequirement(BaseModel):
     model_config = ConfigDict(extra="forbid")
 

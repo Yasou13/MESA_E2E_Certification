@@ -102,7 +102,11 @@ def test_regex_and_literal_modes_are_distinct(identity_map: IdentityMap) -> None
         ],
     )
 
-    assert score_answer(regex_gt, response, ["M-1"], identity_map).status == "PASS"
+    # Regex recognizes the required phrase, but does not prove appended material.
+    from harness.answer_scorer import _pattern_matches
+    assert _pattern_matches(regex_gt.acceptable_answer_patterns[0], response.answer)
+    assert not _pattern_matches(literal_gt.acceptable_answer_patterns[0], response.answer)
+    assert score_answer(regex_gt, response, ["M-1"], identity_map).status != "PASS"
     assert score_answer(literal_gt, response, ["M-1"], identity_map).status == "FAIL"
 
 

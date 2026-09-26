@@ -1,0 +1,35 @@
+============================= test session starts ==============================
+platform linux -- Python 3.13.12, pytest-9.1.1, pluggy-1.6.0
+rootdir: /home/yasin/Desktop/MESA_E2E_Certification
+configfile: pyproject.toml
+testpaths: tests
+collected 235 items
+
+tests/test_adversarial_self_audit.py ....................                [  8%]
+tests/test_answer_scorer_v2.py ..........                                [ 12%]
+tests/test_c1_freeze_fail_closed.py ........                             [ 16%]
+tests/test_c2_gate_verdict_finalizer.py ........                         [ 19%]
+tests/test_c3_oracle_binding.py ..........                               [ 23%]
+tests/test_c4_answer_scorer.py .................                         [ 31%]
+tests/test_c5_evidence_index.py ........                                 [ 34%]
+tests/test_c6_run_id_consistency.py .........                            [ 38%]
+tests/test_c7_gate_registry.py ......                                    [ 40%]
+tests/test_c8_transaction.py ......                                      [ 43%]
+tests/test_core_models.py ..                                             [ 44%]
+tests/test_f1_raw_oracle_scoring_binding.py ............                 [ 49%]
+tests/test_f2_artifact_derived_gate_metrics.py ..........                [ 53%]
+tests/test_f3_no_synthetic_pass_artifacts.py ...........                 [ 58%]
+tests/test_f4_unsupported_answer_claims.py ..............                [ 64%]
+tests/test_final_integrity_adversarial_audit.py ....................     [ 72%]
+tests/test_foundation.py ......                                          [ 75%]
+tests/test_gate_verdict.py ...........                                   [ 80%]
+tests/test_gt_governance.py ......                                       [ 82%]
+tests/test_identity_normalization.py .......                             [ 85%]
+tests/test_legacy_audit.py ...                                           [ 86%]
+tests/test_lifecycle_freeze_evidence.py .....                            [ 88%]
+tests/test_operations_finalizer.py .....                                 [ 91%]
+tests/test_raw_oracle.py .......                                         [ 94%]
+tests/test_repository_checks.py ..                                       [ 94%]
+tests/test_transaction_e2e_integration.py ............                   [100%]
+
+============================= 235 passed in 4.34s ==============================

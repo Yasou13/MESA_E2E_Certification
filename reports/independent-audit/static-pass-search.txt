@@ -1,0 +1,132 @@
+scripts/verify_agent_pack.py:55:        "--agent-pack", type=Path, default=Path("agent-pack"), help="agent pack path"
+scripts/verify_agent_pack.py:63:    print("PASS: agent-pack checksums and membership verified")
+scripts/check_no_secrets.py:52:    print("PASS: no high-confidence secret formats in tracked text files")
+harness/gates.py:35:    requirements: dict[str, MetricRequirement] = Field(default_factory=dict)
+harness/gates.py:165:        status=GateStatus.FAIL if failed else GateStatus.PASS,
+scripts/validate_json_artifacts.py:48:    print("PASS: tracked JSON and JSONL artifacts are syntactically valid")
+harness/verdict.py:55:    if freeze_verification.status is not FreezeStatus.PASS:
+harness/verdict.py:107:        if gate.hard and gate.status is not GateStatus.PASS
+harness/verdict.py:113:            [f"hard gates are not verified PASS: {unverified_hard}"],
+harness/verdict.py:121:        if mandatory_by_id[gate_id].status is not GateStatus.PASS
+harness/verdict.py:127:            [f"mandatory gates are not PASS: {mandatory_not_passed}"],
+harness/verdict.py:133:        VerdictStatus.PROFILE_B_PASS_NATIVE,
+harness/verdict.py:180:            if m.get("status") in {"PASS_NATIVE", "FINALIZING", "COMPLETED"}:
+harness/verdict.py:201:    if verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE and PROFILE_B_GATE_IDS - PRODUCTION_METRIC_PRODUCERS:
+harness/identity.py:42:    content_hash: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+harness/identity.py:106:            source_to_mesa.setdefault(row.source_chunk_id, set()).add(
+harness/identity.py:131:        self._source_to_mesa.setdefault(source_chunk_id, set()).add(mesa_chunk_id)
+harness/identity.py:155:            "status": "PASS",
+harness/evidence.py:242:        "PASS"
+harness/finalizer.py:42:_REQUIRED_PASS_ARTIFACTS = {
+harness/finalizer.py:188:    if verdict != VerdictStatus.PROFILE_B_PASS_NATIVE.value:
+harness/finalizer.py:249:    # 4. Mandatory PASS artifacts
+harness/finalizer.py:250:    for name in sorted(_REQUIRED_PASS_ARTIFACTS):
+harness/finalizer.py:251:        if payloads[name].get("status") != "PASS":
+harness/finalizer.py:253:                f"PASS release requires {name} status PASS"
+harness/finalizer.py:279:        if is_hard and status != "PASS":
+harness/finalizer.py:281:                f"hard gate {gid} has status {status}, cannot promote PASS release"
+harness/finalizer.py:291:        if status == "PASS" and isinstance(reqs, dict) and isinstance(obs, dict):
+harness/finalizer.py:295:                        f"gate {gid} marked PASS but missing observed metric {metric}"
+harness/finalizer.py:302:                        f"gate {gid} marked PASS but observed metric {metric}={val} fails requirements (gte {expected_val})"
+harness/finalizer.py:306:                        f"gate {gid} marked PASS but observed metric {metric}={val} fails requirements (lte {expected_val})"
+harness/finalizer.py:310:                        f"gate {gid} marked PASS but observed metric {metric}={val} fails requirements (eq {expected_val})"
+harness/finalizer.py:315:        and g.get("status") != "PASS"
+harness/finalizer.py:320:            "tampered final_verdict: hard gate failed but verdict claimed PASS"
+harness/finalizer.py:370:    if json_payloads["gate-results.json"]["final_verdict"] == VerdictStatus.PROFILE_B_PASS_NATIVE.value:
+harness/finalizer.py:403:    if verification["status"] != "PASS":
+harness/finalizer.py:455:    return {"status": "PASS" if not errors else "FAIL", "errors": errors}
+harness/operations.py:18:    PASS = "PASS"
+harness/operations.py:43:    details: dict[str, Any] = Field(default_factory=dict)
+harness/operations.py:76:    provider_expected_requests: Optional[int] = Field(default=None, ge=0)
+harness/operations.py:193:        status = OperationalStatus.PASS
+harness/operations.py:227:            if recomputed.status != OperationalStatus.PASS or not snapshot.host_metrics:
+harness/operations.py:266:        "status": "FAIL" if reasons else "PASS",
+harness/artifacts.py:270:        if status not in {"PASS", "FAIL"} or not isinstance(findings, list):
+harness/artifacts.py:293:        if report.get("status") != "PASS" or report.get("finding_count") != 0:
+harness/artifacts.py:295:                f"oracle audit must PASS before scoring: {report.get('status')}"
+harness/artifacts.py:325:            "oracle_audit_status": "PASS",
+harness/oracle.py:147:        "status": "FAIL" if findings else "PASS",
+harness/normalizer.py:101:def default_normalization_authority() -> NormalizationAuthority:
+harness/normalizer.py:108:    return authority if authority is not None else default_normalization_authority()
+harness/lifecycle.py:26:    RunStatus.PASS_NATIVE,
+harness/lifecycle.py:57:            allowed.add(RunStatus.PASS_NATIVE)
+harness/freeze.py:39:    PASS = "PASS"
+harness/freeze.py:286:    return FreezeVerification(FreezeStatus.PASS)
+harness/gt_governance.py:30:    expected_source_chunk_ids: list[str] = Field(default_factory=list)
+harness/gt_governance.py:31:    evidence_groups: list[list[str]] = Field(default_factory=list)
+harness/gt_governance.py:200:        "status": "PASS",
+harness/gt_governance.py:267:        "status": "FAIL" if errors else "PASS",
+harness/gt_governance.py:294:        "status": "FAIL" if any(overlaps.values()) else "PASS",
+harness/gt_governance.py:361:        status = "PASS"
+harness/gt_governance.py:411:    status = "PASS" if not (duplicates or missing or unexpected or unresolved) else "FAIL"
+harness/gt_governance.py:475:        "status": "PASS",
+harness/self_test.py:47:    results.append({"case": 1, "name": "direct retrieval hit at rank 1", "status": "PASS"})
+harness/self_test.py:57:    results.append({"case": 2, "name": "hit exactly at rank 5", "status": "PASS"})
+harness/self_test.py:63:    results.append({"case": 3, "name": "complete miss", "status": "PASS"})
+harness/self_test.py:69:    results.append({"case": 4, "name": "duplicate returned evidence IDs", "status": "PASS"})
+harness/self_test.py:78:    results.append({"case": 5, "name": "equivalent source/MESA chunk identity mapping", "status": "PASS"})
+harness/self_test.py:87:    results.append({"case": 6, "name": "source chunk ID different from MESA public chunk ID", "status": "PASS"})
+harness/self_test.py:102:    results.append({"case": 7, "name": "REL query with all evidence groups", "status": "PASS"})
+harness/self_test.py:108:    results.append({"case": 8, "name": "REL query missing exactly one evidence group", "status": "PASS"})
+harness/self_test.py:114:    results.append({"case": 9, "name": "malformed provenance fails closed", "status": "PASS"})
+harness/self_test.py:119:    results.append({"case": 10, "name": "infrastructure error distinct from retrieval MISS", "status": "PASS"})
+harness/self_test.py:125:    _require(a11.status == "PASS" and a11.grounded_pass is True, "case 11 failed")
+harness/self_test.py:126:    results.append({"case": 11, "name": "NO_ANSWER correct abstention", "status": "PASS"})
+harness/self_test.py:132:    results.append({"case": 12, "name": "NO_ANSWER hallucinated answer", "status": "PASS"})
+harness/self_test.py:142:    results.append({"case": 13, "name": "unknown evidence identity fails closed", "status": "PASS"})
+harness/self_test.py:148:    results.append({"case": 14, "name": "correct wording but unsupported evidence", "status": "PASS"})
+harness/self_test.py:160:    results.append({"case": 15, "name": "Unicode/Turkish normalization fixtures", "status": "PASS"})
+harness/self_test.py:167:    results.append({"case": 16, "name": "intentionally wrong qrel expected to fail", "status": "PASS"})
+harness/self_test.py:172:    _require(a17.status != "PASS" and a17.grounded_pass is False, "case 17 failed")
+harness/self_test.py:173:    results.append({"case": 17, "name": "intentionally wrong answer expected to fail", "status": "PASS"})
+harness/self_test.py:178:        "passed_cases": sum(1 for r in results if r["status"] == "PASS"),
+harness/self_test.py:179:        "failed_cases": sum(1 for r in results if r["status"] != "PASS"),
+harness/self_test.py:180:        "all_passed": all(r["status"] == "PASS" for r in results),
+harness/answer_scorer.py:141:    """Score an answer without converting semantic ambiguity into PASS."""
+harness/answer_scorer.py:175:                status="PASS",
+harness/answer_scorer.py:357:        status = "PASS"
+harness/answer_scorer.py:360:        reasons.append("grounded PASS invariants were not satisfied")
+harness/answer_scorer.py:362:    is_pass = status == "PASS"
+harness/models.py:25:    PASS_NATIVE = "PASS_NATIVE"
+harness/models.py:32:    PASS = "PASS"
+harness/models.py:43:    PASS = "PASS"
+harness/models.py:67:    PROFILE_B_PASS_NATIVE = "PROFILE_B_PASS_NATIVE"
+harness/models.py:100:    supported_by: list[ExactSourceSpan] = Field(default_factory=list)
+harness/models.py:105:    acceptable_source_chunk_ids: list[str] = Field(default_factory=list)
+harness/models.py:111:    values: list[str] = Field(default_factory=list)
+harness/models.py:112:    fact_ids: list[str] = Field(default_factory=list)
+harness/models.py:135:    expected_source_chunk_ids: list[str] = Field(default_factory=list)
+harness/models.py:136:    evidence_groups: list[EvidenceGroup] = Field(default_factory=list)
+harness/models.py:137:    required_facts: list[RequiredFact] = Field(default_factory=list)
+harness/models.py:138:    acceptable_answer_patterns: list[AnswerPattern] = Field(default_factory=list)
+harness/models.py:139:    forbidden_claims: list[str] = Field(default_factory=list)
+harness/models.py:162:    metadata: dict[str, Any] = Field(default_factory=dict)
+harness/models.py:171:    provenance: list[MESAProvenanceItem] = Field(default_factory=list)
+harness/models.py:224:    normalized_retrieved_chunk_ids: list[str] = Field(default_factory=list)
+harness/models.py:225:    matching_chunk_ids: list[str] = Field(default_factory=list)
+harness/models.py:226:    reasons: list[str] = Field(default_factory=list)
+harness/models.py:237:    evidence_chunk_ids: list[str] = Field(default_factory=list)
+harness/models.py:239:    claims: list[AnswerClaim] = Field(default_factory=list)
+harness/models.py:246:    reasons: list[str] = Field(default_factory=list)
+harness/models.py:277:    artifacts: list[ArtifactReference] = Field(default_factory=list)
+harness/models.py:278:    index_hash: Optional[str] = Field(default=None, pattern=SHA256_PATTERN)
+harness/models.py:310:    evidence: list[str] = Field(default_factory=list)
+harness/models.py:316:    reasons: list[str] = Field(default_factory=list)
+harness/models.py:317:    gate_statuses: dict[str, GateStatus] = Field(default_factory=dict)
+harness/models.py:318:    missing_artifacts: list[str] = Field(default_factory=list)
+harness/transaction.py:176:            if verification.status != FreezeStatus.PASS:
+harness/transaction.py:268:            if audit_report["status"] != "PASS":
+harness/transaction.py:329:                # an official scorer. Keep this phase inspectable but non-PASS.
+harness/transaction.py:356:                "status": "PASS" if all(it.get("status") == "PASS" for it in evaluated_items) else "FAIL",
+harness/transaction.py:379:                "status": "PASS" if (evaluated_items and all(it.get("status") == "PASS" for it in evaluated_items)) else "FAIL",
+harness/transaction.py:449:            if verification.status != FreezeStatus.PASS:
+harness/transaction.py:486:            failed_hard = [g.gate_id for g in results if g.hard and g.status != GateStatus.PASS]
+harness/transaction.py:498:                        "status": "FAIL" if failed_hard else "PASS",
+harness/transaction.py:499:                        "final_verdict": "PROFILE_B_FAIL" if failed_hard else "PROFILE_B_PASS_NATIVE",
+harness/transaction.py:596:            if report["status"] != "PASS":
+harness/transaction.py:616:            if payload["status"] != "PASS":
+harness/transaction.py:633:            if not self.final_verdict or self.final_verdict.status != VerdictStatus.PROFILE_B_PASS_NATIVE:
+harness/transaction.py:635:                msg = f"Cannot finalize release with non-PASS verdict: {verdict_status}"
+harness/transaction.py:648:            # Transition lifecycle to FINALIZING then PASS_NATIVE
+harness/transaction.py:650:            self.lifecycle.transition(RunStatus.PASS_NATIVE)
+harness/transaction.py:667:                "status": "PASS",

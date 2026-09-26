@@ -97,7 +97,7 @@ def _pass_all_gates_metrics() -> dict[str, dict]:
 
 
 # T1: Clean passing transaction with real retrieval, real answers, full gates, all 17 required artifacts -> verify_release_bundle PASS
-def test_t1_clean_passing_transaction(tmp_path: Path) -> None:
+def test_t1_placeholder_transaction_remains_blocked(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     release_dir = tmp_path / "release"
     freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
@@ -143,35 +143,17 @@ def test_t1_clean_passing_transaction(tmp_path: Path) -> None:
 
     tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
     verdict = tx.execute_verdict_derivation()
-    assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
-
-    # Evidence index
-    raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
-    records = [
-        {
-            "path": "raw/retrieval/Q-1.json",
-            "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
-            "producer": "harness",
-            "phase": "test",
-            "timestamp_utc": NOW,
-            "source_run_id": RUN_ID,
-            "immutable": True,
-            "sealed": True,
-            "artifact_type": "evidence",
-        }
-    ]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    _populate_supplementary_release_files(run_dir, RUN_ID)
-
-    res = tx.execute_release_finalization(release_dir)
-    assert res["status"] == "PASS"
-
-    promoted_dir = Path(res["release_dir"])
-    verify_res = verify_release_bundle(promoted_dir)
-    assert verify_res["status"] == "PASS"
+    assert verdict.status == VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION
+    assert all(g.status.value == "UNVERIFIED" for g in tx.gate_results)
+    # A complete-looking placeholder bundle must not authorize publication.
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    attack_dir = tmp_path / "placeholder-attack"
+    attack_dir.mkdir()
+    sources = placeholder_sources(attack_dir)
+    with pytest.raises(ReleaseFinalizationError):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=release_dir)
+    assert not (release_dir / "RUN-independent").exists()
 
 
 # T2: Transaction fails at freeze phase if repo modified post-freeze
@@ -300,7 +282,7 @@ def test_t6_fails_at_gate_evaluation_if_score_below_threshold(tmp_path: Path) ->
     gate_results = tx.execute_gate_evaluation()
     b10_result = next((g for g in gate_results if g.gate_id == "B10"), None)
     assert b10_result is not None
-    assert b10_result.status.value == "FAIL"
+    assert b10_result.status.value == "UNVERIFIED"
 
 
 # T7: Transaction fails at verdict derivation if any hard gate is FAIL
@@ -486,64 +468,18 @@ def test_t10_fails_at_health_verification_if_failed(tmp_path: Path) -> None:
 
 # T11: Transaction fails at release finalization if any of 17 required artifacts is missing
 def test_t11_fails_at_release_finalization_if_artifact_missing(tmp_path: Path) -> None:
-    run_dir = tmp_path / RUN_ID
-    freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
-
-    tx = CertificationTransaction(RUN_ID, run_dir)
-    tx.execute_bootstrap()
-    tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
-
-    def build_raw(d: Path):
-        store = RunArtifactStore(d, RUN_ID)
-        store.persist_raw_retrieval(
-            query_id="Q-1",
-            request={"query": "test"},
-            response={"results": [{"chunk_id": "c1"}]},
-            transport_status=200,
-            timestamp_utc=NOW,
-            latency_ms=10.0,
-            runtime_lock_sha256="0" * 64,
-        )
-
-    tx.execute_raw_execution(build_raw)
-    tx.execute_raw_sealing()
-    tx.execute_oracle_audit()
-    tx.execute_scoring()
-
-    # Pre-populate provider evidence so real evidence exists for all gates
-    _populate_supplementary_release_files(run_dir, RUN_ID)
-
-    tx.execute_gate_evaluation(gate_metrics=_pass_all_gates_metrics())
-    verdict = tx.execute_verdict_derivation()
-    assert verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
-
-    raw_path = run_dir / "raw" / "retrieval" / "Q-1.json"
-    records = [
-        {
-            "path": "raw/retrieval/Q-1.json",
-            "sha256": hashlib.sha256(raw_path.read_bytes()).hexdigest(),
-            "producer": "harness",
-            "phase": "test",
-            "timestamp_utc": NOW,
-            "source_run_id": RUN_ID,
-            "immutable": True,
-            "sealed": True,
-            "artifact_type": "evidence",
-        }
-    ]
-    tx.execute_evidence_index(records)
-    tx.execute_run_id_consistency()
-    tx.execute_health_verification()
-
-    # Delete one mandatory release artifact to test fail closed
-    (run_dir / "scorer-canary-results.json").unlink()
-
-    with pytest.raises(TransactionError, match="missing required release artifacts"):
-        tx.execute_release_finalization(tmp_path / "release")
+    from tests.independent_support import placeholder_sources
+    from harness.finalizer import finalize_release, ReleaseFinalizationError
+    sources = placeholder_sources(tmp_path)
+    sources["health-pre-test.json"].unlink()
+    with pytest.raises(ReleaseFinalizationError, match="release source is not a file: health-pre-test.json"):
+        finalize_release(run_id="RUN-independent", sources=sources, release_root=tmp_path / "release")
+    assert not sources["health-pre-test.json"].exists()
+    assert not (tmp_path / "release" / "RUN-independent").exists()
 
 
 # T12: Multi-lane workload (both retrieval and answer items in raw manifest) correctly separates and computes both B10 and B12 gate metrics
-def test_t12_multi_lane_workload_computes_b10_and_b12(tmp_path: Path) -> None:
+def test_t12_multi_lane_capture_does_not_invent_metrics(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
 
@@ -587,13 +523,13 @@ def test_t12_multi_lane_workload_computes_b10_and_b12(tmp_path: Path) -> None:
     # Check that scoring summary has metrics for both lanes
     scoring_summary = json.loads((run_dir / "scoring-summary.json").read_text(encoding="utf-8"))
     metrics = scoring_summary["metrics"]
-    assert "answerable_recall_at_5" in metrics
-    assert "answerable_pass_rate" in metrics
+    assert metrics == {}
+    assert scoring_rep["status"] != "PASS"
 
     gate_results = tx.execute_gate_evaluation()
     b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
     b12_res = next((g for g in gate_results if g.gate_id == "B12"), None)
     assert b10_res is not None
     assert b12_res is not None
-    assert b10_res.status.value == "PASS"
-    assert b12_res.status.value == "PASS"
+    assert b10_res.status.value == "UNVERIFIED"
+    assert b12_res.status.value == "UNVERIFIED"

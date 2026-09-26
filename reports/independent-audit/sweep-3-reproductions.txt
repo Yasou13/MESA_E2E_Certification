@@ -1,0 +1,53 @@
+FFF.                                                                     [100%]
+=================================== FAILURES ===================================
+____________ test_gate_evaluation_revalidates_oracle_after_scoring _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-15/test_gate_evaluation_revalidat0')
+
+    def test_gate_evaluation_revalidates_oracle_after_scoring(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        p = tx.run_dir / "oracle-leakage-audit.json"
+        pl = json.loads(p.read_text()); pl["status"] = "FAIL"
+        pl["finding_count"] = 1; pl["findings"] = [{"kind": "oracle leak"}]
+        p.write_text(json.dumps(pl)); reseal(p)
+>       with pytest.raises(TransactionError, match="oracle|audit"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TransactionError
+
+tests/test_independent_revalidation.py:21: Failed
+______________ test_score_report_mutation_detected_by_gate_phase _______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-15/test_score_report_mutation_det0')
+
+    def test_score_report_mutation_detected_by_gate_phase(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        p = tx.run_dir / "scoring-report.json"
+        pl = json.loads(p.read_text()); pl["items"][0]["status"] = "PASS"
+        p.write_text(json.dumps(pl))
+>       with pytest.raises(TransactionError, match="score|scoring|hash|seal"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TransactionError
+
+tests/test_independent_revalidation.py:32: Failed
+__________________ test_evidence_path_aliases_are_duplicates ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-15/test_evidence_path_aliases_are0')
+
+    def test_evidence_path_aliases_are_duplicates(tmp_path):
+        (tmp_path / "artifact.json").write_text('{"run_id":"R"}')
+        base = {"producer": "test", "phase": "test", "timestamp_utc": NOW,
+                "source_run_id": "R", "immutable": True, "sealed": True}
+>       with pytest.raises(EvidenceIndexError, match="canonical|duplicate"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE EvidenceIndexError
+
+tests/test_independent_revalidation.py:40: Failed
+=========================== short test summary info ============================
+FAILED tests/test_independent_revalidation.py::test_gate_evaluation_revalidates_oracle_after_scoring
+FAILED tests/test_independent_revalidation.py::test_score_report_mutation_detected_by_gate_phase
+FAILED tests/test_independent_revalidation.py::test_evidence_path_aliases_are_duplicates
+3 failed, 1 passed in 0.15s

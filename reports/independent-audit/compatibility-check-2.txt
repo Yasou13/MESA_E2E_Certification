@@ -1,0 +1,203 @@
+...........F............................................................ [ 28%]
+........................................................................ [ 57%]
+..............F......................................................... [ 86%]
+..........................F......                                        [100%]
+=================================== FAILURES ===================================
+_________ test_a12_real_evidence_index_producer_accepted_by_finalizer __________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-6/test_a12_real_evidence_index_p0')
+
+    def test_a12_real_evidence_index_producer_accepted_by_finalizer(tmp_path: Path) -> None:
+        from harness.finalizer import REQUIRED_RELEASE_FILES
+
+        run_dir = tmp_path / RUN_ID
+        run_dir.mkdir(parents=True, exist_ok=True)
+        art_file = run_dir / "art.json"
+        art_file.write_text(json.dumps({"run_id": RUN_ID, "status": "PASS"}), encoding="utf-8")
+
+        records = [
+            {
+                "path": "art.json",
+                "sha256": hashlib.sha256(art_file.read_bytes()).hexdigest(),
+                "producer": "harness",
+                "phase": "test",
+                "timestamp_utc": NOW,
+                "source_run_id": RUN_ID,
+                "immutable": True,
+                "sealed": True,
+                "artifact_type": "evidence",
+            }
+        ]
+        build_evidence_index(
+            run_dir=run_dir,
+            output_path=run_dir / "evidence-index.json",
+            records=records,
+            run_id=RUN_ID,
+            created_at=NOW,
+        )
+
+        # Populate remaining release files with valid PASS metadata
+        categories = sorted(MANDATORY_MATERIAL_CATEGORIES)
+        for name in REQUIRED_RELEASE_FILES:
+            p = run_dir / name
+            if not p.is_file():
+                if name == "final-report.md":
+                    p.write_text(f"# Report\n\nRun: {RUN_ID}\nStatus: PASS\n", encoding="utf-8")
+                elif name == "gate-results.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "final_verdict": "PROFILE_B_PASS_NATIVE",
+                                "mandatory_gate_ids": ["B10"],
+                                "gates": [
+                                    {
+                                        "gate_id": "B10",
+                                        "hard": True,
+                                        "status": "PASS",
+                                        "requirements": {"m": {"operator": "gte", "value": 0.7}},
+                                        "observed": {"m": 0.85},
+                                    }
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                elif name == "contract-freeze.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "status": "PASS",
+                                "freeze_valid": True,
+                                "repository_shas": {
+                                    "MESA": "a" * 40,
+                                    "MESA_Data": "b" * 40,
+                                    "MESA_E2E_Certification": "c" * 40,
+                                },
+                                "materials": [
+                                    {"category": cat, "path": f"{cat}.txt", "sha256": "0" * 64}
+                                    for cat in categories
+                                ],
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                elif name == "run_manifest.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "status": "PASS_NATIVE",
+                                "lifecycle_valid": True,
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                elif name == "determinism-manifest.json":
+                    p.write_text(
+                        json.dumps(
+                            {
+                                "schema_version": "1.0",
+                                "run_id": RUN_ID,
+                                "oracle_audit_status": "PASS",
+                                "oracle_audit_stale": False,
+                            }
+                        ),
+                        encoding="utf-8",
+                    )
+                else:
+                    p.write_text(json.dumps({"schema_version": "1.0", "run_id": RUN_ID, "status": "PASS"}), encoding="utf-8")
+
+        release_dir = tmp_path / "release"
+>       gate_path = sources["gate-results.json"]
+                    ^^^^^^^
+E       NameError: name 'sources' is not defined
+
+tests/test_adversarial_self_audit.py:587: NameError
+_____________________ test_a08_fake_gate_metrics_rejected ______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-6/test_a08_fake_gate_metrics_rej0')
+
+    def test_a08_fake_gate_metrics_rejected(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+        def failing_scorer(raw_payload: dict):
+            return {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.1, "mrr": 0.1}
+        tx.execute_scoring(scoring_fn=failing_scorer)
+
+        # Fake metrics claiming 0.999
+        gate_results = tx.execute_gate_evaluation(gate_metrics={"B10": {"answerable_recall_at_5": 0.999, "answerable_mrr": 0.999}})
+        b10_res = next((g for g in gate_results if g.gate_id == "B10"), None)
+>       assert b10_res.observed["answerable_recall_at_5"] != 0.999
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       KeyError: 'answerable_recall_at_5'
+
+tests/test_final_integrity_adversarial_audit.py:301: KeyError
+__________ test_t6_fails_at_gate_evaluation_if_score_below_threshold ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-6/test_t6_fails_at_gate_evaluati0')
+
+    def test_t6_fails_at_gate_evaluation_if_score_below_threshold(tmp_path: Path) -> None:
+        run_dir = tmp_path / RUN_ID
+        freeze_path, checksum_path, repo_root, shas = _make_freeze(tmp_path, RUN_ID)
+
+        tx = CertificationTransaction(RUN_ID, run_dir)
+        tx.execute_bootstrap()
+        tx.execute_freeze(freeze_path, checksum_path, repository_root=repo_root, current_repository_shas=shas)
+
+        def build_raw(d: Path):
+            store = RunArtifactStore(d, RUN_ID)
+            store.persist_raw_retrieval(
+                query_id="Q-1",
+                request={"query": "test"},
+                response={"results": [{"chunk_id": "c1"}]},
+                transport_status=200,
+                timestamp_utc=NOW,
+                latency_ms=10.0,
+                runtime_lock_sha256="0" * 64,
+            )
+
+        tx.execute_raw_execution(build_raw)
+        tx.execute_raw_sealing()
+        tx.execute_oracle_audit()
+
+        def low_scorer(raw_payload: dict):
+            return {"query_id": "Q-1", "status": "FAIL", "lane": "retrieval", "recall_at_5": 0.2, "mrr": 0.2}
+
+        tx.execute_scoring(scoring_fn=low_scorer)
+        gate_results = tx.execute_gate_evaluation()
+        b10_result = next((g for g in gate_results if g.gate_id == "B10"), None)
+        assert b10_result is not None
+>       assert b10_result.status.value == "FAIL"
+E       AssertionError: assert 'UNVERIFIED' == 'FAIL'
+E
+E         - FAIL
+E         + UNVERIFIED
+
+tests/test_transaction_e2e_integration.py:285: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_adversarial_self_audit.py::test_a12_real_evidence_index_producer_accepted_by_finalizer
+FAILED tests/test_final_integrity_adversarial_audit.py::test_a08_fake_gate_metrics_rejected
+FAILED tests/test_transaction_e2e_integration.py::test_t6_fails_at_gate_evaluation_if_score_below_threshold
+3 failed, 246 passed in 4.27s

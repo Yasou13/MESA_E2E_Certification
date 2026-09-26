@@ -140,6 +140,10 @@ def test_c5_01_real_producer_accepted_by_real_finalizer(tmp_path: Path) -> None:
     _produce_real_index(run_dir, index_path)
 
     sources = _make_release_sources(tmp_path, index_path)
+    gate_path = sources["gate-results.json"]
+    gate_payload = json.loads(gate_path.read_text())
+    gate_payload["final_verdict"] = "PROFILE_B_BLOCKED_PRECONDITION"
+    gate_path.write_text(json.dumps(gate_payload))
     dest = finalize_release(
         run_id=RUN_ID, sources=sources, release_root=tmp_path / "releases"
     )

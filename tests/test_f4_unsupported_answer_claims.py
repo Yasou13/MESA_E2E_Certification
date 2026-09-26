@@ -343,11 +343,11 @@ def test_13_b12_gate_reflects_unsupported_claims(tmp_path: Path) -> None:
     assert b12_result is not None
     # B12 must FAIL because unsupported_material_claim_rate > 0
     assert b12_result.status.value != "PASS"
-    assert b12_result.observed.get("unsupported_material_claim_rate", 0) > 0
+    assert b12_result.observed == {}
 
 
 # 14. non-empty answerable test set with 0 unsupported claims -> B12 PASS
-def test_14_non_empty_clean_set_passes_b12(tmp_path: Path) -> None:
+def test_14_caller_clean_scores_cannot_pass_b12(tmp_path: Path) -> None:
     from harness.artifacts import RunArtifactStore
     from harness.transaction import CertificationTransaction
 
@@ -422,5 +422,5 @@ def test_14_non_empty_clean_set_passes_b12(tmp_path: Path) -> None:
     gate_results = tx.execute_gate_evaluation()
     b12_result = next((g for g in gate_results if g.gate_id == "B12"), None)
     assert b12_result is not None
-    assert b12_result.status.value == "PASS"
-    assert b12_result.observed.get("unsupported_material_claim_rate") == 0
+    assert b12_result.status.value == "UNVERIFIED"
+    assert b12_result.observed == {}

@@ -1,0 +1,211 @@
+FFFFFFFFFFFFFF                                                           [100%]
+=================================== FAILURES ===================================
+________________ test_oracle_surface_collision_cannot_hide_raw _________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_oracle_surface_collision_0')
+
+    def test_oracle_surface_collision_cannot_hide_raw(tmp_path):
+        tx = transaction(tmp_path, request={"required_facts": ["SECRET-FACT"]})
+>       with pytest.raises(TransactionError, match="oracle audit failed"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TransactionError
+
+tests/test_independent_audit.py:54: Failed
+______________ test_empty_retrieval_response_is_not_scored_as_hit ______________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_empty_retrieval_response_0')
+
+    def test_empty_retrieval_response_is_not_scored_as_hit(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        result = tx.execute_scoring()
+>       assert result["status"] != "PASS"
+E       AssertionError: assert 'PASS' != 'PASS'
+
+tests/test_independent_audit.py:62: AssertionError
+_____________________ test_custom_scorer_cannot_force_pass _____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_custom_scorer_cannot_forc0')
+
+    def test_custom_scorer_cannot_force_pass(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        result = tx.execute_scoring(scoring_fn=lambda _: {"query_id": "Q-audit",
+            "lane": "retrieval", "status": "PASS", "recall_at_5": 1, "mrr": 1})
+>       assert result["status"] != "PASS"
+E       AssertionError: assert 'PASS' != 'PASS'
+
+tests/test_independent_audit.py:71: AssertionError
+___________________ test_all_gate_metrics_are_authoritative ____________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_all_gate_metrics_are_auth0')
+
+    def test_all_gate_metrics_are_authoritative(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        cfg = json.loads(tx.gate_config_path.read_text())
+        injected = {gid: {m: r["value"] for m, r in d["requirements"].items()}
+            for gid, d in cfg["gates"].items()}
+        gates = tx.execute_gate_evaluation(injected,
+            {gid: ["contract-freeze.json"] for gid in injected})
+>       assert all(g.status.value != "PASS" for g in gates)
+E       assert False
+E        +  where False = all(<generator object test_all_gate_metrics_are_authoritative.<locals>.<genexpr> at 0x71d40d5ce0c0>)
+
+tests/test_independent_audit.py:83: AssertionError
+____________ test_threshold_change_rejected_before_gate_evaluation _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_threshold_change_rejected0')
+
+    def test_threshold_change_rejected_before_gate_evaluation(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        cfg = json.loads(tx.gate_config_path.read_text())
+        cfg["gates"]["B10"]["requirements"]["answerable_mrr"]["value"] = 0
+        tx.gate_config_path.write_text(json.dumps(cfg))
+>       with pytest.raises(TransactionError, match="freeze|threshold|config"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TransactionError
+
+tests/test_independent_audit.py:93: Failed
+_______________________ test_every_claim_must_be_checked _______________________
+
+    def test_every_claim_must_be_checked():
+>       assert score_claims(["Ceza 5 yıldır", "Sürgün zorunludur"]).status != "PASS"
+E       AssertionError: assert <ScoringStatus.PASS: 'PASS'> != 'PASS'
+E        +  where <ScoringStatus.PASS: 'PASS'> = AnswerScore(schema_version='1.0', query_id='Q', is_answerable=True, status=<ScoringStatus.PASS: 'PASS'>, reasons=['all...=True, evidence_supported=True, facts_satisfied=True, forbidden_claims_absent=True, unsupported_material_claim_count=0).status
+E        +    where AnswerScore(schema_version='1.0', query_id='Q', is_answerable=True, status=<ScoringStatus.PASS: 'PASS'>, reasons=['all...=True, evidence_supported=True, facts_satisfied=True, forbidden_claims_absent=True, unsupported_material_claim_count=0) = score_claims(['Ceza 5 yıldır', 'Sürgün zorunludur'])
+
+tests/test_independent_audit.py:112: AssertionError
+________________ test_vocabulary_overlap_does_not_prove_support ________________
+
+    def test_vocabulary_overlap_does_not_prove_support():
+>       assert score_claims(["Ceza 5 yıldır ve tazminat 100 milyon TL olarak belirlenmiştir"]).status != "PASS"
+E       AssertionError: assert <ScoringStatus.PASS: 'PASS'> != 'PASS'
+E        +  where <ScoringStatus.PASS: 'PASS'> = AnswerScore(schema_version='1.0', query_id='Q', is_answerable=True, status=<ScoringStatus.PASS: 'PASS'>, reasons=['all...=True, evidence_supported=True, facts_satisfied=True, forbidden_claims_absent=True, unsupported_material_claim_count=0).status
+E        +    where AnswerScore(schema_version='1.0', query_id='Q', is_answerable=True, status=<ScoringStatus.PASS: 'PASS'>, reasons=['all...=True, evidence_supported=True, facts_satisfied=True, forbidden_claims_absent=True, unsupported_material_claim_count=0) = score_claims(['Ceza 5 yıldır ve tazminat 100 milyon TL olarak belirlenmiştir'])
+
+tests/test_independent_audit.py:116: AssertionError
+____________ test_every_structured_record_requires_identity[jsonl] _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_every_structured_record_r0')
+extension = 'jsonl'
+
+    @pytest.mark.parametrize("extension", ["jsonl", "jsonl.gz", "json", "json.gz"])
+    def test_every_structured_record_requires_identity(tmp_path, extension):
+        rows = [{"run_id": "RUN-independent"}, {"result": "unowned"}]
+        text = "\n".join(json.dumps(r) for r in rows) if "jsonl" in extension else json.dumps(rows)
+        data = text.encode()
+        (tmp_path / ("observations." + extension)).write_bytes(gzip.compress(data) if extension.endswith("gz") else data)
+>       assert validate_run_id_consistency(tmp_path, "RUN-independent")["status"] != "PASS"
+E       AssertionError: assert 'PASS' != 'PASS'
+
+tests/test_independent_audit.py:125: AssertionError
+___________ test_every_structured_record_requires_identity[jsonl.gz] ___________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_every_structured_record_r1')
+extension = 'jsonl.gz'
+
+    @pytest.mark.parametrize("extension", ["jsonl", "jsonl.gz", "json", "json.gz"])
+    def test_every_structured_record_requires_identity(tmp_path, extension):
+        rows = [{"run_id": "RUN-independent"}, {"result": "unowned"}]
+        text = "\n".join(json.dumps(r) for r in rows) if "jsonl" in extension else json.dumps(rows)
+        data = text.encode()
+        (tmp_path / ("observations." + extension)).write_bytes(gzip.compress(data) if extension.endswith("gz") else data)
+>       assert validate_run_id_consistency(tmp_path, "RUN-independent")["status"] != "PASS"
+E       AssertionError: assert 'PASS' != 'PASS'
+
+tests/test_independent_audit.py:125: AssertionError
+_____________ test_every_structured_record_requires_identity[json] _____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_every_structured_record_r2')
+extension = 'json'
+
+    @pytest.mark.parametrize("extension", ["jsonl", "jsonl.gz", "json", "json.gz"])
+    def test_every_structured_record_requires_identity(tmp_path, extension):
+        rows = [{"run_id": "RUN-independent"}, {"result": "unowned"}]
+        text = "\n".join(json.dumps(r) for r in rows) if "jsonl" in extension else json.dumps(rows)
+        data = text.encode()
+        (tmp_path / ("observations." + extension)).write_bytes(gzip.compress(data) if extension.endswith("gz") else data)
+>       assert validate_run_id_consistency(tmp_path, "RUN-independent")["status"] != "PASS"
+E       AssertionError: assert 'PASS' != 'PASS'
+
+tests/test_independent_audit.py:125: AssertionError
+___________ test_every_structured_record_requires_identity[json.gz] ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_every_structured_record_r3')
+extension = 'json.gz'
+
+    @pytest.mark.parametrize("extension", ["jsonl", "jsonl.gz", "json", "json.gz"])
+    def test_every_structured_record_requires_identity(tmp_path, extension):
+        rows = [{"run_id": "RUN-independent"}, {"result": "unowned"}]
+        text = "\n".join(json.dumps(r) for r in rows) if "jsonl" in extension else json.dumps(rows)
+        data = text.encode()
+        (tmp_path / ("observations." + extension)).write_bytes(gzip.compress(data) if extension.endswith("gz") else data)
+>       assert validate_run_id_consistency(tmp_path, "RUN-independent")["status"] != "PASS"
+E       AssertionError: assert 'PASS' != 'PASS'
+
+tests/test_independent_audit.py:125: AssertionError
+___________________ test_placeholder_pass_bundle_is_rejected ___________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_placeholder_pass_bundle_i0')
+
+    def test_placeholder_pass_bundle_is_rejected(tmp_path):
+        sources = placeholder_sources(tmp_path)
+>       with pytest.raises(ReleaseFinalizationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ReleaseFinalizationError
+
+tests/test_independent_audit.py:149: Failed
+____________ test_real_index_mutated_artifact_rejected_by_finalizer ____________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_real_index_mutated_artifa0')
+
+    def test_real_index_mutated_artifact_rejected_by_finalizer(tmp_path):
+        sources = placeholder_sources(tmp_path)
+        p = sources["answer-summary.json"]
+        payload = json.loads(p.read_text())
+        payload["mutated"] = True
+        p.write_text(json.dumps(payload))
+>       with pytest.raises(ReleaseFinalizationError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE ReleaseFinalizationError
+
+tests/test_independent_audit.py:159: Failed
+______________________ test_health_requires_measurements _______________________
+
+tmp_path = PosixPath('/tmp/pytest-of-yasin/pytest-1/test_health_requires_measureme0')
+
+    def test_health_requires_measurements(tmp_path):
+        tx = transaction(tmp_path)
+        tx.execute_oracle_audit()
+        tx.execute_scoring()
+        tx.execute_gate_evaluation()
+        tx.execute_verdict_derivation()
+        tx.execute_evidence_index([{"path": "raw/retrieval/Q-audit.json", "producer": "independent",
+            "phase": "test", "timestamp_utc": NOW, "source_run_id": tx.run_id,
+            "immutable": True, "sealed": True}])
+        tx.execute_run_id_consistency()
+>       with pytest.raises(TransactionError, match="health|measurement|missing"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE TransactionError
+
+tests/test_independent_audit.py:173: Failed
+=========================== short test summary info ============================
+FAILED tests/test_independent_audit.py::test_oracle_surface_collision_cannot_hide_raw
+FAILED tests/test_independent_audit.py::test_empty_retrieval_response_is_not_scored_as_hit
+FAILED tests/test_independent_audit.py::test_custom_scorer_cannot_force_pass
+FAILED tests/test_independent_audit.py::test_all_gate_metrics_are_authoritative
+FAILED tests/test_independent_audit.py::test_threshold_change_rejected_before_gate_evaluation
+FAILED tests/test_independent_audit.py::test_every_claim_must_be_checked - As...
+FAILED tests/test_independent_audit.py::test_vocabulary_overlap_does_not_prove_support
+FAILED tests/test_independent_audit.py::test_every_structured_record_requires_identity[jsonl]
+FAILED tests/test_independent_audit.py::test_every_structured_record_requires_identity[jsonl.gz]
+FAILED tests/test_independent_audit.py::test_every_structured_record_requires_identity[json]
+FAILED tests/test_independent_audit.py::test_every_structured_record_requires_identity[json.gz]
+FAILED tests/test_independent_audit.py::test_placeholder_pass_bundle_is_rejected
+FAILED tests/test_independent_audit.py::test_real_index_mutated_artifact_rejected_by_finalizer
+FAILED tests/test_independent_audit.py::test_health_requires_measurements - F...
+14 failed in 0.18s
