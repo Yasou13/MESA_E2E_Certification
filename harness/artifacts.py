@@ -89,6 +89,111 @@ class AnswerExecutionCapture(BaseModel):
         )
 
 
+class CertifiedAnswerExecutionCapture(BaseModel):
+    """Exact provider-boundary capture used by authoritative answer scoring.
+
+    The legacy ``AnswerExecutionCapture`` remains readable for historical and
+    negative tests, but only this v2 schema carries the current-run/runtime and
+    byte-exact request bindings required for production scoring.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["2.0"] = "2.0"
+    run_id: str = Field(min_length=1)
+    lane: Literal["answers"] = "answers"
+    query_id: str = Field(min_length=1)
+    timestamp_utc: datetime
+    capture_origin: Literal["harness.answer_execution.provider_boundary"]
+    source_context_contract: Literal["GET /v4/sessions/{session_id}/context"]
+    context_contract_version: Literal["mesa-e2e.context.v1"]
+    mesa_sha: str = Field(pattern=r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
+    tenant_id: str = Field(min_length=1)
+    agent_id: str = Field(min_length=1)
+    session_id: str = Field(min_length=1)
+    dataset_ids: list[str] = Field(min_length=1)
+    exact_model_visible_context: str
+    context_evidence_ids: list[str]
+    context_sha256: str = Field(pattern=SHA256_PATTERN)
+    system_prompt: str
+    system_prompt_sha256: str = Field(pattern=SHA256_PATTERN)
+    question: str = Field(min_length=1)
+    question_sha256: str = Field(pattern=SHA256_PATTERN)
+    answer_instruction: str = Field(min_length=1)
+    answer_instruction_sha256: str = Field(pattern=SHA256_PATTERN)
+    user_prompt: str
+    user_prompt_sha256: str = Field(pattern=SHA256_PATTERN)
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    request_parameters: dict[str, Any]
+    exact_provider_request: dict[str, Any]
+    request_sha256: str = Field(pattern=SHA256_PATTERN)
+    raw_provider_response: dict[str, Any]
+    response_sha256: str = Field(pattern=SHA256_PATTERN)
+    provider_exchange_sha256: str = Field(pattern=SHA256_PATTERN)
+    parsed_response: dict[str, Any]
+
+    @field_validator("timestamp_utc")
+    @classmethod
+    def certified_timestamp_must_be_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp_utc must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def exact_hashes_must_match(self) -> "CertifiedAnswerExecutionCapture":
+        expected = {
+            "context_sha256": _sha256_bytes(
+                self.exact_model_visible_context.encode("utf-8")
+            ),
+            "system_prompt_sha256": _sha256_bytes(self.system_prompt.encode("utf-8")),
+            "question_sha256": _sha256_bytes(self.question.encode("utf-8")),
+            "answer_instruction_sha256": _sha256_bytes(
+                self.answer_instruction.encode("utf-8")
+            ),
+            "user_prompt_sha256": _sha256_bytes(self.user_prompt.encode("utf-8")),
+            "request_sha256": _sha256_bytes(
+                canonical_json_bytes(self.exact_provider_request)
+            ),
+            "response_sha256": _sha256_bytes(
+                canonical_json_bytes(self.raw_provider_response)
+            ),
+        }
+        for field, observed in expected.items():
+            if getattr(self, field) != observed:
+                raise ValueError(f"{field} mismatch: expected {observed}")
+        messages = self.exact_provider_request.get("messages")
+        if messages != [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": self.user_prompt},
+        ]:
+            raise ValueError("exact provider messages do not match captured prompts")
+        if self.exact_provider_request.get("model") != self.model:
+            raise ValueError("exact provider request model mismatch")
+        expected_user_prompt = (
+            f"{self.answer_instruction}\n\nQUESTION:\n{self.question}\n\n"
+            f"MODEL_VISIBLE_CONTEXT:\n{self.exact_model_visible_context}"
+        )
+        if self.user_prompt != expected_user_prompt:
+            raise ValueError(
+                "provider user prompt is not the exact captured composition"
+            )
+        for key, value in self.request_parameters.items():
+            if self.exact_provider_request.get(key) != value:
+                raise ValueError(f"exact provider request parameter mismatch: {key}")
+        if self.exact_model_visible_context not in self.user_prompt:
+            raise ValueError(
+                "exact model-visible context is absent from provider user prompt"
+            )
+        if len(self.context_evidence_ids) != len(set(self.context_evidence_ids)):
+            raise ValueError("context_evidence_ids contains duplicates")
+        if len(self.dataset_ids) != len(set(self.dataset_ids)) or any(
+            not dataset_id for dataset_id in self.dataset_ids
+        ):
+            raise ValueError("dataset_ids contains empty or duplicate identities")
+        return self
+
+
 class RunArtifactStore:
     def __init__(
         self,
@@ -114,6 +219,10 @@ class RunArtifactStore:
         return self.run_dir / "raw" / "answers"
 
     @property
+    def raw_provider_dir(self) -> Path:
+        return self.run_dir / "raw" / "provider"
+
+    @property
     def scored_retrieval_dir(self) -> Path:
         return self.run_dir / "scored" / "retrieval"
 
@@ -137,6 +246,7 @@ class RunArtifactStore:
         for directory in (
             self.raw_retrieval_dir,
             self.raw_answers_dir,
+            self.raw_provider_dir,
             self.scored_retrieval_dir,
             self.scored_answers_dir,
         ):
@@ -179,7 +289,9 @@ class RunArtifactStore:
         ).encode("utf-8")
         if path.exists():
             if path.read_bytes() != serialized:
-                raise ImmutableArtifactError(f"artifact already exists with new bytes: {path}")
+                raise ImmutableArtifactError(
+                    f"artifact already exists with new bytes: {path}"
+                )
             self._verify_seal(path)
             return path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -233,25 +345,76 @@ class RunArtifactStore:
             self._query_path(self.raw_retrieval_dir, query_id), payload
         )
 
-    def persist_raw_answer(self, capture: AnswerExecutionCapture) -> Path:
+    def persist_raw_answer(
+        self, capture: AnswerExecutionCapture | CertifiedAnswerExecutionCapture
+    ) -> Path:
         payload = {
             "run_id": self.run_id,
             "lane": "answers",
             **capture.model_dump(mode="json"),
         }
+        if isinstance(capture, CertifiedAnswerExecutionCapture):
+            if capture.run_id != self.run_id:
+                raise ArtifactStoreError("certified answer capture run_id mismatch")
         return self._write_immutable_json(
             self._query_path(self.raw_answers_dir, capture.query_id), payload
         )
 
+    def persist_raw_provider_exchange(
+        self,
+        *,
+        query_id: str,
+        timestamp_utc: datetime,
+        provider: str,
+        request: dict[str, Any],
+        response: dict[str, Any],
+    ) -> tuple[Path, str]:
+        """Seal the exact provider exchange before response parsing."""
+
+        response_bytes = canonical_json_bytes(response)
+        if len(response_bytes) > self.max_response_bytes:
+            raise ArtifactStoreError(
+                f"provider response exceeds bounded capture limit: {len(response_bytes)}"
+            )
+        if timestamp_utc.tzinfo is None or timestamp_utc.utcoffset() is None:
+            raise ArtifactStoreError(
+                "provider exchange timestamp must be timezone-aware"
+            )
+        payload = {
+            "schema_version": "1.0",
+            "run_id": self.run_id,
+            "lane": "provider_exchange",
+            "query_id": query_id,
+            "timestamp_utc": timestamp_utc.isoformat(),
+            "provider": provider,
+            "request": request,
+            "request_sha256": _sha256_bytes(canonical_json_bytes(request)),
+            "response": response,
+            "response_sha256": _sha256_bytes(response_bytes),
+        }
+        path = self._write_immutable_json(
+            self._query_path(self.raw_provider_dir, query_id), payload
+        )
+        return path, self._verify_seal(path)
+
     def compute_raw_manifest(self) -> dict[str, Any]:
         entries: list[dict[str, str]] = []
-        for lane_dir in (self.raw_retrieval_dir, self.raw_answers_dir):
+        for lane_dir in (
+            self.raw_retrieval_dir,
+            self.raw_answers_dir,
+            self.raw_provider_dir,
+        ):
             if lane_dir.is_dir():
                 for json_file in sorted(lane_dir.glob("*.json")):
                     sha = self._verify_seal(json_file)
                     payload = json.loads(json_file.read_text(encoding="utf-8"))
-                    if not isinstance(payload, dict) or payload.get("run_id") != self.run_id:
-                        raise ArtifactStoreError(f"raw artifact run_id mismatch: {json_file.name}")
+                    if (
+                        not isinstance(payload, dict)
+                        or payload.get("run_id") != self.run_id
+                    ):
+                        raise ArtifactStoreError(
+                            f"raw artifact run_id mismatch: {json_file.name}"
+                        )
                     rel_path = json_file.relative_to(self.run_dir).as_posix()
                     entries.append({"path": rel_path, "sha256": sha})
         entries.sort(key=lambda item: item["path"])
@@ -309,9 +472,13 @@ class RunArtifactStore:
         score: dict[str, Any],
     ) -> Path:
         self._require_passing_oracle_audit()
-        raw_dir = self.raw_retrieval_dir if lane == "retrieval" else self.raw_answers_dir
+        raw_dir = (
+            self.raw_retrieval_dir if lane == "retrieval" else self.raw_answers_dir
+        )
         scored_dir = (
-            self.scored_retrieval_dir if lane == "retrieval" else self.scored_answers_dir
+            self.scored_retrieval_dir
+            if lane == "retrieval"
+            else self.scored_answers_dir
         )
         raw_path = self._query_path(raw_dir, query_id)
         raw_sha256 = self._verify_seal(raw_path)

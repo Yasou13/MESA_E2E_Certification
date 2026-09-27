@@ -10,13 +10,18 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from harness.models import ExecutionStatus, GateResult, GateStatus
+from harness.metric_producers import (
+    PRODUCTION_METRIC_PRODUCERS as _PRODUCTION_METRIC_PRODUCER_REGISTRY,
+)
 
 
 PROFILE_B_GATE_IDS = frozenset(f"B{i}" for i in range(15))
-# This registry is intentionally empty until producers are implemented against
-# independently verified, frozen runtime contracts. Threshold comparison is
-# not a measurement producer. Adding a producer requires production-path tests.
-PRODUCTION_METRIC_PRODUCERS: frozenset[str] = frozenset()
+# Public completeness view used by verdict/finalizer validation. The mapping
+# itself lives with the producer implementations so registration cannot drift
+# away from executable production code.
+PRODUCTION_METRIC_PRODUCERS: frozenset[str] = frozenset(
+    _PRODUCTION_METRIC_PRODUCER_REGISTRY
+)
 
 
 class MetricRequirement(BaseModel):
@@ -39,7 +44,11 @@ class GateDefinition(BaseModel):
 
     @model_validator(mode="after")
     def validate_gate(self) -> "GateDefinition":
-        if not self.wait_for_mesa and not self.unresolved_methodology and not self.requirements:
+        if (
+            not self.wait_for_mesa
+            and not self.unresolved_methodology
+            and not self.requirements
+        ):
             raise ValueError(
                 f"Gate {self.gate_id} must have requirements unless wait_for_mesa or unresolved_methodology is set"
             )
@@ -165,13 +174,18 @@ def evaluate_threshold_gate(
         status=GateStatus.FAIL if failed else GateStatus.PASS,
         required=required,
         observed=dict(sorted(observed.items())),
-        reason=(f"threshold_not_met:{','.join(failed)}" if failed else "thresholds_met"),
+        reason=(
+            f"threshold_not_met:{','.join(failed)}" if failed else "thresholds_met"
+        ),
         evidence=evidence,
     )
 
 
 def write_gate_result(result: GateResult, path: str | Path) -> None:
-    serialized = json.dumps(
-        result.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
-    ) + "\n"
+    serialized = (
+        json.dumps(
+            result.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
+        )
+        + "\n"
+    )
     Path(path).write_text(serialized, encoding="utf-8", newline="\n")

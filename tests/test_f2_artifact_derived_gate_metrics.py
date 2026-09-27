@@ -89,7 +89,7 @@ def test_2_caller_recall_is_unverified(tmp_path: Path) -> None:
     results = tx.execute_gate_evaluation()
     b10_res = next(g for g in results if g.gate_id == "B10")
     assert b10_res.status == GateStatus.UNVERIFIED
-    assert b10_res.reason == "authoritative_metric_producer_unavailable"
+    assert "producer code is not frozen" in b10_res.reason
 
 
 # 3. serialized metric artifact tampered -> detected

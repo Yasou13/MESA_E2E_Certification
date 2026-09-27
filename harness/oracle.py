@@ -59,7 +59,13 @@ def extract_raw_audit_surfaces(
         audit_payload = {
             k: v
             for k, v in content.items()
-            if k not in {"response", "raw_response", "parsed_response"}
+            if k
+            not in {
+                "response",
+                "raw_response",
+                "raw_provider_response",
+                "parsed_response",
+            }
         }
         surfaces[entry["path"]] = audit_payload
     return surfaces
@@ -86,7 +92,9 @@ def audit_oracle_surfaces(
 
     def _check_oracle_val(text: str, path: str) -> None:
         for token in oracle_val_set:
-            if token == text or re.search(r"(?:\b|_)" + re.escape(token) + r"(?:\b|_)", text, re.IGNORECASE):
+            if token == text or re.search(
+                r"(?:\b|_)" + re.escape(token) + r"(?:\b|_)", text, re.IGNORECASE
+            ):
                 findings.append(
                     {
                         "path": path,
@@ -138,8 +146,12 @@ def audit_oracle_surfaces(
             _check_oracle_val(str(value), path)
 
     visit(surfaces, "")
-    manifest_hash = raw_manifest.get("manifest_hash") if isinstance(raw_manifest, dict) else None
-    raw_artifacts = raw_manifest.get("entries") if isinstance(raw_manifest, dict) else []
+    manifest_hash = (
+        raw_manifest.get("manifest_hash") if isinstance(raw_manifest, dict) else None
+    )
+    raw_artifacts = (
+        raw_manifest.get("entries") if isinstance(raw_manifest, dict) else []
+    )
     return {
         "schema_version": "1.0",
         "auditor_version": "1.0.0",
@@ -154,7 +166,5 @@ def audit_oracle_surfaces(
 
 
 def write_oracle_audit(report: dict[str, object], path: str | Path) -> None:
-    serialized = json.dumps(
-        report, ensure_ascii=False, indent=2, sort_keys=True
-    ) + "\n"
+    serialized = json.dumps(report, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
     Path(path).write_text(serialized, encoding="utf-8", newline="\n")

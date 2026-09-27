@@ -14,8 +14,18 @@ from typing import Any, Mapping
 from pydantic import ValidationError
 
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, MANDATORY_REPOSITORIES
-from harness.models import EvidenceIndex, VerdictStatus
-from harness.gates import PROFILE_B_GATE_IDS, PRODUCTION_METRIC_PRODUCERS
+from harness.models import (
+    EvidenceIndex,
+    ExecutionStatus,
+    GateResult,
+    GateStatus,
+    VerdictStatus,
+)
+from harness.gates import (
+    PROFILE_B_GATE_IDS,
+    PRODUCTION_METRIC_PRODUCERS,
+    load_gate_config,
+)
 from harness.evidence import _confined_path, EvidenceIndexError, sha256_file
 
 
@@ -109,9 +119,7 @@ def _validate_no_secret_bytes(name: str, content: bytes) -> None:
             )
 
 
-def _load_and_validate_source(
-    *, name: str, source: Path, run_id: str
-) -> bytes:
+def _load_and_validate_source(*, name: str, source: Path, run_id: str) -> bytes:
     if source.is_symlink():
         raise ReleaseFinalizationError(f"release source must not be a symlink: {name}")
     if not source.is_file():
@@ -157,18 +165,25 @@ def _load_and_validate_source(
         try:
             ev_model = EvidenceIndex.model_validate(payload)
         except ValidationError as exc:
-            raise ReleaseFinalizationError(f"evidence-index.json fails schema: {exc}") from exc
+            raise ReleaseFinalizationError(
+                f"evidence-index.json fails schema: {exc}"
+            ) from exc
         if ev_model.index_hash:
             entries_for_hash = [
                 {"path": art.path, "sha256": art.sha256}
                 for art in sorted(ev_model.artifacts, key=lambda item: item.path)
             ]
             canonical_bytes = json.dumps(
-                entries_for_hash, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+                entries_for_hash,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
             ).encode("utf-8")
             observed_index_hash = hashlib.sha256(canonical_bytes).hexdigest()
             if observed_index_hash != ev_model.index_hash:
-                raise ReleaseFinalizationError("evidence-index index_hash integrity mismatch")
+                raise ReleaseFinalizationError(
+                    "evidence-index index_hash integrity mismatch"
+                )
         for art in ev_model.artifacts:
             if art.source_run_id != run_id:
                 raise ReleaseFinalizationError(
@@ -192,11 +207,24 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
     run_manifest = payloads.get("run_manifest.json")
     if isinstance(run_manifest, dict):
         manifest_status = run_manifest.get("status")
-        if manifest_status in {"FAIL", "INVALIDATED", "BLOCKED", "INVALID", "UNVERIFIED"}:
-            raise ReleaseFinalizationError(f"run lifecycle is invalid: {manifest_status}")
+        if manifest_status in {
+            "FAIL",
+            "INVALIDATED",
+            "BLOCKED",
+            "INVALID",
+            "UNVERIFIED",
+        }:
+            raise ReleaseFinalizationError(
+                f"run lifecycle is invalid: {manifest_status}"
+            )
         if run_manifest.get("lifecycle_valid") is False:
             raise ReleaseFinalizationError("run lifecycle terminal state is invalid")
-        if run_manifest.get("lifecycle_status") in {"FAIL", "INVALIDATED", "BLOCKED", "INVALID"}:
+        if run_manifest.get("lifecycle_status") in {
+            "FAIL",
+            "INVALIDATED",
+            "BLOCKED",
+            "INVALID",
+        }:
             raise ReleaseFinalizationError(
                 f"run lifecycle terminal state is invalid: {run_manifest.get('lifecycle_status')}"
             )
@@ -215,7 +243,9 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
             "FREEZE_REPOSITORY_IDENTITY_MISSING",
             "FREEZE_HASH_MISMATCH",
         }:
-            raise ReleaseFinalizationError(f"contract freeze is invalid: {freeze_status}")
+            raise ReleaseFinalizationError(
+                f"contract freeze is invalid: {freeze_status}"
+            )
         if contract_freeze.get("freeze_valid") is False:
             raise ReleaseFinalizationError("contract freeze is invalid")
         repos = contract_freeze.get("repository_shas")
@@ -227,9 +257,7 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
                 )
         materials = contract_freeze.get("materials")
         if isinstance(materials, list) and materials:
-            present_cats = {
-                m.get("category") for m in materials if isinstance(m, dict)
-            }
+            present_cats = {m.get("category") for m in materials if isinstance(m, dict)}
             missing_cats = sorted(MANDATORY_MATERIAL_CATEGORIES - present_cats)
             if missing_cats:
                 raise ReleaseFinalizationError(
@@ -249,15 +277,18 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
     # 4. Mandatory PASS artifacts
     for name in sorted(_REQUIRED_PASS_ARTIFACTS):
         if payloads[name].get("status") != "PASS":
-            raise ReleaseFinalizationError(
-                f"PASS release requires {name} status PASS"
-            )
+            raise ReleaseFinalizationError(f"PASS release requires {name} status PASS")
 
     # 5. Authoritative gate results recomputation
     gates = gate_results["gates"]
     gate_ids = [g.get("gate_id") for g in gates if isinstance(g, dict)]
     if len(gate_ids) != len(set(gate_ids)):
-        raise ReleaseFinalizationError("duplicate gate results found in gate-results.json")
+        raise ReleaseFinalizationError(
+            "duplicate gate results found in gate-results.json"
+        )
+    config = load_gate_config(
+        Path(__file__).resolve().parents[1] / "config" / "profile-b-gates.json"
+    )
 
     mandatory_gate_ids: set[str] = set()
     if "mandatory_gate_ids" in gate_results:
@@ -275,6 +306,35 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
         gid = g.get("gate_id", "unknown")
         status = g.get("status")
         is_hard = g.get("hard", False) or (gid in mandatory_gate_ids)
+        if is_hard and status != "PASS":
+            raise ReleaseFinalizationError(
+                f"hard gate {gid} has status {status}, cannot promote PASS release"
+            )
+        try:
+            gate_model = GateResult.model_validate(g)
+        except ValidationError as exc:
+            raise ReleaseFinalizationError(
+                "tampered final_verdict: unverified mandatory gate schema or metric; "
+                f"gate result fails authoritative schema: {exc}"
+            ) from exc
+
+        if gid not in config.gates:
+            raise ReleaseFinalizationError(f"unknown gate ID in PASS claim: {gid}")
+        expected_required = {
+            key: requirement.model_dump(mode="json")
+            for key, requirement in config.gates[gid].requirements.items()
+        }
+        if gate_model.required != expected_required:
+            raise ReleaseFinalizationError(
+                f"gate {gid} requirements differ from authoritative config"
+            )
+        if gate_model.status is GateStatus.PASS and (
+            gate_model.execution_status is not ExecutionStatus.COMPLETED
+            or not gate_model.evidence
+        ):
+            raise ReleaseFinalizationError(
+                f"gate {gid} PASS lacks completed authoritative evidence"
+            )
 
         if is_hard and status != "PASS":
             raise ReleaseFinalizationError(
@@ -332,7 +392,9 @@ def finalize_release(
     missing = sorted(REQUIRED_RELEASE_FILES - supplied)
     extra = sorted(supplied - REQUIRED_RELEASE_FILES)
     if missing:
-        raise ReleaseFinalizationError(f"missing mandatory release artifacts: {missing}")
+        raise ReleaseFinalizationError(
+            f"missing mandatory release artifacts: {missing}"
+        )
     if extra:
         raise ReleaseFinalizationError(f"unexpected release artifacts: {extra}")
 
@@ -356,7 +418,11 @@ def finalize_release(
     # Verify the real index producer's references against source bytes, not just
     # the self-consistency of its serialized digest list.
     index = EvidenceIndex.model_validate(json_payloads["evidence-index.json"])
-    if not index.artifacts or not index.index_hash or index.artifact_count != len(index.artifacts):
+    if (
+        not index.artifacts
+        or not index.index_hash
+        or index.artifact_count != len(index.artifacts)
+    ):
         raise ReleaseFinalizationError("empty or incomplete evidence index")
     evidence_root = Path(sources["evidence-index.json"]).parent
     for artifact in index.artifacts:
@@ -364,18 +430,50 @@ def finalize_release(
             path = _confined_path(evidence_root, artifact.path)
         except EvidenceIndexError as exc:
             raise ReleaseFinalizationError(str(exc)) from exc
-        if not path.is_file() or path.is_symlink() or sha256_file(path) != artifact.sha256:
-            raise ReleaseFinalizationError(f"evidence artifact missing or hash mismatch: {artifact.path}")
+        if (
+            not path.is_file()
+            or path.is_symlink()
+            or sha256_file(path) != artifact.sha256
+        ):
+            raise ReleaseFinalizationError(
+                f"evidence artifact missing or hash mismatch: {artifact.path}"
+            )
 
-    if json_payloads["gate-results.json"]["final_verdict"] == VerdictStatus.PROFILE_B_PASS_NATIVE.value:
+    if (
+        json_payloads["gate-results.json"]["final_verdict"]
+        == VerdictStatus.PROFILE_B_PASS_NATIVE.value
+    ):
         gates = json_payloads["gate-results.json"]["gates"]
         if {g["gate_id"] for g in gates} != PROFILE_B_GATE_IDS:
-            raise ReleaseFinalizationError("mandatory gate registry must contain exactly B0-B14")
+            raise ReleaseFinalizationError(
+                "mandatory gate registry must contain exactly B0-B14"
+            )
         unavailable = sorted(PROFILE_B_GATE_IDS - PRODUCTION_METRIC_PRODUCERS)
         if unavailable:
             raise ReleaseFinalizationError(
                 f"unverified authoritative metric producers for mandatory gates: {unavailable}"
             )
+        indexed = {artifact.path: artifact.sha256 for artifact in index.artifacts}
+        for gate in gates:
+            for reference in gate.get("evidence", []):
+                if not isinstance(reference, str) or "#sha256=" not in reference:
+                    raise ReleaseFinalizationError(
+                        f"gate {gate.get('gate_id')} has malformed evidence reference"
+                    )
+                relative, digest = reference.rsplit("#sha256=", 1)
+                try:
+                    evidence_path = _confined_path(evidence_root, relative)
+                except EvidenceIndexError as exc:
+                    raise ReleaseFinalizationError(str(exc)) from exc
+                if (
+                    indexed.get(relative) != digest
+                    or not evidence_path.is_file()
+                    or evidence_path.is_symlink()
+                    or sha256_file(evidence_path) != digest
+                ):
+                    raise ReleaseFinalizationError(
+                        f"gate evidence is absent from the authoritative index or hash-mismatched: {relative}"
+                    )
 
     staging_path: Path | None = None
     try:
@@ -394,7 +492,9 @@ def finalize_release(
         os.replace(staging_path, destination)
         staging_path = None
     except OSError as exc:
-        raise ReleaseFinalizationError(f"atomic release promotion failed: {exc}") from exc
+        raise ReleaseFinalizationError(
+            f"atomic release promotion failed: {exc}"
+        ) from exc
     finally:
         if staging_path is not None and staging_path.exists():
             shutil.rmtree(staging_path)

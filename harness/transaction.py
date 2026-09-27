@@ -17,13 +17,31 @@ from harness.finalizer import finalize_release, ReleaseFinalizationError
 from harness.freeze import verify_contract_freeze, FreezeStatus
 from harness.gates import GateConfig, evaluate_threshold_gate, load_gate_config
 from harness.lifecycle import RunLifecycle
-from harness.models import ExecutionStatus, FinalVerdict, GateResult, GateStatus, RunStatus, VerdictStatus
+from harness.models import (
+    ExecutionStatus,
+    FinalVerdict,
+    GateResult,
+    GateStatus,
+    RunStatus,
+    VerdictStatus,
+)
+from harness.metric_producers import (
+    ProducerContext,
+    frozen_producer_code_sha256,
+    produce_all,
+)
 from harness.oracle import audit_oracle_surfaces, extract_raw_audit_surfaces
+from harness.official_scoring import (
+    ScoringAuthorityUnavailable,
+    load_frozen_scoring_authority,
+    score_run_from_frozen_authority,
+)
 from harness.verdict import derive_production_verdict
 
 
 class TransactionError(RuntimeError):
     """Raised when a certification transaction invariant is violated."""
+
     pass
 
 
@@ -99,7 +117,7 @@ class CertificationTransaction:
             )
         if not 0 <= self.current_step_idx < len(PHASE_SEQUENCE):
             raise TransactionError("phase sequence already completed or corrupted")
-        if self.completed_phases != set(PHASE_SEQUENCE[:self.current_step_idx]):
+        if self.completed_phases != set(PHASE_SEQUENCE[: self.current_step_idx]):
             raise TransactionError("phase history does not match current phase")
         replay = RunLifecycle(self.run_id)
         try:
@@ -108,13 +126,20 @@ class CertificationTransaction:
                     raise ValueError("discontinuous lifecycle history")
                 replay.transition(RunStatus(event["to"]))
             expected_status = (
-                RunStatus.CREATED if self.current_step_idx == 0 else
-                RunStatus.HARNESS_READY if self.current_step_idx == 1 else
-                RunStatus.CONTRACT_FROZEN if self.current_step_idx == 2 else
-                RunStatus.TEST_RUNNING if self.current_step_idx == 3 else
-                RunStatus.TEST_COMPLETED
+                RunStatus.CREATED
+                if self.current_step_idx == 0
+                else RunStatus.HARNESS_READY
+                if self.current_step_idx == 1
+                else RunStatus.CONTRACT_FROZEN
+                if self.current_step_idx == 2
+                else RunStatus.TEST_RUNNING
+                if self.current_step_idx == 3
+                else RunStatus.TEST_COMPLETED
             )
-            if replay.status != self.lifecycle.status or replay.status != expected_status:
+            if (
+                replay.status != self.lifecycle.status
+                or replay.status != expected_status
+            ):
                 raise ValueError("lifecycle status does not match phase")
         except (KeyError, ValueError, RuntimeError) as exc:
             raise TransactionError(f"invalid lifecycle: {exc}") from exc
@@ -124,7 +149,9 @@ class CertificationTransaction:
                 f"Out-of-order phase execution: attempted {phase.value}, expected {expected_phase.value}"
             )
 
-    def _fail_transaction(self, reason: str, *, status: RunStatus = RunStatus.FAIL) -> None:
+    def _fail_transaction(
+        self, reason: str, *, status: RunStatus = RunStatus.FAIL
+    ) -> None:
         self.failed = True
         self.failure_reason = reason
         try:
@@ -187,7 +214,9 @@ class CertificationTransaction:
 
             self.freeze_path = target_freeze
             self.checksum_path = target_checksum
-            self._gate_config_hash = hashlib.sha256(self.gate_config_path.read_bytes()).hexdigest()
+            self._gate_config_hash = hashlib.sha256(
+                self.gate_config_path.read_bytes()
+            ).hexdigest()
             self.repository_root = Path(repository_root)
             self.current_repository_shas = dict(current_repository_shas)
 
@@ -255,9 +284,15 @@ class CertificationTransaction:
             # If caller supplied surfaces (e.g. for isolated tests), merge them
             if oracle_surfaces:
                 if isinstance(oracle_surfaces, dict):
-                    surfaces_dict = {"sealed_raw": surfaces_dict, "supplemental": oracle_surfaces}
+                    surfaces_dict = {
+                        "sealed_raw": surfaces_dict,
+                        "supplemental": oracle_surfaces,
+                    }
                 else:
-                    surfaces_dict = {"sealed_raw": surfaces_dict, "supplemental": oracle_surfaces}
+                    surfaces_dict = {
+                        "sealed_raw": surfaces_dict,
+                        "supplemental": oracle_surfaces,
+                    }
 
             audit_report = audit_oracle_surfaces(
                 surfaces_dict,
@@ -302,7 +337,10 @@ class CertificationTransaction:
                 msg = "raw artifact manifest hash modified after sealing"
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
-            if self.audited_manifest_hash and current_hash != self.audited_manifest_hash:
+            if (
+                self.audited_manifest_hash
+                and current_hash != self.audited_manifest_hash
+            ):
                 msg = "raw artifact manifest hash modified after oracle audit"
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
@@ -315,13 +353,109 @@ class CertificationTransaction:
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
 
+            # Authoritative production path: the freeze must explicitly name
+            # byte-exact GT, qrels, identity-map and normalization inputs.  A
+            # caller callback is never consulted.
+            try:
+                authority = load_frozen_scoring_authority(
+                    freeze_path=self.freeze_path,
+                    repository_root=self.repository_root,
+                    run_id=self.run_id,
+                )
+            except ScoringAuthorityUnavailable:
+                authority = None
+            if authority is not None:
+                official = score_run_from_frozen_authority(
+                    store=self.store, authority=authority
+                )
+                oracle_audit_path = self.run_dir / "oracle-leakage-audit.json"
+                oracle_audit_hash = hashlib.sha256(
+                    oracle_audit_path.read_bytes()
+                ).hexdigest()
+                all_items = [
+                    *official["retrieval"]["items"],
+                    *official["answers"]["items"],
+                ]
+                report = {
+                    **{
+                        key: value
+                        for key, value in official.items()
+                        if key not in {"retrieval", "answers"}
+                    },
+                    "oracle_audit_hash": oracle_audit_hash,
+                    "items": all_items,
+                    "lane_reports": {
+                        "retrieval": official["retrieval"],
+                        "answers": official["answers"],
+                    },
+                }
+                report_bytes = (
+                    json.dumps(report, indent=2, sort_keys=True) + "\n"
+                ).encode("utf-8")
+                score_artifact_hash = hashlib.sha256(report_bytes).hexdigest()
+                (self.run_dir / "scoring-report.json").write_bytes(report_bytes)
+                for lane, filename in (
+                    ("retrieval", "retrieval-test-report.json"),
+                    ("answers", "answer-test-report.json"),
+                ):
+                    self.store._write_immutable_json(
+                        self.run_dir / filename, official[lane]
+                    )
+                    lane_summary = {
+                        key: value
+                        for key, value in official[lane].items()
+                        if key != "items"
+                    }
+                    self.store._write_immutable_json(
+                        self.run_dir
+                        / (
+                            "retrieval-summary.json"
+                            if lane == "retrieval"
+                            else "answer-summary.json"
+                        ),
+                        lane_summary,
+                    )
+                summary = {
+                    "schema_version": "2.0",
+                    "run_id": self.run_id,
+                    "scorer_version": official["scorer_version"],
+                    "scorer_sha256": official["scorer_sha256"],
+                    "ground_truth_sha256": official["ground_truth_sha256"],
+                    "qrels_sha256": official["qrels_sha256"],
+                    "identity_map_sha256": official["identity_map_sha256"],
+                    "normalization_sha256": official["normalization_sha256"],
+                    "raw_manifest_hash": current_hash,
+                    "oracle_audit_hash": oracle_audit_hash,
+                    "item_count": official["item_count"],
+                    "status": official["status"],
+                    "score_artifact_hash": score_artifact_hash,
+                    "metrics": {
+                        **official["retrieval"]["metrics"],
+                        **official["answers"]["metrics"],
+                    },
+                    "lane_status": {
+                        "retrieval": official["retrieval"]["status"],
+                        "answers": official["answers"]["status"],
+                    },
+                }
+                self.store._write_immutable_json(
+                    self.run_dir / "scoring-summary.json", summary
+                )
+                self.completed_phases.add(TransactionPhase.SCORING)
+                self.current_step_idx += 1
+                return report
+
             evaluated_items = []
             for entry in current_manifest["entries"]:
                 file_path = self.run_dir / entry["path"]
                 self.store._verify_seal(file_path)
                 raw_payload = json.loads(file_path.read_text(encoding="utf-8"))
                 query_id = raw_payload.get("query_id")
-                lane = raw_payload.get("lane", "answers" if "answers" in entry["path"] else "retrieval")
+                lane = raw_payload.get(
+                    "lane", "answers" if "answers" in entry["path"] else "retrieval"
+                )
+                if lane == "provider_exchange":
+                    continue
 
                 # The MESA response/context adapters and frozen GT join are not
                 # independently verified yet. Raw bytes alone cannot establish
@@ -331,7 +465,7 @@ class CertificationTransaction:
                     "query_id": query_id,
                     "lane": lane,
                     "status": "UNVERIFIED",
-                    "reasons": ["WAIT_FOR_MESA: frozen scorer/input binding unavailable"],
+                    "reasons": ["frozen scoring authority unavailable"],
                 }
 
                 self.store.persist_scored(lane=lane, query_id=query_id, score=scored)
@@ -343,17 +477,23 @@ class CertificationTransaction:
                 raise TransactionError(msg)
 
             oracle_audit_path = self.run_dir / "oracle-leakage-audit.json"
-            oracle_audit_hash = hashlib.sha256(oracle_audit_path.read_bytes()).hexdigest()
+            oracle_audit_hash = hashlib.sha256(
+                oracle_audit_path.read_bytes()
+            ).hexdigest()
 
             report = {
                 "schema_version": "1.0",
                 "run_id": self.run_id,
                 "scorer_version": "unverified-adapter-1",
-                "scorer_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "scorer_sha256": hashlib.sha256(
+                    Path(__file__).read_bytes()
+                ).hexdigest(),
                 "raw_manifest_hash": current_hash,
                 "oracle_audit_hash": oracle_audit_hash,
                 "item_count": len(evaluated_items),
-                "status": "PASS" if all(it.get("status") == "PASS" for it in evaluated_items) else "FAIL",
+                "status": "PASS"
+                if all(it.get("status") == "PASS" for it in evaluated_items)
+                else "FAIL",
                 "items": evaluated_items,
             }
             report_bytes = json.dumps(report, indent=2, sort_keys=True).encode("utf-8")
@@ -361,7 +501,9 @@ class CertificationTransaction:
             report["score_artifact_hash"] = score_artifact_hash
 
             (self.run_dir / "answer-test-report.json").write_bytes(report_bytes + b"\n")
-            (self.run_dir / "retrieval-test-report.json").write_bytes(report_bytes + b"\n")
+            (self.run_dir / "retrieval-test-report.json").write_bytes(
+                report_bytes + b"\n"
+            )
             (self.run_dir / "scoring-report.json").write_bytes(report_bytes + b"\n")
 
             # Missing measured populations have no metrics. In particular an
@@ -372,11 +514,18 @@ class CertificationTransaction:
                 "schema_version": "1.0",
                 "run_id": self.run_id,
                 "scorer_version": "unverified-adapter-1",
-                "scorer_sha256": hashlib.sha256(Path(__file__).read_bytes()).hexdigest(),
+                "scorer_sha256": hashlib.sha256(
+                    Path(__file__).read_bytes()
+                ).hexdigest(),
                 "raw_manifest_hash": current_hash,
                 "oracle_audit_hash": oracle_audit_hash,
                 "item_count": len(evaluated_items),
-                "status": "PASS" if (evaluated_items and all(it.get("status") == "PASS" for it in evaluated_items)) else "FAIL",
+                "status": "PASS"
+                if (
+                    evaluated_items
+                    and all(it.get("status") == "PASS" for it in evaluated_items)
+                )
+                else "FAIL",
                 "score_artifact_hash": score_artifact_hash,
                 "metrics": metrics_computed,
             }
@@ -410,7 +559,10 @@ class CertificationTransaction:
                 self.store = RunArtifactStore(self.run_dir, self.run_id)
 
             current_manifest = self.store.compute_raw_manifest()
-            if self.raw_manifest_hash and current_manifest["manifest_hash"] != self.raw_manifest_hash:
+            if (
+                self.raw_manifest_hash
+                and current_manifest["manifest_hash"] != self.raw_manifest_hash
+            ):
                 msg = "raw artifact manifest modified before gate evaluation"
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
@@ -436,50 +588,115 @@ class CertificationTransaction:
                 raise TransactionError(msg)
 
             self.store._require_passing_oracle_audit()
-            oracle_hash = hashlib.sha256((self.run_dir / "oracle-leakage-audit.json").read_bytes()).hexdigest()
+            oracle_hash = hashlib.sha256(
+                (self.run_dir / "oracle-leakage-audit.json").read_bytes()
+            ).hexdigest()
             if summary.get("oracle_audit_hash") != oracle_hash:
-                raise TransactionError("ORACLE_AUDIT_STALE: score artifact audit hash mismatch")
+                raise TransactionError(
+                    "ORACLE_AUDIT_STALE: score artifact audit hash mismatch"
+                )
             report_path = self.run_dir / "scoring-report.json"
-            if not report_path.is_file() or hashlib.sha256(report_path.read_bytes()).hexdigest() != summary.get("score_artifact_hash"):
+            if not report_path.is_file() or hashlib.sha256(
+                report_path.read_bytes()
+            ).hexdigest() != summary.get("score_artifact_hash"):
                 raise TransactionError("score report hash mismatch")
             report = json.loads(report_path.read_text(encoding="utf-8"))
-            if report.get("item_count") != summary.get("item_count") or len(report.get("items", [])) != summary.get("item_count"):
+            if report.get("item_count") != summary.get("item_count") or len(
+                report.get("items", [])
+            ) != summary.get("item_count"):
                 raise TransactionError("score item count mismatch")
-            if summary.get("scorer_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
+            if summary.get("scorer_version") == "profile-b-official-v2":
+                authority = load_frozen_scoring_authority(
+                    freeze_path=self.freeze_path,
+                    repository_root=self.repository_root,
+                    run_id=self.run_id,
+                )
+                if summary.get("scorer_sha256") != authority.scorer_sha256:
+                    raise TransactionError("scorer source hash mismatch")
+            elif (
+                summary.get("scorer_sha256")
+                != hashlib.sha256(Path(__file__).read_bytes()).hexdigest()
+            ):
                 raise TransactionError("scorer source hash mismatch")
-
-            item_count = summary.get("item_count", 0)
-            score_metrics = summary.get("metrics", {})
 
             config = load_gate_config(self.gate_config_path)
             results: list[GateResult] = []
 
             verification = verify_contract_freeze(
-                self.freeze_path, self.checksum_path,
+                self.freeze_path,
+                self.checksum_path,
                 repository_root=self.repository_root,
                 current_repository_shas=self.current_repository_shas,
             )
             if verification.status != FreezeStatus.PASS:
-                raise TransactionError(f"freeze invalid before gates: {verification.drift}")
-            if hashlib.sha256(self.gate_config_path.read_bytes()).hexdigest() != self._gate_config_hash:
+                raise TransactionError(
+                    f"freeze invalid before gates: {verification.drift}"
+                )
+            if (
+                hashlib.sha256(self.gate_config_path.read_bytes()).hexdigest()
+                != self._gate_config_hash
+            ):
                 raise TransactionError("threshold config changed after freeze")
 
+            producer_context = ProducerContext(
+                run_dir=self.run_dir,
+                run_id=self.run_id,
+                freeze_path=self.freeze_path,
+                checksum_path=self.checksum_path,
+                repository_root=self.repository_root,
+                current_repository_shas=self.current_repository_shas,
+                raw_manifest_hash=self.raw_manifest_hash,
+                gate_config_path=self.gate_config_path,
+            )
+            producer_results = produce_all(producer_context)
+            try:
+                producer_authority_hash = frozen_producer_code_sha256(producer_context)
+            except (OSError, ValueError, KeyError, TypeError):
+                producer_authority_hash = None
             observations: dict[str, dict[str, Any]] = {}
+            producer_audit: dict[str, dict[str, Any]] = {}
             for gate_id in config.mandatory_gate_ids:
                 defn = config.gates[gate_id]
-                # No current producer proves these gate observations from a
-                # verified MESA contract. Do not adopt caller metrics or an
-                # unrelated existing path as evidence. Keep each gate explicit.
-                observed: dict[str, Any] = {}
-                observations[gate_id] = observed
-                results.append(GateResult(
-                    gate_id=gate_id, hard=defn.hard,
-                    execution_status=ExecutionStatus.COMPLETED,
-                    status=GateStatus.UNVERIFIED,
-                    required={k: v.model_dump(mode="json") for k, v in defn.requirements.items()},
-                    observed=observed, evidence=[],
-                    reason="authoritative_metric_producer_unavailable",
-                ))
+                produced = producer_results[gate_id]
+                observations[gate_id] = produced.observed
+                producer_audit[gate_id] = {
+                    "execution": produced.execution,
+                    "reason": produced.reason,
+                    "evidence": list(produced.evidence),
+                    "producer_version": produced.producer_version,
+                }
+                if produced.execution == "COMPLETED":
+                    results.append(
+                        evaluate_threshold_gate(
+                            defn,
+                            produced.observed,
+                            ExecutionStatus.COMPLETED,
+                            list(produced.evidence),
+                        )
+                    )
+                    continue
+                contract_blocked = produced.reason.startswith(
+                    "BLOCKED_BY_MESA_CONTRACT:"
+                )
+                results.append(
+                    GateResult(
+                        gate_id=gate_id,
+                        hard=defn.hard,
+                        execution_status=ExecutionStatus.BLOCKED,
+                        status=(
+                            GateStatus.BLOCKED
+                            if contract_blocked
+                            else GateStatus.UNVERIFIED
+                        ),
+                        required={
+                            key: value.model_dump(mode="json")
+                            for key, value in defn.requirements.items()
+                        },
+                        observed={},
+                        evidence=[],
+                        reason=produced.reason,
+                    )
+                )
 
             self.gate_results = results
 
@@ -489,33 +706,32 @@ class CertificationTransaction:
                 "run_id": self.run_id,
                 "raw_manifest_hash": self.raw_manifest_hash,
                 "derived_at_utc": datetime.now(timezone.utc).isoformat(),
+                "producer_code_sha256": producer_authority_hash,
                 "observations": observations,
+                "producer_audit": producer_audit,
             }
-            (self.run_dir / "gate-observations.json").write_text(
-                json.dumps(obs_payload, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
+            self.store._write_immutable_json(
+                self.run_dir / "gate-observations.json", obs_payload
             )
 
-            failed_hard = [g.gate_id for g in results if g.hard and g.status != GateStatus.PASS]
+            failed_hard = [
+                g.gate_id for g in results if g.hard and g.status != GateStatus.PASS
+            ]
             if failed_hard:
                 self.failure_reason = f"hard gates not passed: {failed_hard}"
 
-            gate_results_path = self.run_dir / "gate-results.json"
-            gate_results_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "1.0",
-                        "run_id": self.run_id,
-                        "gates": [g.model_dump(mode="json") for g in results],
-                        "mandatory_gate_ids": config.mandatory_gate_ids,
-                        "status": "FAIL" if failed_hard else "PASS",
-                        "final_verdict": "PROFILE_B_FAIL" if failed_hard else "PROFILE_B_PASS_NATIVE",
-                    },
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
+            self.store._write_immutable_json(
+                self.run_dir / "gate-results.json",
+                {
+                    "schema_version": "1.0",
+                    "run_id": self.run_id,
+                    "gates": [g.model_dump(mode="json") for g in results],
+                    "mandatory_gate_ids": config.mandatory_gate_ids,
+                    "status": "FAIL" if failed_hard else "PASS",
+                    "final_verdict": (
+                        "PROFILE_B_FAIL" if failed_hard else "PROFILE_B_PASS_NATIVE"
+                    ),
+                },
             )
 
             self.completed_phases.add(TransactionPhase.GATE_EVALUATION)
@@ -560,7 +776,8 @@ class CertificationTransaction:
             self.final_verdict = verdict
             verdict_path = self.run_dir / "verdict.json"
             verdict_path.write_text(
-                json.dumps(verdict.model_dump(mode="json"), indent=2, sort_keys=True) + "\n",
+                json.dumps(verdict.model_dump(mode="json"), indent=2, sort_keys=True)
+                + "\n",
                 encoding="utf-8",
             )
             self.completed_phases.add(TransactionPhase.VERDICT_DERIVATION)
@@ -625,9 +842,12 @@ class CertificationTransaction:
         self._require_phase(TransactionPhase.HEALTH_VERIFICATION)
         try:
             from harness.operations import verify_health_artifacts
+
             payload = verify_health_artifacts(self.run_dir, self.run_id)
             if payload["status"] != "PASS":
-                raise TransactionError(f"health verification failed: {payload['reasons']}")
+                raise TransactionError(
+                    f"health verification failed: {payload['reasons']}"
+                )
             self.completed_phases.add(TransactionPhase.HEALTH_VERIFICATION)
             self.current_step_idx += 1
             return payload
@@ -643,8 +863,13 @@ class CertificationTransaction:
     ) -> dict[str, object]:
         self._require_phase(TransactionPhase.RELEASE_FINALIZATION)
         try:
-            if not self.final_verdict or self.final_verdict.status != VerdictStatus.PROFILE_B_PASS_NATIVE:
-                verdict_status = self.final_verdict.status.value if self.final_verdict else "NONE"
+            if (
+                not self.final_verdict
+                or self.final_verdict.status != VerdictStatus.PROFILE_B_PASS_NATIVE
+            ):
+                verdict_status = (
+                    self.final_verdict.status.value if self.final_verdict else "NONE"
+                )
                 msg = f"Cannot finalize release with non-PASS verdict: {verdict_status}"
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
@@ -652,7 +877,11 @@ class CertificationTransaction:
             from harness.finalizer import REQUIRED_RELEASE_FILES
 
             # Fail closed if any required release file is missing - NEVER synthesize
-            missing_files = [name for name in sorted(REQUIRED_RELEASE_FILES) if not (self.run_dir / name).is_file()]
+            missing_files = [
+                name
+                for name in sorted(REQUIRED_RELEASE_FILES)
+                if not (self.run_dir / name).is_file()
+            ]
             if missing_files:
                 msg = f"missing required release artifacts: {missing_files}"
                 self._fail_transaction(msg)
@@ -663,10 +892,7 @@ class CertificationTransaction:
             self.lifecycle.transition(RunStatus.PASS_NATIVE)
             self.lifecycle.write(self.run_dir / "lifecycle.json")
 
-            sources = {
-                name: self.run_dir / name
-                for name in REQUIRED_RELEASE_FILES
-            }
+            sources = {name: self.run_dir / name for name in REQUIRED_RELEASE_FILES}
             dest_path = finalize_release(
                 run_id=self.run_id,
                 sources=sources,
