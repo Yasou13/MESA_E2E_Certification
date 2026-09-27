@@ -211,34 +211,118 @@ def capture_frozen_state_proof(
     )
 
 
+def verify_quiescence_evidence(
+    quiescence_evidence: dict[str, Any] | None,
+) -> tuple[bool, str]:
+    """Verify authentic runtime/worker quiescence signals without inventing evidence."""
+    if not isinstance(quiescence_evidence, dict) or not quiescence_evidence:
+        return False, "quiescence signals absent"
+
+    # Real signals: workers stopped/read-only, queues drained, no pending mutations
+    workers_ok = quiescence_evidence.get("workers_stopped_or_read_only") is True
+    queues_ok = quiescence_evidence.get("queues_drained") is True
+    mutations_ok = quiescence_evidence.get("no_pending_mutations") is True
+    if workers_ok and queues_ok and mutations_ok:
+        return True, "REAL_WORKER_QUIESCENCE_VERIFIED"
+
+    # Qualification freeze flag / runtime freeze verified
+    if quiescence_evidence.get("runtime_freeze_verified") is True:
+        return True, "RUNTIME_FREEZE_QUIESCENCE_VERIFIED"
+
+    return False, "quiescence signals incomplete or unverified"
+
+
 def verify_store_quiescence(
     pre_proof: FrozenStateProof,
     post_proof: FrozenStateProof,
-) -> tuple[bool, str]:
-    """Verify that PRE and POST state proofs are byte-for-byte identical."""
+    quiescence_evidence: dict[str, Any] | None = None,
+) -> tuple[bool, str, bool]:
+    """Verify that PRE and POST state proofs are unchanged and evaluate quiescence.
+
+    Returns (state_unchanged, reason, quiescence_verified).
+    """
 
     if pre_proof.sqlite_fingerprint != post_proof.sqlite_fingerprint:
         return (
             False,
             f"BLOCKED_BY_RUNTIME_STATE_PROOF: SQLite store mutated during paired execution "
             f"({pre_proof.sqlite_fingerprint} != {post_proof.sqlite_fingerprint})",
+            False,
         )
     if pre_proof.lancedb_fingerprint != post_proof.lancedb_fingerprint:
         return (
             False,
             f"BLOCKED_BY_RUNTIME_STATE_PROOF: LanceDB vector store mutated during paired execution "
             f"({pre_proof.lancedb_fingerprint} != {post_proof.lancedb_fingerprint})",
+            False,
         )
     if pre_proof.kuzu_fingerprint != post_proof.kuzu_fingerprint:
         return (
             False,
             f"BLOCKED_BY_RUNTIME_STATE_PROOF: Kùzu graph store mutated during paired execution "
             f"({pre_proof.kuzu_fingerprint} != {post_proof.kuzu_fingerprint})",
+            False,
         )
     if pre_proof.composite_fingerprint != post_proof.composite_fingerprint:
         return (
             False,
             "BLOCKED_BY_RUNTIME_STATE_PROOF: composite store fingerprint mismatch",
+            False,
         )
 
-    return True, "QUIESCENT_STATE_VERIFIED"
+    quiescent, _ = verify_quiescence_evidence(quiescence_evidence)
+    return True, "RETRIEVAL_STATE_UNCHANGED", quiescent
+
+
+def write_sealed_state_proof(
+    run_dir: Path | str,
+    *,
+    run_id: str,
+    pre_proof: FrozenStateProof,
+    post_proof: FrozenStateProof,
+    store_locations: dict[str, str],
+    dataset_identity: str = "dataset-legal-1",
+    freeze_identity: str = "freeze-v1",
+    quiescence_evidence: dict[str, Any] | None = None,
+) -> tuple[Path, str]:
+    """Write authoritative sealed state proof artifact into raw/state lane."""
+    raw_state_dir = Path(run_dir) / "raw" / "state"
+    raw_state_dir.mkdir(parents=True, exist_ok=True)
+    target_path = raw_state_dir / "state-proof.json"
+
+    unchanged, reason, quiescent = verify_store_quiescence(
+        pre_proof, post_proof, quiescence_evidence=quiescence_evidence
+    )
+
+    payload = {
+        "schema_version": "1.0",
+        "run_id": run_id,
+        "lane": "state",
+        "contract_version": STATE_PROOF_CONTRACT_VERSION,
+        "dataset_identity": dataset_identity,
+        "freeze_identity": freeze_identity,
+        "store_locations": store_locations,
+        "pre_composite_fingerprint": pre_proof.composite_fingerprint,
+        "post_composite_fingerprint": post_proof.composite_fingerprint,
+        "sqlite_fingerprint": pre_proof.sqlite_fingerprint,
+        "lancedb_fingerprint": pre_proof.lancedb_fingerprint,
+        "kuzu_fingerprint": pre_proof.kuzu_fingerprint,
+        "retrieval_state_unchanged": unchanged,
+        "quiescence_evidence": quiescence_evidence or {},
+        "quiescence_verified": quiescent,
+        "collector_version": "harness.state_proof.v1",
+        "captured_at_utc": datetime.now(timezone.utc).isoformat(),
+        "pre_state": pre_proof.to_dict(),
+        "post_state": post_proof.to_dict(),
+    }
+
+    serialized = (
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False)
+        + "\n"
+    ).encode("utf-8")
+    target_path.write_bytes(serialized)
+    digest = hashlib.sha256(serialized).hexdigest()
+    target_path.with_suffix(target_path.suffix + ".SHA256").write_text(
+        f"{digest}  {target_path.name}\n", encoding="utf-8", newline="\n"
+    )
+    return target_path, digest

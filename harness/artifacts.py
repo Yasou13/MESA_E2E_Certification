@@ -223,6 +223,18 @@ class RunArtifactStore:
         return self.run_dir / "raw" / "provider"
 
     @property
+    def raw_scope_dir(self) -> Path:
+        return self.run_dir / "raw" / "scope"
+
+    @property
+    def raw_graph_dir(self) -> Path:
+        return self.run_dir / "raw" / "graph"
+
+    @property
+    def raw_state_dir(self) -> Path:
+        return self.run_dir / "raw" / "state"
+
+    @property
     def scored_retrieval_dir(self) -> Path:
         return self.run_dir / "scored" / "retrieval"
 
@@ -247,6 +259,9 @@ class RunArtifactStore:
             self.raw_retrieval_dir,
             self.raw_answers_dir,
             self.raw_provider_dir,
+            self.raw_scope_dir,
+            self.raw_graph_dir,
+            self.raw_state_dir,
             self.scored_retrieval_dir,
             self.scored_answers_dir,
         ):
@@ -397,12 +412,42 @@ class RunArtifactStore:
         )
         return path, self._verify_seal(path)
 
+    def persist_raw_scope(
+        self,
+        case_id: str,
+        payload: dict[str, Any],
+    ) -> tuple[Path, str]:
+        path = self.raw_scope_dir / f"{case_id}.json"
+        self._write_immutable_json(path, payload)
+        return path, self._verify_seal(path)
+
+    def persist_raw_graph(
+        self,
+        filename: str,
+        payload: dict[str, Any],
+    ) -> tuple[Path, str]:
+        path = self.raw_graph_dir / filename
+        self._write_immutable_json(path, payload)
+        return path, self._verify_seal(path)
+
+    def persist_raw_state_proof(
+        self,
+        filename: str,
+        payload: dict[str, Any],
+    ) -> tuple[Path, str]:
+        path = self.raw_state_dir / filename
+        self._write_immutable_json(path, payload)
+        return path, self._verify_seal(path)
+
     def compute_raw_manifest(self) -> dict[str, Any]:
         entries: list[dict[str, str]] = []
         for lane_dir in (
             self.raw_retrieval_dir,
             self.raw_answers_dir,
             self.raw_provider_dir,
+            self.raw_scope_dir,
+            self.raw_graph_dir,
+            self.raw_state_dir,
         ):
             if lane_dir.is_dir():
                 for json_file in sorted(lane_dir.glob("*.json")):

@@ -34,6 +34,41 @@ NOW = datetime(2026, 9, 27, 12, 0, tzinfo=timezone.utc)
 
 
 def _ctx(tmp_path: Path) -> ProducerContext:
+    import hashlib
+
+    entries = []
+    raw_dir = tmp_path / "raw"
+    if raw_dir.is_dir():
+        for file in sorted(raw_dir.rglob("*.json")):
+            rel_path = file.relative_to(tmp_path).as_posix()
+            entries.append({
+                "path": rel_path,
+                "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
+                "size_bytes": file.stat().st_size,
+            })
+    manifest_bytes = (json.dumps(entries, sort_keys=True) + "\n").encode("utf-8")
+    manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
+    manifest_payload = {
+        "schema_version": "1.0",
+        "run_id": RUN_ID,
+        "manifest_hash": manifest_hash,
+        "entries": entries,
+    }
+    p = tmp_path / "raw-manifest.json"
+    p_bytes = (json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    p.write_bytes(p_bytes)
+    p_sha = hashlib.sha256(p_bytes).hexdigest()
+    p.with_suffix(p.suffix + ".SHA256").write_text(f"{p_sha}  {p.name}\n", encoding="utf-8")
+
+    summary_path = tmp_path / "scoring-summary.json"
+    if summary_path.is_file():
+        s_payload = json.loads(summary_path.read_text(encoding="utf-8"))
+        s_payload["raw_manifest_hash"] = manifest_hash
+        s_bytes = (json.dumps(s_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        summary_path.write_bytes(s_bytes)
+        s_sha = hashlib.sha256(s_bytes).hexdigest()
+        summary_path.with_suffix(summary_path.suffix + ".SHA256").write_text(f"{s_sha}  {summary_path.name}\n", encoding="utf-8")
+
     return ProducerContext(
         run_dir=tmp_path,
         run_id=RUN_ID,
@@ -41,7 +76,7 @@ def _ctx(tmp_path: Path) -> ProducerContext:
         checksum_path=tmp_path / "contract-freeze.SHA256",
         repository_root=tmp_path,
         current_repository_shas={},
-        raw_manifest_hash=RAW_HASH,
+        raw_manifest_hash=manifest_hash,
         gate_config_path=Path(__file__).resolve().parents[1]
         / "config"
         / "profile-b-gates.json",
@@ -49,6 +84,80 @@ def _ctx(tmp_path: Path) -> ProducerContext:
 
 
 def _sealed(tmp_path: Path, name: str, payload: dict) -> Path:
+    import hashlib
+
+    if name == "graph-ablation.json":
+        raw_state_dir = tmp_path / "raw" / "state"
+        raw_state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = raw_state_dir / "state-proof.json"
+        state_payload = {
+            "schema_version": "1.0",
+            "run_id": RUN_ID,
+            "collector_version": "harness.state_proof.v1",
+            "retrieval_state_unchanged": True,
+            "quiescence_verified": True,
+            "pre_composite_fingerprint": "sha256:" + "0" * 64,
+            "post_composite_fingerprint": "sha256:" + "0" * 64,
+        }
+        state_bytes = (json.dumps(state_payload, sort_keys=True) + "\n").encode("utf-8")
+        state_file.write_bytes(state_bytes)
+        state_sha = hashlib.sha256(state_bytes).hexdigest()
+        state_file.with_suffix(state_file.suffix + ".SHA256").write_text(f"{state_sha}  {state_file.name}\n")
+
+        payload["state_proof_artifact"] = "raw/state/state-proof.json"
+        payload["state_proof_sha256"] = state_sha
+        payload.setdefault("frozen_state_proof", {})["state_proof_artifact"] = "raw/state/state-proof.json"
+        payload["frozen_state_proof"]["state_proof_sha256"] = state_sha
+        payload["frozen_state_proof"]["retrieval_state_unchanged"] = True
+        payload["frozen_state_proof"]["quiescence_verified"] = True
+
+        raw_graph_dir = tmp_path / "raw" / "graph"
+        raw_graph_dir.mkdir(parents=True, exist_ok=True)
+        for pair in payload.get("pairs", []):
+            qid = pair.get("on", {}).get("query_id") or "q"
+            pair.setdefault("pair_identity", f"pair-{qid}")
+            pair.setdefault("scope_identity", {"tenant_id": "t1", "agent_id": "a1"})
+
+            on_side = pair.get("on", {})
+            on_side.setdefault("pair_identity", pair["pair_identity"])
+            on_side.setdefault("scope_identity", pair["scope_identity"])
+            on_file = raw_graph_dir / f"{qid}_on.json"
+            on_payload = {
+                "schema_version": "1.0",
+                "run_id": RUN_ID,
+                "query_id": qid,
+                "mode": "enabled",
+                "graph_enabled": True,
+            }
+            on_bytes = (json.dumps(on_payload, sort_keys=True) + "\n").encode("utf-8")
+            on_file.write_bytes(on_bytes)
+            on_sha = hashlib.sha256(on_bytes).hexdigest()
+            on_file.with_suffix(on_file.suffix + ".SHA256").write_text(f"{on_sha}  {on_file.name}\n")
+            pair["on_raw_artifact"] = f"raw/graph/{qid}_on.json"
+            pair["on_raw_sha256"] = on_sha
+            on_side["on_raw_artifact"] = f"raw/graph/{qid}_on.json"
+            on_side["on_raw_sha256"] = on_sha
+
+            off_side = pair.get("off", {})
+            off_side.setdefault("pair_identity", pair["pair_identity"])
+            off_side.setdefault("scope_identity", pair["scope_identity"])
+            off_file = raw_graph_dir / f"{qid}_off.json"
+            off_payload = {
+                "schema_version": "1.0",
+                "run_id": RUN_ID,
+                "query_id": qid,
+                "mode": "disabled",
+                "graph_enabled": False,
+            }
+            off_bytes = (json.dumps(off_payload, sort_keys=True) + "\n").encode("utf-8")
+            off_file.write_bytes(off_bytes)
+            off_sha = hashlib.sha256(off_bytes).hexdigest()
+            off_file.with_suffix(off_file.suffix + ".SHA256").write_text(f"{off_sha}  {off_file.name}\n")
+            pair["off_raw_artifact"] = f"raw/graph/{qid}_off.json"
+            pair["off_raw_sha256"] = off_sha
+            off_side["off_raw_artifact"] = f"raw/graph/{qid}_off.json"
+            off_side["off_raw_sha256"] = off_sha
+
     return write_sealed_measurement(
         tmp_path / name,
         {"schema_version": "2.0", "run_id": RUN_ID, **payload},
@@ -85,6 +194,10 @@ def _score(tmp_path: Path) -> None:
 
 
 def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
+    import hashlib
+
+    raw_dir = tmp_path / "raw" / "scope"
+    raw_dir.mkdir(parents=True, exist_ok=True)
     case_ids = [
         "cross_tenant_search",
         "cross_dataset_search",
@@ -99,6 +212,32 @@ def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
         "revision_visibility",
         "chunk_visibility",
     ]
+    cases = []
+    for index, case_id in enumerate(case_ids):
+        is_search = "search" in case_id
+        raw_file = raw_dir / f"{case_id}.json"
+        raw_payload = {"schema_version": "1.0", "run_id": RUN_ID, "case_id": case_id}
+        raw_bytes = (json.dumps(raw_payload, sort_keys=True) + "\n").encode("utf-8")
+        raw_file.write_bytes(raw_bytes)
+        raw_sha = hashlib.sha256(raw_bytes).hexdigest()
+        raw_file.with_suffix(raw_file.suffix + ".SHA256").write_text(f"{raw_sha}  {raw_file.name}\n")
+
+        cases.append({
+            "case_id": case_id,
+            "proof_type": "search_pre_rank_scope" if is_search else "endpoint_visibility",
+            "source_raw_artifact": f"raw/scope/{case_id}.json",
+            "source_raw_sha256": raw_sha,
+            "returned_forbidden_evidence_ids": (
+                forbidden if index == 0 else []
+            ),
+            "pre_rank_audit_verified": True if (is_search and capabilities) else False,
+            "endpoint_visibility_verified": True if not is_search else False,
+            "exclusion_audit_hash": f"sha256:{'0' * 64}" if (is_search and capabilities) else None,
+            "evaluated_candidate_count": 10 if (is_search and capabilities) else None,
+            "excluded_candidate_count": 5 if (is_search and capabilities) else None,
+            "eligible_candidate_count": 5 if (is_search and capabilities) else None,
+        })
+
     _sealed(
         tmp_path,
         "scope-isolation.json",
@@ -111,20 +250,7 @@ def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
                 "candidate_scope_identity": capabilities,
                 "pre_rank_exclusion_audit": capabilities,
             },
-            "negative_cases": [
-                {
-                    "case_id": case_id,
-                    "returned_forbidden_evidence_ids": (
-                        forbidden if index == 0 else []
-                    ),
-                    "pre_rank_audit_verified": True,
-                    "exclusion_audit_hash": f"sha256:{'0' * 64}",
-                    "evaluated_candidate_count": 10,
-                    "excluded_candidate_count": 5,
-                    "eligible_candidate_count": 5,
-                }
-                for index, case_id in enumerate(case_ids)
-            ],
+            "negative_cases": cases,
         },
     )
 

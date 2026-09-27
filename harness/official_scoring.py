@@ -355,15 +355,15 @@ def score_run_from_frozen_authority(
         payload = json.loads(path.read_text(encoding="utf-8"))
         if payload.get("run_id") != store.run_id:
             raise OfficialScoringError(f"raw artifact run_id mismatch: {entry['path']}")
+        lane = payload.get("lane")
+        if lane not in {"retrieval", "answers"}:
+            continue
         query_id = payload.get("query_id")
         if query_id not in gt_by_query:
             raise OfficialScoringError(
                 f"raw query_id is absent from frozen GT: {query_id}"
             )
         gt = gt_by_query[query_id]
-        lane = payload.get("lane")
-        if lane == "provider_exchange":
-            continue
         if lane == "retrieval":
             request_record = payload.get("request")
             response_record = payload.get("response")
