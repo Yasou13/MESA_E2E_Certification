@@ -103,6 +103,10 @@ def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
         tmp_path,
         "scope-isolation.json",
         {
+            "schema_version": "2.0",
+            "run_id": RUN_ID,
+            "contract_version": "mesa.scope-audit.v1",
+            "producer": "harness.scope_collector.collect_phase7_scope_isolation",
             "mesa_contract_capabilities": {
                 "candidate_scope_identity": capabilities,
                 "pre_rank_exclusion_audit": capabilities,
@@ -114,6 +118,10 @@ def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
                         forbidden if index == 0 else []
                     ),
                     "pre_rank_audit_verified": True,
+                    "exclusion_audit_hash": f"sha256:{'0' * 64}",
+                    "evaluated_candidate_count": 10,
+                    "excluded_candidate_count": 5,
+                    "eligible_candidate_count": 5,
                 }
                 for index, case_id in enumerate(case_ids)
             ],

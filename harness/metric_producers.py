@@ -582,6 +582,14 @@ def _b9(ctx: ProducerContext) -> ProducerObservation:
         return _blocked(
             "B9", "BLOCKED_BY_MESA_CONTRACT: candidate scope/pre-rank audit unavailable"
         )
+    if data.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
+        raise ProducerIntegrityError(
+            "B9 scope-isolation artifact lacks authoritative producer lineage"
+        )
+    if data.get("contract_version") != "mesa.scope-audit.v1":
+        raise ProducerIntegrityError(
+            f"B9 unsupported scope contract_version: {data.get('contract_version')!r}"
+        )
     cases = data.get("negative_cases")
     if (
         not isinstance(cases, list)
@@ -613,6 +621,26 @@ def _b9(ctx: ProducerContext) -> ProducerObservation:
         for values in forbidden_lists
     ):
         raise ProducerIntegrityError("B9 forbidden-evidence observations are malformed")
+    for case in cases:
+        if case.get("pre_rank_audit_verified") is not True:
+            raise ProducerIntegrityError(
+                f"B9 case {case.get('case_id')} pre_rank_audit_verified is not True"
+            )
+        hash_val = case.get("exclusion_audit_hash")
+        if hash_val is not None and (
+            not isinstance(hash_val, str) or not hash_val.startswith("sha256:")
+        ):
+            raise ProducerIntegrityError(
+                f"B9 case {case.get('case_id')} exclusion_audit_hash is invalid"
+            )
+        eval_c = case.get("evaluated_candidate_count")
+        excl_c = case.get("excluded_candidate_count")
+        elig_c = case.get("eligible_candidate_count")
+        if eval_c is not None and excl_c is not None and elig_c is not None:
+            if eval_c != excl_c + elig_c:
+                raise ProducerIntegrityError(
+                    f"B9 case {case.get('case_id')} counts are incoherent"
+                )
     leaks = sum(len(values) for values in forbidden_lists)
     complete = all(case.get("pre_rank_audit_verified") is True for case in cases)
     return _completed(
@@ -648,6 +676,14 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
             "B10",
             "BLOCKED_BY_MESA_CONTRACT: tenant leakage cannot be measured without "
             "candidate scope identity and pre-rank exclusion audit",
+        )
+    if scope.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
+        raise ProducerIntegrityError(
+            "B10 scope-isolation artifact lacks authoritative producer lineage"
+        )
+    if scope.get("contract_version") != "mesa.scope-audit.v1":
+        raise ProducerIntegrityError(
+            f"B10 unsupported scope contract_version: {scope.get('contract_version')!r}"
         )
     metrics = data.get("metrics")
     if (
