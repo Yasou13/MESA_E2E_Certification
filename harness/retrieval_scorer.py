@@ -50,7 +50,7 @@ def score_retrieval(
 
     # 1. Normalize only the first-class matched-evidence ID. Broad provenance is
     # support/debug metadata and must never create a retrieval hit. The final
-    # product adapter remains WAIT_FOR_MESA_PHASE_1.
+    # production adapter normalizes this field before invoking the scorer.
     normalized_chunks_by_rank: list[tuple[int, str]] = []
     all_normalized_chunk_ids: list[str] = []
     for idx, res in enumerate(retrieved_results[:5]):

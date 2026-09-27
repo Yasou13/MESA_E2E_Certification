@@ -1,21 +1,37 @@
-# WAIT_FOR_MESA_PHASE_7 — scope/rank adversarial adapter
+# Phase 7 — scope/rank adversarial adapter
 
-Status: `WAIT_FOR_MESA_PHASE_7`
+Status: `BLOCKED_BY_MESA_CONTRACT`
 
-Required fields: tenant, dataset, agent/principal, status, jurisdiction,
-version/effective-date, and stale/current identity for every ranked candidate.
+Verified against read-only MESA checkout
+`194f7b2b439ae6b9bc0f420a42a98eff1f4db2d0`.
 
-Required semantics: forbidden-scope candidates are excluded before rank
-contribution and cannot leak through context, catalog, document, revision, or
-chunk paths.
+## What MESA currently proves
 
-Versioning: freeze the public filtering contract version and MESA commit with
-the adversarial fixture version.
+`POST /v4/memory/search` authorizes the session and derives tenant and agent
+scope from that session. `MemoryDAO.search_v4_memory` applies tenant, dataset,
+agent, status, jurisdiction and temporal filters before lane fusion/ranking.
+The returned matched assertion rows expose tenant, dataset, document, revision,
+chunk, status, jurisdiction and validity fields.
 
-Fail-closed behavior: missing scope identity, ambiguous effective date, or
-unverifiable filter order makes B9 unverified/failed; it cannot be interpreted
-as zero leakage.
+## Minimal missing public contract
 
-Synchronization tests: cross-tenant/dataset/agent negatives, inactive status,
-wrong jurisdiction, stale version, effective-date boundary, and pre-rank
-exclusion proof.
+The public ranked-candidate response does not expose:
+
+- the candidate's `agent_id` or effective principal identity;
+- a stable public pre-rank exclusion/audit identity proving that forbidden
+  tenant/dataset/agent/status/temporal candidates contributed no lane rank;
+- an equivalent public audit surface tying that proof to the exact query/run.
+
+Correct internal filtering and MESA unit tests are not a certification artifact
+for an external E2E consumer. E2E therefore cannot prove all required negative
+scope cases or convert missing identity into zero leakage.
+
+## E2E behavior
+
+`harness/mesa_adapters.py::require_phase7_scope_contract` reports the precise
+missing capabilities. B9 and B10 producers consume only sealed scope evidence;
+without candidate scope identity and pre-rank exclusion audit they return
+`BLOCKED_BY_MESA_CONTRACT`, never a synthetic leakage value.
+
+Covered by `tests/test_mesa_adapters.py`, `tests/test_metric_producers.py` and
+the official transaction integration test.

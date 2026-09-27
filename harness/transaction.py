@@ -429,7 +429,7 @@ class CertificationTransaction:
                     "query_id": query_id,
                     "lane": lane,
                     "status": "UNVERIFIED",
-                    "reasons": ["WAIT_FOR_MESA: frozen scorer/input binding unavailable"],
+                    "reasons": ["frozen scoring authority unavailable"],
                 }
 
                 self.store.persist_scored(lane=lane, query_id=query_id, score=scored)
