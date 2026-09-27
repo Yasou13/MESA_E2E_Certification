@@ -12,6 +12,8 @@ from harness.answer_execution import execute_answer_and_persist
 from harness.artifacts import RunArtifactStore
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
 from harness.mesa_adapters import normalize_context_response
+from harness.metric_producers import write_sealed_measurement
+from harness.models import GateStatus
 from harness.transaction import CertificationTransaction, TransactionError
 
 
@@ -148,6 +150,15 @@ def _authority_freeze(tmp_path: Path):
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / "harness" / name, destination)
         scorer_files.append(destination)
+    producer_files = []
+    for name in ("metric_producers.py", "gates.py", "transaction.py"):
+        destination = repo / "harness" / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(ROOT / "harness" / name, destination)
+        producer_files.append(destination)
+    gate_config = repo / "config" / "profile-b-gates.json"
+    gate_config.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copyfile(ROOT / "config" / "profile-b-gates.json", gate_config)
 
     materials: dict[str, list[Path]] = {}
     for category in sorted(MANDATORY_MATERIAL_CATEGORIES):
@@ -161,6 +172,10 @@ def _authority_freeze(tmp_path: Path):
             materials[category] = [normalization]
         elif category == "scorer_source":
             materials[category] = scorer_files
+        elif category == "harness_source":
+            materials[category] = producer_files
+        elif category == "thresholds":
+            materials[category] = [gate_config]
         else:
             materials[category] = [_write(repo / "frozen" / f"{category}.txt", category)]
     # scorer_source is already mandatory, but keep this explicit if the set evolves.
@@ -340,3 +355,47 @@ def test_score_report_hash_binds_official_report(tmp_path: Path) -> None:
     assert summary["score_artifact_hash"] == hashlib.sha256(
         (tx.run_dir / "scoring-report.json").read_bytes()
     ).hexdigest()
+
+
+def test_official_transaction_uses_frozen_producers_and_contract_blockers(
+    tmp_path: Path,
+) -> None:
+    tx, _ = _run_to_scoring(tmp_path)
+    tx.execute_scoring()
+    write_sealed_measurement(
+        tx.run_dir / "scope-isolation.json",
+        {
+            "schema_version": "2.0",
+            "run_id": RUN_ID,
+            "mesa_contract_capabilities": {
+                "candidate_scope_identity": False,
+                "pre_rank_exclusion_audit": False,
+            },
+            "negative_cases": [],
+        },
+    )
+    write_sealed_measurement(
+        tx.run_dir / "graph-ablation.json",
+        {
+            "schema_version": "2.0",
+            "run_id": RUN_ID,
+            "mesa_contract_capabilities": {
+                "stable_path_identity": False,
+                "native_graph_on_off_switch": False,
+            },
+            "pairs": [],
+        },
+    )
+
+    results = tx.execute_gate_evaluation(
+        gate_metrics={gate: {"forged": True} for gate in ("B9", "B10", "B11")},
+        gate_evidence={gate: ["forged.json"] for gate in ("B9", "B10", "B11")},
+    )
+
+    by_gate = {result.gate_id: result for result in results}
+    assert by_gate["B9"].status is GateStatus.BLOCKED
+    assert by_gate["B10"].status is GateStatus.BLOCKED
+    assert by_gate["B11"].status is GateStatus.BLOCKED
+    assert any(result.status is not GateStatus.PASS for result in results)
+    observations = json.loads((tx.run_dir / "gate-observations.json").read_text())
+    assert observations["producer_code_sha256"]

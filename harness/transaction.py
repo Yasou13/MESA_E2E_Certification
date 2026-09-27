@@ -18,6 +18,11 @@ from harness.freeze import verify_contract_freeze, FreezeStatus
 from harness.gates import GateConfig, evaluate_threshold_gate, load_gate_config
 from harness.lifecycle import RunLifecycle
 from harness.models import ExecutionStatus, FinalVerdict, GateResult, GateStatus, RunStatus, VerdictStatus
+from harness.metric_producers import (
+    ProducerContext,
+    frozen_producer_code_sha256,
+    produce_all,
+)
 from harness.oracle import audit_oracle_surfaces, extract_raw_audit_surfaces
 from harness.official_scoring import (
     ScoringAuthorityUnavailable,
@@ -549,9 +554,6 @@ class CertificationTransaction:
             elif summary.get("scorer_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
                 raise TransactionError("scorer source hash mismatch")
 
-            item_count = summary.get("item_count", 0)
-            score_metrics = summary.get("metrics", {})
-
             config = load_gate_config(self.gate_config_path)
             results: list[GateResult] = []
 
@@ -565,22 +567,67 @@ class CertificationTransaction:
             if hashlib.sha256(self.gate_config_path.read_bytes()).hexdigest() != self._gate_config_hash:
                 raise TransactionError("threshold config changed after freeze")
 
+            producer_context = ProducerContext(
+                run_dir=self.run_dir,
+                run_id=self.run_id,
+                freeze_path=self.freeze_path,
+                checksum_path=self.checksum_path,
+                repository_root=self.repository_root,
+                current_repository_shas=self.current_repository_shas,
+                raw_manifest_hash=self.raw_manifest_hash,
+                gate_config_path=self.gate_config_path,
+            )
+            producer_results = produce_all(producer_context)
+            try:
+                producer_authority_hash = frozen_producer_code_sha256(
+                    producer_context
+                )
+            except (OSError, ValueError, KeyError, TypeError):
+                producer_authority_hash = None
             observations: dict[str, dict[str, Any]] = {}
+            producer_audit: dict[str, dict[str, Any]] = {}
             for gate_id in config.mandatory_gate_ids:
                 defn = config.gates[gate_id]
-                # No current producer proves these gate observations from a
-                # verified MESA contract. Do not adopt caller metrics or an
-                # unrelated existing path as evidence. Keep each gate explicit.
-                observed: dict[str, Any] = {}
-                observations[gate_id] = observed
-                results.append(GateResult(
-                    gate_id=gate_id, hard=defn.hard,
-                    execution_status=ExecutionStatus.COMPLETED,
-                    status=GateStatus.UNVERIFIED,
-                    required={k: v.model_dump(mode="json") for k, v in defn.requirements.items()},
-                    observed=observed, evidence=[],
-                    reason="authoritative_metric_producer_unavailable",
-                ))
+                produced = producer_results[gate_id]
+                observations[gate_id] = produced.observed
+                producer_audit[gate_id] = {
+                    "execution": produced.execution,
+                    "reason": produced.reason,
+                    "evidence": list(produced.evidence),
+                    "producer_version": produced.producer_version,
+                }
+                if produced.execution == "COMPLETED":
+                    results.append(
+                        evaluate_threshold_gate(
+                            defn,
+                            produced.observed,
+                            ExecutionStatus.COMPLETED,
+                            list(produced.evidence),
+                        )
+                    )
+                    continue
+                contract_blocked = produced.reason.startswith(
+                    "BLOCKED_BY_MESA_CONTRACT:"
+                )
+                results.append(
+                    GateResult(
+                        gate_id=gate_id,
+                        hard=defn.hard,
+                        execution_status=ExecutionStatus.BLOCKED,
+                        status=(
+                            GateStatus.BLOCKED
+                            if contract_blocked
+                            else GateStatus.UNVERIFIED
+                        ),
+                        required={
+                            key: value.model_dump(mode="json")
+                            for key, value in defn.requirements.items()
+                        },
+                        observed={},
+                        evidence=[],
+                        reason=produced.reason,
+                    )
+                )
 
             self.gate_results = results
 
@@ -590,33 +637,32 @@ class CertificationTransaction:
                 "run_id": self.run_id,
                 "raw_manifest_hash": self.raw_manifest_hash,
                 "derived_at_utc": datetime.now(timezone.utc).isoformat(),
+                "producer_code_sha256": producer_authority_hash,
                 "observations": observations,
+                "producer_audit": producer_audit,
             }
-            (self.run_dir / "gate-observations.json").write_text(
-                json.dumps(obs_payload, indent=2, sort_keys=True) + "\n",
-                encoding="utf-8",
+            self.store._write_immutable_json(
+                self.run_dir / "gate-observations.json", obs_payload
             )
 
             failed_hard = [g.gate_id for g in results if g.hard and g.status != GateStatus.PASS]
             if failed_hard:
                 self.failure_reason = f"hard gates not passed: {failed_hard}"
 
-            gate_results_path = self.run_dir / "gate-results.json"
-            gate_results_path.write_text(
-                json.dumps(
-                    {
-                        "schema_version": "1.0",
-                        "run_id": self.run_id,
-                        "gates": [g.model_dump(mode="json") for g in results],
-                        "mandatory_gate_ids": config.mandatory_gate_ids,
-                        "status": "FAIL" if failed_hard else "PASS",
-                        "final_verdict": "PROFILE_B_FAIL" if failed_hard else "PROFILE_B_PASS_NATIVE",
-                    },
-                    indent=2,
-                    sort_keys=True,
-                )
-                + "\n",
-                encoding="utf-8",
+            self.store._write_immutable_json(
+                self.run_dir / "gate-results.json",
+                {
+                    "schema_version": "1.0",
+                    "run_id": self.run_id,
+                    "gates": [g.model_dump(mode="json") for g in results],
+                    "mandatory_gate_ids": config.mandatory_gate_ids,
+                    "status": "FAIL" if failed_hard else "PASS",
+                    "final_verdict": (
+                        "PROFILE_B_FAIL"
+                        if failed_hard
+                        else "PROFILE_B_PASS_NATIVE"
+                    ),
+                },
             )
 
             self.completed_phases.add(TransactionPhase.GATE_EVALUATION)

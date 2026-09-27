@@ -208,7 +208,9 @@ def write_health_snapshot(snapshot: HealthSnapshot, path: str | Path) -> None:
     serialized = json.dumps(
         snapshot.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
     ) + "\n"
-    Path(path).write_text(serialized, encoding="utf-8", newline="\n")
+    target = Path(path)
+    target.write_text(serialized, encoding="utf-8", newline="\n")
+    _write_adjacent_seal(target)
 
 
 def verify_health_artifacts(run_dir: Path, run_id: str) -> dict[str, object]:
@@ -278,6 +280,16 @@ def _write_jsonl(records: list[OperationalModel], path: Path) -> None:
         encoding="utf-8",
         newline="\n",
     )
+    _write_adjacent_seal(path)
+
+
+def _write_adjacent_seal(path: Path) -> Path:
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
+    sidecar = path.with_suffix(path.suffix + ".SHA256")
+    sidecar.write_text(
+        f"{digest}  {path.name}\n", encoding="utf-8", newline="\n"
+    )
+    return sidecar
 
 
 def write_resource_artifacts(

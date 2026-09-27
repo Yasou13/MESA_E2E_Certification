@@ -10,13 +10,18 @@ from typing import Any, Literal
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from harness.models import ExecutionStatus, GateResult, GateStatus
+from harness.metric_producers import (
+    PRODUCTION_METRIC_PRODUCERS as _PRODUCTION_METRIC_PRODUCER_REGISTRY,
+)
 
 
 PROFILE_B_GATE_IDS = frozenset(f"B{i}" for i in range(15))
-# This registry is intentionally empty until producers are implemented against
-# independently verified, frozen runtime contracts. Threshold comparison is
-# not a measurement producer. Adding a producer requires production-path tests.
-PRODUCTION_METRIC_PRODUCERS: frozenset[str] = frozenset()
+# Public completeness view used by verdict/finalizer validation. The mapping
+# itself lives with the producer implementations so registration cannot drift
+# away from executable production code.
+PRODUCTION_METRIC_PRODUCERS: frozenset[str] = frozenset(
+    _PRODUCTION_METRIC_PRODUCER_REGISTRY
+)
 
 
 class MetricRequirement(BaseModel):
