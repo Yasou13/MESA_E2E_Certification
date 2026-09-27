@@ -33,7 +33,7 @@ and a supported native matched graph-ON/OFF execution identity.
 
 ## Verification
 
-- E2E full suite: 348 passed.
+- E2E full suite: 352 passed.
 - Harness self-test: 17/17 passed.
 - Compileall: passed.
 - Agent-pack verification, secret scan and tracked JSON validation: passed.
@@ -49,7 +49,8 @@ and a supported native matched graph-ON/OFF execution identity.
 - `5b133d5` — frozen authority to official scorers
 - `11b279e` — B0-B14 sealed-evidence producers and transaction integration
 - `1cd13ad` — verified WAIT contract resolutions and blockers
-- final adversarial hardening commit follows this report
+- `6e92dc3` — close adversarial false-pass paths
+- `e210658` — add regression tests for finalizer false-pass boundaries
 
 ## Decision
 
