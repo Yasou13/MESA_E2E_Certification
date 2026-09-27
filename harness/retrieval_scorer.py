@@ -25,11 +25,12 @@ def _mapping_integrity_error(gt: GroundTruthItem, reason: str) -> RetrievalScore
         reasons=[reason],
     )
 
+
 def score_retrieval(
     gt: GroundTruthItem,
     retrieved_results: list[dict[str, Any]],
     identity_map: IdentityMap,
-    is_infrastructure_error: bool = False
+    is_infrastructure_error: bool = False,
 ) -> RetrievalScore:
     """Score retrieval results deterministically."""
     if is_infrastructure_error:
@@ -45,7 +46,7 @@ def score_retrieval(
             group_coverage_at_5=0.0,
             complete_evidence_at_5=0.0,
             normalized_retrieved_chunk_ids=[],
-            matching_chunk_ids=[]
+            matching_chunk_ids=[],
         )
 
     # 1. Normalize only the first-class matched-evidence ID. Broad provenance is
@@ -100,7 +101,7 @@ def score_retrieval(
             group_coverage_at_5=1.0,
             complete_evidence_at_5=1.0,
             normalized_retrieved_chunk_ids=all_normalized_chunk_ids,
-            matching_chunk_ids=[]
+            matching_chunk_ids=[],
         )
 
     # 2. Relational Query Scoring
@@ -121,7 +122,7 @@ def score_retrieval(
         total_groups = len(gt.evidence_groups)
         group_coverage = len(covered_groups) / total_groups if total_groups > 0 else 1.0
         complete_evidence = 1.0 if len(covered_groups) == total_groups else 0.0
-        
+
         hit_rank = first_hit_rank
         r1 = 1.0 if hit_rank == 1 else 0.0
         r5 = 1.0 if hit_rank is not None and hit_rank <= 5 else 0.0
@@ -131,7 +132,9 @@ def score_retrieval(
             query_id=gt.query_id,
             query_class=gt.query_class,
             is_answerable=True,
-            status="HIT" if complete_evidence == 1.0 else ("PARTIAL" if group_coverage > 0 else "MISS"),
+            status="HIT"
+            if complete_evidence == 1.0
+            else ("PARTIAL" if group_coverage > 0 else "MISS"),
             rank=hit_rank,
             recall_at_1=r1,
             recall_at_5=r5,
@@ -139,7 +142,7 @@ def score_retrieval(
             group_coverage_at_5=group_coverage,
             complete_evidence_at_5=complete_evidence,
             normalized_retrieved_chunk_ids=all_normalized_chunk_ids,
-            matching_chunk_ids=sorted(set(matched_chunks))
+            matching_chunk_ids=sorted(set(matched_chunks)),
         )
 
     # 3. Single-hop / Standard Scoring
@@ -166,7 +169,7 @@ def score_retrieval(
             group_coverage_at_5=1.0,
             complete_evidence_at_5=1.0,
             normalized_retrieved_chunk_ids=all_normalized_chunk_ids,
-            matching_chunk_ids=sorted(set(matched_chunks))
+            matching_chunk_ids=sorted(set(matched_chunks)),
         )
 
     return RetrievalScore(
@@ -181,5 +184,5 @@ def score_retrieval(
         group_coverage_at_5=0.0,
         complete_evidence_at_5=0.0,
         normalized_retrieved_chunk_ids=all_normalized_chunk_ids,
-        matching_chunk_ids=[]
+        matching_chunk_ids=[],
     )

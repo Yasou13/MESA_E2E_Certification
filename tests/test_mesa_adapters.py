@@ -43,7 +43,11 @@ def _assertion(assertion_id: str, chunk_id: str, **updates):
 def _result(*, assertion_id="assertion-a", chunk_id="chunk-a", graph=False):
     matched = _assertion(assertion_id, chunk_id)
     support = []
-    debug = {"origins": ["vector"], "lane_ranks": {"vector": 1}, "raw_scores": {"vector": 0.1}}
+    debug = {
+        "origins": ["vector"],
+        "lane_ranks": {"vector": 1},
+        "raw_scores": {"vector": 0.1},
+    }
     if graph:
         support = [_assertion("assertion-support", "chunk-support")]
         debug = {
@@ -201,7 +205,11 @@ def _context():
 class _Transport:
     provider_name = "openai_compatible"
 
+    def __init__(self):
+        self.calls = 0
+
     def complete(self, request_payload):
+        self.calls += 1
         return {
             "id": "provider-request-1",
             "choices": [
@@ -253,6 +261,7 @@ def test_phase10_exact_provider_boundary_capture_is_sealed(tmp_path) -> None:
 def test_phase10_rejects_oracle_fields_before_provider_call(tmp_path) -> None:
     store = RunArtifactStore(tmp_path / RUN_ID, RUN_ID)
     store.initialize()
+    transport = _Transport()
     with pytest.raises(AnswerExecutionError, match="oracle"):
         execute_answer_and_persist(
             store=store,
@@ -262,9 +271,66 @@ def test_phase10_rejects_oracle_fields_before_provider_call(tmp_path) -> None:
             answer_instruction="instruction",
             model="openai/gpt-oss-20b",
             request_parameters={"required_facts": ["secret"]},
-            transport=_Transport(),
+            transport=transport,
             timestamp_utc=NOW,
         )
+    assert transport.calls == 0
+
+
+@pytest.mark.parametrize(
+    "parameters",
+    [
+        {"messages": [{"role": "user", "content": "forged"}]},
+        {"model": "forged-model"},
+        {"metadata": {"required-facts": ["secret"]}},
+    ],
+)
+def test_phase10_rejects_reserved_or_nested_oracle_parameters_before_call(
+    tmp_path, parameters
+) -> None:
+    store = RunArtifactStore(tmp_path / RUN_ID, RUN_ID)
+    store.initialize()
+    transport = _Transport()
+    with pytest.raises(AnswerExecutionError, match="overrid|oracle"):
+        execute_answer_and_persist(
+            store=store,
+            context=_context(),
+            question="question",
+            system_prompt="system",
+            answer_instruction="instruction",
+            model="openai/gpt-oss-20b",
+            request_parameters=parameters,
+            transport=transport,
+            timestamp_utc=NOW,
+        )
+    assert transport.calls == 0
+
+
+def test_phase10_seals_raw_provider_response_before_parse_failure(tmp_path) -> None:
+    class InvalidResponseTransport:
+        provider_name = "openai_compatible"
+
+        def complete(self, request_payload):
+            return {"id": "provider-raw", "choices": []}
+
+    store = RunArtifactStore(tmp_path / RUN_ID, RUN_ID)
+    store.initialize()
+    with pytest.raises(AnswerExecutionError, match="choices"):
+        execute_answer_and_persist(
+            store=store,
+            context=_context(),
+            question="question",
+            system_prompt="system",
+            answer_instruction="instruction",
+            model="openai/gpt-oss-20b",
+            request_parameters={"temperature": 0},
+            transport=InvalidResponseTransport(),
+            timestamp_utc=NOW,
+        )
+    exchange = store.raw_provider_dir / "Q-1.json"
+    assert json.loads(exchange.read_text())["response"]["id"] == "provider-raw"
+    store._verify_seal(exchange)
+    assert not (store.raw_answers_dir / "Q-1.json").exists()
 
 
 def test_phase10_hash_tampering_is_rejected(tmp_path) -> None:

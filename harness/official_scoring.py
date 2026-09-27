@@ -9,7 +9,11 @@ from pathlib import Path
 from typing import Any
 
 from harness.answer_scorer import score_answer
-from harness.artifacts import CertifiedAnswerExecutionCapture, RunArtifactStore, canonical_json_bytes
+from harness.artifacts import (
+    CertifiedAnswerExecutionCapture,
+    RunArtifactStore,
+    canonical_json_bytes,
+)
 from harness.gt_governance import load_ground_truth, validate_ground_truth
 from harness.identity import IdentityMap
 from harness.mesa_adapters import normalize_search_response
@@ -41,6 +45,13 @@ class FrozenScoringAuthority:
     normalization_sha256: str
     scorer_sha256: str
     scorer_paths: tuple[Path, ...]
+    answer_provider: str
+    answer_model: str
+    system_prompt_sha256: str
+    answer_instruction_sha256: str
+    request_parameters_sha256: str
+    context_contract_version: str
+    source_context_contract: str
 
 
 def _sha256(path: Path) -> str:
@@ -66,7 +77,9 @@ def load_frozen_scoring_authority(
     try:
         freeze = json.loads(Path(freeze_path).read_text(encoding="utf-8"))
     except (OSError, UnicodeError, json.JSONDecodeError) as exc:
-        raise ScoringAuthorityUnavailable(f"cannot read contract freeze: {exc}") from exc
+        raise ScoringAuthorityUnavailable(
+            f"cannot read contract freeze: {exc}"
+        ) from exc
     if freeze.get("run_id") != run_id:
         raise OfficialScoringError("contract freeze run_id mismatch")
     runtime = freeze.get("runtime_identities")
@@ -75,6 +88,42 @@ def load_frozen_scoring_authority(
         raise ScoringAuthorityUnavailable(
             "runtime_identities.scoring_authority is absent from contract freeze"
         )
+    answer_authority = (
+        runtime.get("answer_authority") if isinstance(runtime, dict) else None
+    )
+    if not isinstance(answer_authority, dict):
+        raise ScoringAuthorityUnavailable(
+            "runtime_identities.answer_authority is absent from contract freeze"
+        )
+    required_answer = {
+        "provider",
+        "model",
+        "system_prompt_sha256",
+        "answer_instruction_sha256",
+        "request_parameters_sha256",
+        "context_contract_version",
+        "source_context_contract",
+    }
+    missing_answer = sorted(required_answer - answer_authority.keys())
+    if missing_answer:
+        raise ScoringAuthorityUnavailable(
+            f"answer authority is missing fields: {missing_answer}"
+        )
+    if any(
+        not isinstance(answer_authority[field], str) or not answer_authority[field]
+        for field in required_answer
+    ):
+        raise OfficialScoringError("answer authority fields must be non-empty strings")
+    for field in (
+        "system_prompt_sha256",
+        "answer_instruction_sha256",
+        "request_parameters_sha256",
+    ):
+        value = answer_authority[field]
+        if len(value) != 64 or any(
+            character not in "0123456789abcdef" for character in value
+        ):
+            raise OfficialScoringError(f"answer authority has invalid {field}")
     required = {
         "ground_truth_path",
         "qrels_path",
@@ -95,7 +144,11 @@ def load_frozen_scoring_authority(
     for item in materials:
         if not isinstance(item, dict):
             raise OfficialScoringError("contract freeze material row is malformed")
-        path, category, digest = item.get("path"), item.get("category"), item.get("sha256")
+        path, category, digest = (
+            item.get("path"),
+            item.get("category"),
+            item.get("sha256"),
+        )
         if not all(isinstance(value, str) for value in (path, category, digest)):
             raise OfficialScoringError("contract freeze material row has invalid types")
         frozen_by_path[path] = (category, digest)
@@ -121,15 +174,15 @@ def load_frozen_scoring_authority(
     gt_path, gt_sha = resolve("ground_truth_path", "ground_truth")
     qrels_path, qrels_sha = resolve("qrels_path", "qrels")
     identity_path, identity_sha = resolve("identity_map_path", "identity_map")
-    normalization_path, normalization_sha = resolve("normalization_path", "normalization")
+    normalization_path, normalization_sha = resolve(
+        "normalization_path", "normalization"
+    )
     scorer_paths = tuple(
         (root / item["path"]).resolve()
         for item in materials
         if item.get("category") == "scorer_source"
     )
-    scorer_relpaths = {
-        path.relative_to(root).as_posix() for path in scorer_paths
-    }
+    scorer_relpaths = {path.relative_to(root).as_posix() for path in scorer_paths}
     required_scorers = {
         "harness/retrieval_scorer.py",
         "harness/answer_scorer.py",
@@ -157,6 +210,13 @@ def load_frozen_scoring_authority(
         normalization_sha256=normalization_sha,
         scorer_sha256=_aggregate_hash(scorer_paths, root),
         scorer_paths=scorer_paths,
+        answer_provider=answer_authority["provider"],
+        answer_model=answer_authority["model"],
+        system_prompt_sha256=answer_authority["system_prompt_sha256"],
+        answer_instruction_sha256=answer_authority["answer_instruction_sha256"],
+        request_parameters_sha256=answer_authority["request_parameters_sha256"],
+        context_contract_version=answer_authority["context_contract_version"],
+        source_context_contract=answer_authority["source_context_contract"],
     )
 
 
@@ -186,7 +246,8 @@ def _answer_metrics(scores: list[dict[str, Any]]) -> dict[str, Any]:
 
     def pass_rate(rows: list[dict[str, Any]]) -> float | None:
         return (
-            sum(1 for row in rows if row["status"] == ScoringStatus.PASS.value) / len(rows)
+            sum(1 for row in rows if row["status"] == ScoringStatus.PASS.value)
+            / len(rows)
             if rows
             else None
         )
@@ -196,7 +257,8 @@ def _answer_metrics(scores: list[dict[str, Any]]) -> dict[str, Any]:
         1
         for row in scores
         for reason in row.get("reasons", [])
-        if "outside retrieved context" in reason or "unknown MESA/source chunk ID" in reason
+        if "outside retrieved context" in reason
+        or "unknown MESA/source chunk ID" in reason
     )
     return {
         "answer_population": len(scores),
@@ -238,15 +300,55 @@ def score_run_from_frozen_authority(
         split_name="TEST",
     )
     if validation["status"] != "PASS":
-        raise OfficialScoringError(f"frozen GT/qrels validation failed: {validation['errors']}")
+        raise OfficialScoringError(
+            f"frozen GT/qrels validation failed: {validation['errors']}"
+        )
     ground_truth = load_ground_truth(authority.ground_truth_path)
-    gt_by_query: dict[str, GroundTruthItem] = {item.query_id: item for item in ground_truth}
+    gt_by_query: dict[str, GroundTruthItem] = {
+        item.query_id: item for item in ground_truth
+    }
     if len(gt_by_query) != len(ground_truth) or not gt_by_query:
-        raise OfficialScoringError("frozen TEST ground truth is empty or has duplicate query IDs")
+        raise OfficialScoringError(
+            "frozen TEST ground truth is empty or has duplicate query IDs"
+        )
 
     retrieval_scores: list[dict[str, Any]] = []
     answer_scores: list[dict[str, Any]] = []
+    retrieval_identities: dict[str, tuple[str, tuple[str, ...]]] = {}
+    answer_identities: dict[str, tuple[str, tuple[str, ...]]] = {}
     raw_manifest = store.compute_raw_manifest()
+    provider_exchanges: dict[str, tuple[dict[str, Any], str]] = {}
+    for entry in raw_manifest["entries"]:
+        path = store.run_dir / entry["path"]
+        store._verify_seal(path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if payload.get("lane") != "provider_exchange":
+            continue
+        query_id = payload.get("query_id")
+        if payload.get("run_id") != store.run_id or query_id not in gt_by_query:
+            raise OfficialScoringError(
+                "provider exchange has invalid run/query identity"
+            )
+        if query_id in provider_exchanges:
+            raise OfficialScoringError("duplicate provider exchange for answer query")
+        request = payload.get("request")
+        response = payload.get("response")
+        if not isinstance(request, dict) or not isinstance(response, dict):
+            raise OfficialScoringError(
+                "provider exchange request/response is malformed"
+            )
+        if (
+            payload.get("request_sha256")
+            != hashlib.sha256(canonical_json_bytes(request)).hexdigest()
+        ):
+            raise OfficialScoringError("provider exchange request hash mismatch")
+        if (
+            payload.get("response_sha256")
+            != hashlib.sha256(canonical_json_bytes(response)).hexdigest()
+        ):
+            raise OfficialScoringError("provider exchange response hash mismatch")
+        provider_exchanges[str(query_id)] = (payload, entry["sha256"])
+
     for entry in raw_manifest["entries"]:
         path = store.run_dir / entry["path"]
         store._verify_seal(path)
@@ -255,25 +357,82 @@ def score_run_from_frozen_authority(
             raise OfficialScoringError(f"raw artifact run_id mismatch: {entry['path']}")
         query_id = payload.get("query_id")
         if query_id not in gt_by_query:
-            raise OfficialScoringError(f"raw query_id is absent from frozen GT: {query_id}")
+            raise OfficialScoringError(
+                f"raw query_id is absent from frozen GT: {query_id}"
+            )
         gt = gt_by_query[query_id]
         lane = payload.get("lane")
+        if lane == "provider_exchange":
+            continue
         if lane == "retrieval":
             request_record = payload.get("request")
             response_record = payload.get("response")
-            if not isinstance(request_record, dict) or not isinstance(response_record, dict):
-                raise OfficialScoringError("raw retrieval request/response wrapper is malformed")
+            if not isinstance(request_record, dict) or not isinstance(
+                response_record, dict
+            ):
+                raise OfficialScoringError(
+                    "raw retrieval request/response wrapper is malformed"
+                )
+            request_payload = request_record.get("request")
+            response_payload = response_record.get("response")
+            if not isinstance(request_payload, dict) or not isinstance(
+                response_payload, dict
+            ):
+                raise OfficialScoringError("raw retrieval payload is malformed")
+            if (
+                request_record.get("query_id") != query_id
+                or response_record.get("query_id") != query_id
+                or request_record.get("request_sha256")
+                != hashlib.sha256(canonical_json_bytes(request_payload)).hexdigest()
+                or response_record.get("response_sha256")
+                != hashlib.sha256(canonical_json_bytes(response_payload)).hexdigest()
+            ):
+                raise OfficialScoringError(
+                    "raw retrieval wrapper hash/identity mismatch"
+                )
+            if request_payload.get("query") != gt.question:
+                raise OfficialScoringError(
+                    "retrieval query differs from frozen GT question"
+                )
+            if request_payload.get("limit") != 5:
+                raise OfficialScoringError(
+                    "official retrieval request limit must equal 5"
+                )
+            request_datasets = request_payload.get("dataset_ids")
+            if (
+                not isinstance(request_datasets, list)
+                or not request_datasets
+                or len(request_datasets) != len(set(request_datasets))
+                or any(
+                    not isinstance(value, str) or not value
+                    for value in request_datasets
+                )
+            ):
+                raise OfficialScoringError(
+                    "official retrieval dataset identity is invalid"
+                )
+            request_session = request_payload.get("session_id")
+            if not isinstance(request_session, str) or not request_session:
+                raise OfficialScoringError(
+                    "official retrieval session identity is invalid"
+                )
+            retrieval_identities[str(query_id)] = (
+                request_session,
+                tuple(request_datasets),
+            )
             status = response_record.get("transport_status")
             if not isinstance(status, int):
                 raise OfficialScoringError("raw retrieval transport status is missing")
-            if status >= 400:
-                score = score_retrieval(gt, [], identity_map, is_infrastructure_error=True)
+            if status != 200:
+                score = score_retrieval(
+                    gt, [], identity_map, is_infrastructure_error=True
+                )
             else:
                 capture = normalize_search_response(
                     run_id=store.run_id,
                     query_id=query_id,
-                    request=request_record.get("request"),
-                    response=response_record.get("response"),
+                    request=request_payload,
+                    response=response_payload,
                     api_version=authority.mesa_api_version,
                     mesa_sha=authority.mesa_sha,
                 )
@@ -286,6 +445,13 @@ def score_run_from_frozen_authority(
                     for result in capture.results
                 ]
                 score = score_retrieval(gt, scorer_results, identity_map)
+                if retrieval_identities[str(query_id)] != (
+                    capture.session_id,
+                    tuple(capture.dataset_ids),
+                ):
+                    raise OfficialScoringError(
+                        "retrieval request/response scope identity mismatch"
+                    )
             serialized = score.model_dump(mode="json")
             store.persist_scored(lane="retrieval", query_id=query_id, score=serialized)
             retrieval_scores.append(serialized)
@@ -297,8 +463,50 @@ def score_run_from_frozen_authority(
                     f"answer {query_id} is not an exact provider-boundary v2 capture"
                 ) from exc
             if capture.mesa_sha != authority.mesa_sha:
-                raise OfficialScoringError("answer capture MESA SHA differs from freeze")
+                raise OfficialScoringError(
+                    "answer capture MESA SHA differs from freeze"
+                )
+            if capture.question != gt.question:
+                raise OfficialScoringError(
+                    "answer question differs from frozen GT question"
+                )
+            request_parameters_sha256 = hashlib.sha256(
+                canonical_json_bytes(capture.request_parameters)
+            ).hexdigest()
+            if (
+                capture.provider != authority.answer_provider
+                or capture.model != authority.answer_model
+                or capture.system_prompt_sha256 != authority.system_prompt_sha256
+                or capture.answer_instruction_sha256
+                != authority.answer_instruction_sha256
+                or request_parameters_sha256 != authority.request_parameters_sha256
+                or capture.context_contract_version
+                != authority.context_contract_version
+                or capture.source_context_contract != authority.source_context_contract
+            ):
+                raise OfficialScoringError(
+                    "answer provider/prompt/context identity differs from freeze"
+                )
+            exchange_row = provider_exchanges.get(str(query_id))
+            if exchange_row is None:
+                raise OfficialScoringError(
+                    "answer capture has no sealed pre-parse provider exchange"
+                )
+            exchange, exchange_sha256 = exchange_row
+            if (
+                capture.provider_exchange_sha256 != exchange_sha256
+                or exchange.get("provider") != capture.provider
+                or exchange.get("request") != capture.exact_provider_request
+                or exchange.get("response") != capture.raw_provider_response
+            ):
+                raise OfficialScoringError(
+                    "answer capture differs from sealed pre-parse provider exchange"
+                )
             answer = AnswerResponse.model_validate(capture.parsed_response)
+            answer_identities[str(query_id)] = (
+                capture.session_id,
+                tuple(capture.dataset_ids),
+            )
             score = score_answer(
                 gt,
                 answer,
@@ -315,7 +523,14 @@ def score_run_from_frozen_authority(
     retrieval_ids = {row["query_id"] for row in retrieval_scores}
     answer_ids = {row["query_id"] for row in answer_scores}
     expected_ids = set(gt_by_query)
-    if len(retrieval_ids) != len(retrieval_scores) or len(answer_ids) != len(answer_scores):
+    for query_id in sorted(expected_ids & retrieval_ids & answer_ids):
+        if retrieval_identities.get(query_id) != answer_identities.get(query_id):
+            raise OfficialScoringError(
+                f"retrieval/answer session or dataset identity mismatch: {query_id}"
+            )
+    if len(retrieval_ids) != len(retrieval_scores) or len(answer_ids) != len(
+        answer_scores
+    ):
         raise OfficialScoringError("duplicate query in a scored lane")
     retrieval_metrics = _retrieval_metrics(retrieval_scores)
     answer_metrics = _answer_metrics(answer_scores)
@@ -326,7 +541,8 @@ def score_run_from_frozen_authority(
         ScoringStatus.INFRASTRUCTURE_ERROR.value,
     }
     scoring_integrity_pass = not any(
-        row["status"] in integrity_failures for row in [*retrieval_scores, *answer_scores]
+        row["status"] in integrity_failures
+        for row in [*retrieval_scores, *answer_scores]
     )
     common = {
         "schema_version": "2.0",

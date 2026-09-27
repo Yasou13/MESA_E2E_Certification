@@ -25,7 +25,8 @@ class AnswerExecutionError(RuntimeError):
 class ProviderTransport(Protocol):
     provider_name: str
 
-    def complete(self, request_payload: dict[str, Any]) -> dict[str, Any]: ...
+    def complete(self, request_payload: dict[str, Any]) -> dict[str, Any]:
+        ...
 
 
 class OpenAICompatibleHTTPTransport:
@@ -59,7 +60,9 @@ class OpenAICompatibleHTTPTransport:
             with urllib.request.urlopen(request, timeout=self._timeout) as response:
                 raw = response.read()
         except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError) as exc:
-            raise AnswerExecutionError(f"provider request failed: {type(exc).__name__}") from exc
+            raise AnswerExecutionError(
+                f"provider request failed: {type(exc).__name__}"
+            ) from exc
         try:
             payload = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -74,13 +77,17 @@ def _parse_openai_compatible_response(raw_response: dict[str, Any]) -> AnswerRes
         choices = raw_response["choices"]
         content = choices[0]["message"]["content"]
     except (KeyError, IndexError, TypeError) as exc:
-        raise AnswerExecutionError("provider response lacks choices[0].message.content") from exc
+        raise AnswerExecutionError(
+            "provider response lacks choices[0].message.content"
+        ) from exc
     if not isinstance(content, str):
         raise AnswerExecutionError("provider message content must be a string")
     try:
         return AnswerResponse.model_validate_json(content)
     except Exception as exc:
-        raise AnswerExecutionError("provider answer does not satisfy AnswerResponse") from exc
+        raise AnswerExecutionError(
+            "provider answer does not satisfy AnswerResponse"
+        ) from exc
 
 
 def execute_answer_and_persist(
@@ -100,15 +107,45 @@ def execute_answer_and_persist(
     if context.run_id != store.run_id:
         raise AnswerExecutionError("context/store run_id mismatch")
     forbidden = {
-        "expected_answer",
-        "required_facts",
-        "forbidden_claims",
-        "gold_evidence_ids",
+        "expectedanswer",
+        "expectedanswers",
+        "expectedlabel",
+        "expectedstatus",
+        "requiredfact",
+        "requiredfacts",
+        "forbiddenclaim",
+        "forbiddenclaims",
+        "goldevidenceid",
+        "goldevidenceids",
+        "qrel",
         "qrels",
     }
+    reserved = {"messages", "model"}
+
+    def normalized_key(value: object) -> str:
+        return "".join(
+            character for character in str(value).casefold() if character.isalnum()
+        )
+
+    def validate_request_value(value: Any, path: str) -> None:
+        if isinstance(value, dict):
+            for key, nested in value.items():
+                normalized = normalized_key(key)
+                if normalized in forbidden:
+                    raise AnswerExecutionError(
+                        f"oracle/grader field is forbidden from provider request: {path}.{key}"
+                    )
+                validate_request_value(nested, f"{path}.{key}")
+        elif isinstance(value, list):
+            for index, nested in enumerate(value):
+                validate_request_value(nested, f"{path}[{index}]")
+
     request_keys = {str(key).casefold() for key in request_parameters}
-    if request_keys & forbidden:
-        raise AnswerExecutionError("oracle/grader field is forbidden from provider request")
+    if request_keys & reserved:
+        raise AnswerExecutionError(
+            "model/messages cannot be overridden by request parameters"
+        )
+    validate_request_value(request_parameters, "request_parameters")
     user_prompt = (
         f"{answer_instruction}\n\nQUESTION:\n{question}\n\n"
         f"MODEL_VISIBLE_CONTEXT:\n{context.exact_model_visible_context}"
@@ -122,15 +159,27 @@ def execute_answer_and_persist(
         **request_parameters,
     }
     raw_response = transport.complete(exact_request)
+    capture_time = timestamp_utc or datetime.now(timezone.utc)
+    _, provider_exchange_sha256 = store.persist_raw_provider_exchange(
+        query_id=context.query_id,
+        timestamp_utc=capture_time,
+        provider=transport.provider_name,
+        request=exact_request,
+        response=raw_response,
+    )
     parsed = _parse_openai_compatible_response(raw_response)
     capture = CertifiedAnswerExecutionCapture(
         run_id=store.run_id,
         query_id=context.query_id,
-        timestamp_utc=timestamp_utc or datetime.now(timezone.utc),
+        timestamp_utc=capture_time,
         capture_origin="harness.answer_execution.provider_boundary",
         source_context_contract=context.source_contract,
         context_contract_version=context.schema_version,
         mesa_sha=context.mesa_sha,
+        tenant_id=context.tenant_id,
+        agent_id=context.agent_id,
+        session_id=context.session_id,
+        dataset_ids=context.dataset_ids,
         exact_model_visible_context=context.exact_model_visible_context,
         context_evidence_ids=context.context_evidence_ids,
         context_sha256=_sha256_bytes(
@@ -138,6 +187,10 @@ def execute_answer_and_persist(
         ),
         system_prompt=system_prompt,
         system_prompt_sha256=_sha256_bytes(system_prompt.encode("utf-8")),
+        question=question,
+        question_sha256=_sha256_bytes(question.encode("utf-8")),
+        answer_instruction=answer_instruction,
+        answer_instruction_sha256=_sha256_bytes(answer_instruction.encode("utf-8")),
         user_prompt=user_prompt,
         user_prompt_sha256=_sha256_bytes(user_prompt.encode("utf-8")),
         provider=transport.provider_name,
@@ -147,6 +200,7 @@ def execute_answer_and_persist(
         request_sha256=_sha256_bytes(canonical_json_bytes(exact_request)),
         raw_provider_response=raw_response,
         response_sha256=_sha256_bytes(canonical_json_bytes(raw_response)),
+        provider_exchange_sha256=provider_exchange_sha256,
         parsed_response=parsed.model_dump(mode="json"),
     )
     store.persist_raw_answer(capture)

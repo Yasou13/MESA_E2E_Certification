@@ -177,7 +177,9 @@ def _authority_freeze(tmp_path: Path):
         elif category == "thresholds":
             materials[category] = [gate_config]
         else:
-            materials[category] = [_write(repo / "frozen" / f"{category}.txt", category)]
+            materials[category] = [
+                _write(repo / "frozen" / f"{category}.txt", category)
+            ]
     # scorer_source is already mandatory, but keep this explicit if the set evolves.
     materials["scorer_source"] = scorer_files
     shas = {
@@ -193,6 +195,25 @@ def _authority_freeze(tmp_path: Path):
         material_paths=materials,
         runtime_identities={
             "python": "3.10",
+            "answer_authority": {
+                "provider": "openai_compatible",
+                "model": "openai/gpt-oss-20b",
+                "system_prompt_sha256": hashlib.sha256(
+                    b"Use only evidence"
+                ).hexdigest(),
+                "answer_instruction_sha256": hashlib.sha256(
+                    b"Return structured answer"
+                ).hexdigest(),
+                "request_parameters_sha256": hashlib.sha256(
+                    json.dumps(
+                        {"temperature": 0},
+                        sort_keys=True,
+                        separators=(",", ":"),
+                    ).encode("utf-8")
+                ).hexdigest(),
+                "context_contract_version": "mesa-e2e.context.v1",
+                "source_context_contract": "GET /v4/sessions/{session_id}/context",
+            },
             "scoring_authority": {
                 "ground_truth_path": gt.relative_to(repo).as_posix(),
                 "qrels_path": qrels.relative_to(repo).as_posix(),
@@ -246,7 +267,15 @@ def _mesa_response(chunk_id="mesa-chunk-1"):
     }
 
 
-def _run_to_scoring(tmp_path: Path, *, answer=True, cited_id="mesa-chunk-1"):
+def _run_to_scoring(
+    tmp_path: Path,
+    *,
+    answer=True,
+    cited_id="mesa-chunk-1",
+    answer_model="openai/gpt-oss-20b",
+    retrieval_query="Question?",
+    context_dataset="dataset-1",
+):
     repo, freeze_path, checksum_path, shas, qrels = _authority_freeze(tmp_path)
     run_dir = tmp_path / RUN_ID
     tx = CertificationTransaction(RUN_ID, run_dir)
@@ -265,7 +294,7 @@ def _run_to_scoring(tmp_path: Path, *, answer=True, cited_id="mesa-chunk-1"):
             request={
                 "session_id": "session-1",
                 "dataset_ids": ["dataset-1"],
-                "query": "Question?",
+                "query": retrieval_query,
                 "limit": 5,
             },
             response=_mesa_response(),
@@ -282,10 +311,13 @@ def _run_to_scoring(tmp_path: Path, *, answer=True, cited_id="mesa-chunk-1"):
                     "tenant_id": "tenant-1",
                     "agent_id": "agent-1",
                     "session_id": "session-1",
-                    "dataset_ids": ["dataset-1"],
+                    "dataset_ids": [context_dataset],
                     "context": "Exact legal fact",
                     "canonical_memories": [
-                        {"source_chunk_id": "mesa-chunk-1", "evidence_id": "assertion-1"}
+                        {
+                            "source_chunk_id": "mesa-chunk-1",
+                            "evidence_id": "assertion-1",
+                        }
                     ],
                 },
                 api_version="v4",
@@ -297,7 +329,7 @@ def _run_to_scoring(tmp_path: Path, *, answer=True, cited_id="mesa-chunk-1"):
                 question="Question?",
                 system_prompt="Use only evidence",
                 answer_instruction="Return structured answer",
-                model="openai/gpt-oss-20b",
+                model=answer_model,
                 request_parameters={"temperature": 0},
                 transport=_Transport(cited_id=cited_id),
                 timestamp_utc=NOW,
@@ -338,7 +370,9 @@ def test_citation_outside_exact_context_cannot_pass_answer(tmp_path: Path) -> No
     report = tx.execute_scoring()
     answer_item = report["lane_reports"]["answers"]["items"][0]
     assert answer_item["status"] != "PASS"
-    assert any("outside retrieved context" in reason for reason in answer_item["reasons"])
+    assert any(
+        "outside retrieved context" in reason for reason in answer_item["reasons"]
+    )
 
 
 def test_qrel_drift_after_freeze_is_rejected(tmp_path: Path) -> None:
@@ -352,9 +386,28 @@ def test_score_report_hash_binds_official_report(tmp_path: Path) -> None:
     tx, _ = _run_to_scoring(tmp_path)
     tx.execute_scoring()
     summary = json.loads((tx.run_dir / "scoring-summary.json").read_text())
-    assert summary["score_artifact_hash"] == hashlib.sha256(
-        (tx.run_dir / "scoring-report.json").read_bytes()
-    ).hexdigest()
+    assert (
+        summary["score_artifact_hash"]
+        == hashlib.sha256((tx.run_dir / "scoring-report.json").read_bytes()).hexdigest()
+    )
+
+
+def test_answer_provider_identity_must_match_freeze(tmp_path: Path) -> None:
+    tx, _ = _run_to_scoring(tmp_path, answer_model="forged-model")
+    with pytest.raises(TransactionError, match="identity differs from freeze"):
+        tx.execute_scoring()
+
+
+def test_retrieval_query_must_equal_frozen_gt_question(tmp_path: Path) -> None:
+    tx, _ = _run_to_scoring(tmp_path, retrieval_query="oracle-expanded query")
+    with pytest.raises(TransactionError, match="frozen GT question"):
+        tx.execute_scoring()
+
+
+def test_answer_context_scope_must_match_retrieval_scope(tmp_path: Path) -> None:
+    tx, _ = _run_to_scoring(tmp_path, context_dataset="other-dataset")
+    with pytest.raises(TransactionError, match="session or dataset identity mismatch"):
+        tx.execute_scoring()
 
 
 def test_official_transaction_uses_frozen_producers_and_contract_blockers(

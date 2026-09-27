@@ -205,9 +205,15 @@ def capture_health_snapshot(
 
 
 def write_health_snapshot(snapshot: HealthSnapshot, path: str | Path) -> None:
-    serialized = json.dumps(
-        snapshot.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
-    ) + "\n"
+    serialized = (
+        json.dumps(
+            snapshot.model_dump(mode="json"),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     target = Path(path)
     target.write_text(serialized, encoding="utf-8", newline="\n")
     _write_adjacent_seal(target)
@@ -216,29 +222,46 @@ def write_health_snapshot(snapshot: HealthSnapshot, path: str | Path) -> None:
 def verify_health_artifacts(run_dir: Path, run_id: str) -> dict[str, object]:
     """Re-evaluate measurements; never accept a serialized status by itself."""
     try:
-        for name, phase in (("health-pre-test.json", HealthPhase.PRE_TEST),
-                            ("health-post-test.json", HealthPhase.POST_TEST)):
+        for name, phase in (
+            ("health-pre-test.json", HealthPhase.PRE_TEST),
+            ("health-post-test.json", HealthPhase.POST_TEST),
+        ):
             snapshot = HealthSnapshot.model_validate_json((run_dir / name).read_text())
             if snapshot.run_id != run_id or snapshot.phase != phase:
                 raise ValueError(f"wrong identity/phase in {name}")
             recomputed = capture_health_snapshot(
-                run_id=run_id, phase=phase, timestamp_utc=snapshot.timestamp_utc,
-                services=snapshot.services, provider_reachable=snapshot.provider_reachable,
+                run_id=run_id,
+                phase=phase,
+                timestamp_utc=snapshot.timestamp_utc,
+                services=snapshot.services,
+                provider_reachable=snapshot.provider_reachable,
                 host_metrics=snapshot.host_metrics,
             )
             if recomputed.status != OperationalStatus.PASS or not snapshot.host_metrics:
                 raise ValueError(f"unverified health measurements in {name}")
-        samples = [ResourceSample.model_validate_json(line) for line in
-                   (run_dir / "resource-telemetry.jsonl").read_text().splitlines() if line.strip()]
-        events = [ResourcePressureEvent.model_validate_json(line) for line in
-                  (run_dir / "resource-pressure-events.jsonl").read_text().splitlines() if line.strip()]
+        samples = [
+            ResourceSample.model_validate_json(line)
+            for line in (run_dir / "resource-telemetry.jsonl").read_text().splitlines()
+            if line.strip()
+        ]
+        events = [
+            ResourcePressureEvent.model_validate_json(line)
+            for line in (run_dir / "resource-pressure-events.jsonl")
+            .read_text()
+            .splitlines()
+            if line.strip()
+        ]
         if any(r.run_id != run_id for r in [*samples, *events]):
             raise ValueError("resource measurement run_id mismatch")
         result = evaluate_resource_status(samples, events)
         return {**result, "run_id": run_id}
     except (OSError, ValueError) as exc:
-        return {"schema_version": "1.0", "run_id": run_id,
-                "status": "UNVERIFIED", "reasons": [f"missing/invalid health measurement: {exc}"]}
+        return {
+            "schema_version": "1.0",
+            "run_id": run_id,
+            "status": "UNVERIFIED",
+            "reasons": [f"missing/invalid health measurement: {exc}"],
+        }
 
 
 def evaluate_resource_status(
@@ -286,9 +309,7 @@ def _write_jsonl(records: list[OperationalModel], path: Path) -> None:
 def _write_adjacent_seal(path: Path) -> Path:
     digest = hashlib.sha256(path.read_bytes()).hexdigest()
     sidecar = path.with_suffix(path.suffix + ".SHA256")
-    sidecar.write_text(
-        f"{digest}  {path.name}\n", encoding="utf-8", newline="\n"
-    )
+    sidecar.write_text(f"{digest}  {path.name}\n", encoding="utf-8", newline="\n")
     return sidecar
 
 
@@ -324,7 +345,5 @@ def write_runtime_lock(
     path.write_bytes(serialized)
     digest = hashlib.sha256(serialized).hexdigest()
     sidecar = destination / "mesa-runtime-lock.SHA256"
-    sidecar.write_text(
-        f"{digest}  {path.name}\n", encoding="utf-8", newline="\n"
-    )
+    sidecar.write_text(f"{digest}  {path.name}\n", encoding="utf-8", newline="\n")
     return path, sidecar

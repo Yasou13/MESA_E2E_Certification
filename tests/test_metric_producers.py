@@ -85,6 +85,20 @@ def _score(tmp_path: Path) -> None:
 
 
 def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
+    case_ids = [
+        "cross_tenant_search",
+        "cross_dataset_search",
+        "cross_agent_search",
+        "inactive_status_search",
+        "wrong_jurisdiction_search",
+        "stale_version_search",
+        "effective_date_boundary_search",
+        "context_visibility",
+        "catalog_visibility",
+        "document_visibility",
+        "revision_visibility",
+        "chunk_visibility",
+    ]
     _sealed(
         tmp_path,
         "scope-isolation.json",
@@ -95,9 +109,13 @@ def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
             },
             "negative_cases": [
                 {
-                    "returned_forbidden_evidence_ids": forbidden,
+                    "case_id": case_id,
+                    "returned_forbidden_evidence_ids": (
+                        forbidden if index == 0 else []
+                    ),
                     "pre_rank_audit_verified": True,
                 }
+                for index, case_id in enumerate(case_ids)
             ],
         },
     )
@@ -117,7 +135,11 @@ def _graph_side(
         "mesa_sha": "c" * 40,
         "settings_sha256": settings,
         "graph_enabled": enabled,
-        "graph_origin_top5": enabled,
+        "graph_backend_status": (
+            "OPERATIONAL" if enabled else "DISABLED_BY_NATIVE_SWITCH"
+        ),
+        "graph_backend_error": None,
+        "top5_origins": [["graph"]] if enabled else [["vector"]],
         "paths": (
             [{"graph_path_id": f"path-{query_id}", "path_valid": True}]
             if enabled
@@ -133,12 +155,16 @@ def test_registry_contains_exactly_b0_through_b14() -> None:
     assert REGISTERED_GATE_IDS == PRODUCTION_GATE_IDS
 
 
-def test_missing_artifacts_never_produce_completed_or_pass_metrics(tmp_path: Path) -> None:
+def test_missing_artifacts_never_produce_completed_or_pass_metrics(
+    tmp_path: Path,
+) -> None:
     observations = produce_all(_ctx(tmp_path))
     assert set(observations) == PRODUCTION_GATE_IDS
     assert all(item.execution == "BLOCKED" for item in observations.values())
     assert all(item.observed == {} for item in observations.values())
-    assert all("producer code is not frozen" in item.reason for item in observations.values())
+    assert all(
+        "producer code is not frozen" in item.reason for item in observations.values()
+    )
 
 
 def test_b10_does_not_invent_zero_tenant_leakage(tmp_path: Path) -> None:
@@ -171,6 +197,65 @@ def test_b9_reports_verified_missing_mesa_contract(tmp_path: Path) -> None:
     assert result.reason.startswith("BLOCKED_BY_MESA_CONTRACT:")
 
 
+def test_b6_missing_retry_counts_cannot_pass_canary(tmp_path: Path) -> None:
+    _sealed(
+        tmp_path,
+        "native-canary.json",
+        {
+            "publisher_component": "MESA_Data",
+            "publish_route": "/v4/memory/insert",
+            "diagnostic_bridge_used": False,
+            "mutation_state": "COMMITTED",
+            "source_chunk_id": "source-1",
+            "search_source_chunk_id": "source-1",
+        },
+    )
+
+    result = PRODUCTION_METRIC_PRODUCERS["B6"](_ctx(tmp_path))
+
+    assert result.observed["canary_passed"] is False
+
+
+def test_b7_duplicate_planned_chunk_is_not_a_complete_mapping(tmp_path: Path) -> None:
+    _sealed(
+        tmp_path,
+        "delivery-evidence.json",
+        {
+            "planned_source_chunk_ids": ["source-1", "source-1"],
+            "deliveries": [
+                {
+                    "source_chunk_id": "source-1",
+                    "terminal_state": "COMMITTED",
+                    "mesa_chunk_id": "mesa-1",
+                    "mutation_id": "mutation-1",
+                }
+            ],
+        },
+    )
+
+    with pytest.raises(ProducerIntegrityError, match="duplicates"):
+        PRODUCTION_METRIC_PRODUCERS["B7"](_ctx(tmp_path))
+
+
+def test_b8_missing_counts_and_empty_probes_cannot_pass(tmp_path: Path) -> None:
+    _sealed(
+        tmp_path,
+        "restart-idempotency.json",
+        {
+            "before_restart_probe": {},
+            "after_restart_probe": {},
+            "restart_observed": True,
+            "stable_idempotency_key": True,
+            "republish_terminal_state": "COMMITTED",
+        },
+    )
+
+    result = PRODUCTION_METRIC_PRODUCERS["B8"](_ctx(tmp_path))
+
+    assert result.observed["restart_persistence_proven"] is False
+    assert result.observed["idempotent_republish_proven"] is False
+
+
 def test_b11_distinguishes_positive_neutral_and_harm(tmp_path: Path) -> None:
     pairs = [
         {
@@ -186,6 +271,13 @@ def test_b11_distinguishes_positive_neutral_and_harm(tmp_path: Path) -> None:
             "off": _graph_side("harm", enabled=False, coverage=1.0, rank=1),
         },
     ]
+    pairs.extend(
+        {
+            "on": _graph_side(f"neutral-{index}", enabled=True, coverage=1.0, rank=2),
+            "off": _graph_side(f"neutral-{index}", enabled=False, coverage=1.0, rank=2),
+        }
+        for index in range(7)
+    )
     _sealed(
         tmp_path,
         "graph-ablation.json",
@@ -202,7 +294,7 @@ def test_b11_distinguishes_positive_neutral_and_harm(tmp_path: Path) -> None:
     result = PRODUCTION_METRIC_PRODUCERS["B11"](_ctx(tmp_path))
 
     assert result.observed["graph_positive_utility_count"] == 1
-    assert result.observed["graph_neutral_effect_count"] == 1
+    assert result.observed["graph_neutral_effect_count"] == 8
     assert result.observed["graph_harm_count"] == 1
     assert result.observed["graph_causal_ablation_proven"] is True
 
@@ -226,7 +318,20 @@ def test_b11_rejects_unmatched_on_off_pair(tmp_path: Path, mutation: str) -> Non
                 "native_graph_on_off_switch": True,
             },
             "graph_capability_operational": True,
-            "pairs": [{"on": on, "off": off}],
+            "pairs": [
+                {"on": on, "off": off},
+                *[
+                    {
+                        "on": _graph_side(
+                            f"filler-{index}", enabled=True, coverage=1.0, rank=2
+                        ),
+                        "off": _graph_side(
+                            f"filler-{index}", enabled=False, coverage=1.0, rank=2
+                        ),
+                    }
+                    for index in range(9)
+                ],
+            ],
         },
     )
 
@@ -247,7 +352,20 @@ def test_b11_logging_only_claim_cannot_prove_graph(tmp_path: Path) -> None:
                 "native_graph_on_off_switch": True,
             },
             "graph_capability_operational": True,
-            "pairs": [{"on": on, "off": off}],
+            "pairs": [
+                {"on": on, "off": off},
+                *[
+                    {
+                        "on": _graph_side(
+                            f"filler-{index}", enabled=True, coverage=1.0, rank=2
+                        ),
+                        "off": _graph_side(
+                            f"filler-{index}", enabled=False, coverage=1.0, rank=2
+                        ),
+                    }
+                    for index in range(9)
+                ],
+            ],
         },
     )
 

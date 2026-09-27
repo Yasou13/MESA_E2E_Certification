@@ -159,7 +159,9 @@ def _validate_contract_identity(*, api_version: str, mesa_sha: str) -> None:
         raise MESAContractIntegrityError("mesa_sha must be a full Git SHA")
 
 
-def _normalize_scope(matched: dict[str, Any], result: dict[str, Any]) -> NormalizedScopeEvidence:
+def _normalize_scope(
+    matched: dict[str, Any], result: dict[str, Any]
+) -> NormalizedScopeEvidence:
     return NormalizedScopeEvidence(
         tenant_id=_nonempty(matched.get("tenant_id"), "matched_assertion.tenant_id"),
         dataset_id=_nonempty(matched.get("dataset_id"), "matched_assertion.dataset_id"),
@@ -167,7 +169,9 @@ def _normalize_scope(matched: dict[str, Any], result: dict[str, Any]) -> Normali
             matched.get("document_id") or result.get("document_id"),
             "matched_assertion.document_id",
         ),
-        revision_id=_nonempty(matched.get("revision_id"), "matched_assertion.revision_id"),
+        revision_id=_nonempty(
+            matched.get("revision_id"), "matched_assertion.revision_id"
+        ),
         chunk_id=_nonempty(matched.get("chunk_id"), "matched_assertion.chunk_id"),
         status=_nonempty(matched.get("status"), "matched_assertion.status"),
         jurisdiction=str(matched.get("jurisdiction") or ""),
@@ -184,7 +188,9 @@ def _normalize_graph_paths(
 ) -> list[NormalizedGraphPath]:
     raw_paths = debug.get("graph_paths", [])
     if not isinstance(raw_paths, list):
-        raise MESAContractIntegrityError("retrieval_provenance.graph_paths must be a list")
+        raise MESAContractIntegrityError(
+            "retrieval_provenance.graph_paths must be a list"
+        )
     normalized: list[NormalizedGraphPath] = []
     seen: set[tuple[tuple[str, ...], tuple[str, ...]]] = set()
     for index, raw in enumerate(raw_paths):
@@ -194,26 +200,41 @@ def _normalize_graph_paths(
         entity_ids = raw.get("entity_ids")
         directions = raw.get("edge_directions")
         predicates = raw.get("predicates")
-        if not all(isinstance(value, list) for value in (assertion_ids, entity_ids, directions, predicates)):
+        if not all(
+            isinstance(value, list)
+            for value in (assertion_ids, entity_ids, directions, predicates)
+        ):
             raise MESAContractIntegrityError(f"graph path {index} has malformed arrays")
         if not assertion_ids or len(entity_ids) != len(assertion_ids) + 1:
-            raise MESAContractIntegrityError(f"graph path {index} has invalid hop alignment")
-        if len(directions) != len(assertion_ids) or len(predicates) != len(assertion_ids):
-            raise MESAContractIntegrityError(f"graph path {index} has invalid edge alignment")
+            raise MESAContractIntegrityError(
+                f"graph path {index} has invalid hop alignment"
+            )
+        if len(directions) != len(assertion_ids) or len(predicates) != len(
+            assertion_ids
+        ):
+            raise MESAContractIntegrityError(
+                f"graph path {index} has invalid edge alignment"
+            )
         if any(direction not in {"forward", "reverse"} for direction in directions):
-            raise MESAContractIntegrityError(f"graph path {index} has invalid direction")
+            raise MESAContractIntegrityError(
+                f"graph path {index} has invalid direction"
+            )
         if not set(assertion_ids).issubset(available_assertion_ids):
             raise MESAContractIntegrityError(
                 f"graph path {index} references an assertion outside matched/support provenance"
             )
         key = (tuple(entity_ids), tuple(assertion_ids))
         if key in seen:
-            raise MESAContractIntegrityError("duplicate graph path cannot amplify support")
+            raise MESAContractIntegrityError(
+                "duplicate graph path cannot amplify support"
+            )
         seen.add(key)
         normalized.append(
             NormalizedGraphPath(
                 stable_path_id=raw.get("graph_path_id"),
-                assertion_ids=[_nonempty(v, "graph assertion ID") for v in assertion_ids],
+                assertion_ids=[
+                    _nonempty(v, "graph assertion ID") for v in assertion_ids
+                ],
                 entity_ids=[_nonempty(v, "graph entity ID") for v in entity_ids],
                 edge_directions=list(directions),
                 predicates=[_nonempty(v, "graph predicate") for v in predicates],
@@ -266,7 +287,9 @@ def normalize_search_response(
                 f"result at rank {rank} has conflicting evidence/assertion identity"
             )
         if public_id in public_ids or evidence_id in evidence_ids:
-            raise MESAContractIntegrityError("duplicate ranked result/evidence identity")
+            raise MESAContractIntegrityError(
+                "duplicate ranked result/evidence identity"
+            )
         public_ids.add(public_id)
         evidence_ids.add(evidence_id)
 
@@ -274,36 +297,66 @@ def normalize_search_response(
         support = result.get("supporting_assertions")
         provenance = result.get("provenance")
         debug = result.get("retrieval_provenance")
-        if not isinstance(matched, list) or len(matched) != 1 or not isinstance(matched[0], dict):
+        if (
+            not isinstance(matched, list)
+            or len(matched) != 1
+            or not isinstance(matched[0], dict)
+        ):
             raise MESAContractIntegrityError(
                 f"result at rank {rank} must expose exactly one first-class matched assertion"
             )
-        if not isinstance(support, list) or any(not isinstance(item, dict) for item in support):
-            raise MESAContractIntegrityError(f"result at rank {rank} has malformed support provenance")
-        if not isinstance(provenance, list) or any(not isinstance(item, dict) for item in provenance):
-            raise MESAContractIntegrityError(f"result at rank {rank} has malformed provenance")
+        if not isinstance(support, list) or any(
+            not isinstance(item, dict) for item in support
+        ):
+            raise MESAContractIntegrityError(
+                f"result at rank {rank} has malformed support provenance"
+            )
+        if not isinstance(provenance, list) or any(
+            not isinstance(item, dict) for item in provenance
+        ):
+            raise MESAContractIntegrityError(
+                f"result at rank {rank} has malformed provenance"
+            )
         if not isinstance(debug, dict):
-            raise MESAContractIntegrityError(f"result at rank {rank} has malformed retrieval_provenance")
+            raise MESAContractIntegrityError(
+                f"result at rank {rank} has malformed retrieval_provenance"
+            )
 
         matched_item = matched[0]
         if matched_item.get("assertion_id") != evidence_id:
-            raise MESAContractIntegrityError("matched assertion does not own ranked evidence ID")
+            raise MESAContractIntegrityError(
+                "matched assertion does not own ranked evidence ID"
+            )
         if matched_item.get("chunk_id") != chunk_id:
-            raise MESAContractIntegrityError("matched assertion chunk differs from ranked source_chunk_id")
+            raise MESAContractIntegrityError(
+                "matched assertion chunk differs from ranked source_chunk_id"
+            )
         support_ids = [item.get("assertion_id") for item in support]
         if evidence_id in support_ids or len(support_ids) != len(set(support_ids)):
-            raise MESAContractIntegrityError("support provenance conflicts or duplicates matched evidence")
+            raise MESAContractIntegrityError(
+                "support provenance conflicts or duplicates matched evidence"
+            )
         provenance_ids = [item.get("assertion_id") for item in provenance]
-        if provenance_ids.count(evidence_id) != 1 or set(provenance_ids) != {evidence_id, *support_ids}:
-            raise MESAContractIntegrityError("provenance does not equal matched plus support assertions")
+        if provenance_ids.count(evidence_id) != 1 or set(provenance_ids) != {
+            evidence_id,
+            *support_ids,
+        }:
+            raise MESAContractIntegrityError(
+                "provenance does not equal matched plus support assertions"
+            )
 
-        available_assertions = {evidence_id, *[_nonempty(v, "support assertion ID") for v in support_ids]}
+        available_assertions = {
+            evidence_id,
+            *[_nonempty(v, "support assertion ID") for v in support_ids],
+        }
         graph_paths = _normalize_graph_paths(
             debug, available_assertion_ids=available_assertions
         )
         evidence_text = str(result.get("evidence_span") or "")
         if len(evidence_text) > 4096:
-            raise MESAContractIntegrityError("evidence span exceeds MESA V4 bounded contract")
+            raise MESAContractIntegrityError(
+                "evidence span exceeds MESA V4 bounded contract"
+            )
         normalized.append(
             NormalizedRetrievalResult(
                 rank=rank,
@@ -382,12 +435,21 @@ def normalize_context_response(
     """Capture the exact post-budget ContextBuilder string returned publicly."""
 
     _validate_contract_identity(api_version=api_version, mesa_sha=mesa_sha)
-    required = ("tenant_id", "agent_id", "session_id", "dataset_ids", "context", "canonical_memories")
+    required = (
+        "tenant_id",
+        "agent_id",
+        "session_id",
+        "dataset_ids",
+        "context",
+        "canonical_memories",
+    )
     missing = [field for field in required if field not in response]
     if missing:
         raise MESAContractIntegrityError(f"context response missing fields: {missing}")
     memories = response["canonical_memories"]
-    if not isinstance(memories, list) or any(not isinstance(item, dict) for item in memories):
+    if not isinstance(memories, list) or any(
+        not isinstance(item, dict) for item in memories
+    ):
         raise MESAContractIntegrityError("canonical_memories must be a list of objects")
     evidence_ids: list[str] = []
     for index, memory in enumerate(memories):
@@ -397,13 +459,17 @@ def normalize_context_response(
                 f"model-visible memory {index} has no first-class source_chunk_id"
             )
         if chunk_id in evidence_ids:
-            raise MESAContractIntegrityError("duplicate model-visible context evidence ID")
+            raise MESAContractIntegrityError(
+                "duplicate model-visible context evidence ID"
+            )
         evidence_ids.append(chunk_id)
     context = response["context"]
     if not isinstance(context, str):
         raise MESAContractIntegrityError("context must be the exact rendered string")
     datasets = response["dataset_ids"]
-    if not isinstance(datasets, list) or any(not isinstance(v, str) or not v for v in datasets):
+    if not isinstance(datasets, list) or any(
+        not isinstance(v, str) or not v for v in datasets
+    ):
         raise MESAContractIntegrityError("context dataset_ids are malformed")
     return NormalizedContextCapture(
         run_id=_nonempty(run_id, "run_id"),
@@ -417,5 +483,7 @@ def normalize_context_response(
         exact_model_visible_context=context,
         context_evidence_ids=evidence_ids,
         context_sha256=hashlib.sha256(context.encode("utf-8")).hexdigest(),
-        canonical_memories_sha256=hashlib.sha256(_canonical_bytes(memories)).hexdigest(),
+        canonical_memories_sha256=hashlib.sha256(
+            _canonical_bytes(memories)
+        ).hexdigest(),
     )

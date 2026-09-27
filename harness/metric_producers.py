@@ -65,6 +65,18 @@ def _evidence(path: Path, run_dir: Path) -> str:
     return f"{path.relative_to(run_dir).as_posix()}#sha256={_sha256(path)}"
 
 
+def _bounded_path(root: Path, relative: Any, field: str) -> Path:
+    if not isinstance(relative, str) or not relative:
+        raise ProducerIntegrityError(f"{field} must be a non-empty relative path")
+    base = root.resolve()
+    path = (base / relative).resolve()
+    try:
+        path.relative_to(base)
+    except ValueError as exc:
+        raise ProducerIntegrityError(f"{field} escapes its authority root") from exc
+    return path
+
+
 def _verify_sidecar(path: Path) -> None:
     sidecar = path.with_suffix(path.suffix + ".SHA256")
     if not path.is_file() or not sidecar.is_file():
@@ -111,9 +123,12 @@ def write_sealed_measurement(path: str | Path, payload: dict[str, Any]) -> Path:
     """Write a deterministic producer input plus adjacent SHA-256 seal."""
 
     target = Path(path)
-    serialized = json.dumps(
-        payload, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False
-    ) + "\n"
+    serialized = (
+        json.dumps(
+            payload, ensure_ascii=False, indent=2, sort_keys=True, allow_nan=False
+        )
+        + "\n"
+    )
     target.parent.mkdir(parents=True, exist_ok=True)
     if target.exists() and target.read_text(encoding="utf-8") != serialized:
         raise ProducerIntegrityError(f"refusing to overwrite measurement: {target}")
@@ -147,7 +162,9 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
             item.get("sha256"),
         )
         if not all(isinstance(value, str) for value in (rel, category, digest)):
-            raise ProducerIntegrityError("producer authority material row has invalid types")
+            raise ProducerIntegrityError(
+                "producer authority material row has invalid types"
+            )
         frozen[rel] = (category, digest)
 
     source_root = Path(__file__).resolve().parents[1]
@@ -175,7 +192,9 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
         try:
             frozen_path.relative_to(root)
         except ValueError as exc:
-            raise ProducerIntegrityError(f"producer authority path escapes root: {rel}") from exc
+            raise ProducerIntegrityError(
+                f"producer authority path escapes root: {rel}"
+            ) from exc
         if (
             not frozen_path.is_file()
             or not execution_path.is_file()
@@ -210,12 +229,20 @@ def _b0(ctx: ProducerContext) -> ProducerObservation:
     repositories = data.get("repositories")
     ci_runs = data.get("ci_runs")
     dependency = data.get("dependency_lock")
-    if not isinstance(repositories, list) or not isinstance(ci_runs, list) or not isinstance(dependency, dict):
+    if (
+        not isinstance(repositories, list)
+        or not isinstance(ci_runs, list)
+        or not isinstance(dependency, dict)
+    ):
         raise ProducerIntegrityError("B0 baseline evidence shape is invalid")
     expected = {"MESA", "MESA_Data", "MESA_E2E_Certification"}
     by_name = {row.get("name"): row for row in repositories if isinstance(row, dict)}
-    clean = set(by_name) == expected and all(row.get("dirty_paths") == [] for row in by_name.values())
-    dedicated = clean and all(row.get("branch") not in {"main", "master", ""} for row in by_name.values())
+    clean = set(by_name) == expected and all(
+        row.get("dirty_paths") == [] for row in by_name.values()
+    )
+    dedicated = clean and all(
+        row.get("branch") not in {"main", "master", ""} for row in by_name.values()
+    )
     exact_ci = clean and all(
         any(
             ci.get("repository") == name
@@ -226,7 +253,9 @@ def _b0(ctx: ProducerContext) -> ProducerObservation:
         )
         for name, row in by_name.items()
     )
-    lock_path = ctx.repository_root / str(dependency.get("path", ""))
+    lock_path = _bounded_path(
+        ctx.repository_root, dependency.get("path"), "dependency_lock.path"
+    )
     reproducible = (
         lock_path.is_file()
         and dependency.get("sha256") == _sha256(lock_path)
@@ -251,7 +280,14 @@ def _b1(ctx: ProducerContext) -> ProducerObservation:
     environment, ep = _json(ctx, "environment-baseline.json")
     ram = environment.get("ram_total_bytes")
     disk = environment.get("disk_free_bytes")
-    if not isinstance(ram, int) or not isinstance(disk, int) or ram < 0 or disk < 0:
+    if (
+        isinstance(ram, bool)
+        or isinstance(disk, bool)
+        or not isinstance(ram, int)
+        or not isinstance(disk, int)
+        or ram < 0
+        or disk < 0
+    ):
         raise ProducerIntegrityError("B1 resource measurements are invalid")
     isolated = all(
         workspace.get(key) is expected
@@ -265,7 +301,7 @@ def _b1(ctx: ProducerContext) -> ProducerObservation:
             "docker_state_isolated": True,
         }.items()
     )
-    gib = 1024**3
+    gib = 1024 ** 3
     return _completed(
         "B1",
         {
@@ -284,19 +320,37 @@ def _b2(ctx: ProducerContext) -> ProducerObservation:
     query = data.get("query_embedding")
     if not isinstance(document, list) or not isinstance(query, list):
         raise ProducerIntegrityError("B2 embeddings must be arrays")
-    finite = all(isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) for v in [*document, *query])
+    finite = all(
+        isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+        for v in [*document, *query]
+    )
     dim = len(document) == len(query) == 2048
-    asymmetric = document != query and data.get("document_input_type") == "passage" and data.get("query_input_type") == "query"
+    asymmetric = (
+        document != query
+        and data.get("document_input_type") == "passage"
+        and data.get("query_input_type") == "query"
+    )
+    request_ids = data.get("provider_request_ids")
     real = (
         data.get("provider") == "openai_compatible"
         and data.get("endpoint") == "https://integrate.api.nvidia.com/v1"
         and data.get("embedding_model") == "nvidia/nemotron-3-embed-1b"
         and data.get("extraction_model") == "openai/gpt-oss-20b"
-        and isinstance(data.get("provider_request_ids"), list)
-        and bool(data.get("provider_request_ids"))
+        and isinstance(request_ids, list)
+        and bool(request_ids)
+        and all(isinstance(item, str) and item for item in request_ids)
+        and len(request_ids) == len(set(request_ids))
     )
-    completion = data.get("completion_marker_expected") == data.get("completion_marker_observed")
-    extraction = isinstance(data.get("structured_extraction"), dict) and bool(data["structured_extraction"].get("facts"))
+    expected_marker = data.get("completion_marker_expected")
+    observed_marker = data.get("completion_marker_observed")
+    completion = (
+        isinstance(expected_marker, str)
+        and bool(expected_marker)
+        and observed_marker == expected_marker
+    )
+    extraction = isinstance(data.get("structured_extraction"), dict) and bool(
+        data["structured_extraction"].get("facts")
+    )
     return _completed(
         "B2",
         {
@@ -311,8 +365,12 @@ def _b2(ctx: ProducerContext) -> ProducerObservation:
 
 def _b3(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "runtime-config-parity.json")
-    intended, container, effective = (data.get(name) for name in ("intended", "container", "effective"))
-    if not all(isinstance(value, dict) and value for value in (intended, container, effective)):
+    intended, container, effective = (
+        data.get(name) for name in ("intended", "container", "effective")
+    )
+    if not all(
+        isinstance(value, dict) and value for value in (intended, container, effective)
+    ):
         raise ProducerIntegrityError("B3 parity maps are missing")
     parity = intended == container == effective
     canonical = {
@@ -324,8 +382,16 @@ def _b3(ctx: ProducerContext) -> ProducerObservation:
         "MESA_EXTRACTION_MODEL": "openai/gpt-oss-20b",
         "MESA_EXTRACTION_LANG": "tr",
     }
-    frozen = all(effective.get(key) == value for key, value in canonical.items()) and effective.get("MESA_EXTRACTION_MAX_TOKENS", 0) >= 4096
-    return _completed("B3", {"docker_config_parity": parity, "frozen_provider_parity": frozen}, [path], ctx)
+    frozen = (
+        all(effective.get(key) == value for key, value in canonical.items())
+        and effective.get("MESA_EXTRACTION_MAX_TOKENS", 0) >= 4096
+    )
+    return _completed(
+        "B3",
+        {"docker_config_parity": parity, "frozen_provider_parity": frozen},
+        [path],
+        ctx,
+    )
 
 
 def _b4(ctx: ProducerContext) -> ProducerObservation:
@@ -338,8 +404,10 @@ def _b4(ctx: ProducerContext) -> ProducerObservation:
     for item in items:
         if not isinstance(item, dict):
             raise ProducerIntegrityError("B4 corpus item is malformed")
-        raw = ctx.run_dir / str(item.get("raw_path", ""))
-        canonical = ctx.run_dir / str(item.get("canonical_path", ""))
+        raw = _bounded_path(ctx.run_dir, item.get("raw_path"), "B4 raw_path")
+        canonical = _bounded_path(
+            ctx.run_dir, item.get("canonical_path"), "B4 canonical_path"
+        )
         raw_ok &= raw.is_file() and item.get("raw_sha256") == _sha256(raw)
         canonical_ok &= (
             canonical.is_file()
@@ -347,7 +415,13 @@ def _b4(ctx: ProducerContext) -> ProducerObservation:
             and item.get("canonical_sha256") == _sha256(canonical)
             and "�" not in canonical.read_text(encoding="utf-8")
         )
-        if item.get("quality_status") == "PASS" and item.get("eligible") is True:
+        checks = item.get("quality_checks")
+        quality_passed = (
+            isinstance(checks, dict)
+            and bool(checks)
+            and all(value is True for value in checks.values())
+        )
+        if quality_passed:
             eligible += 1
     return _completed(
         "B4",
@@ -367,16 +441,35 @@ def _b5(ctx: ProducerContext) -> ProducerObservation:
     selected_hash = data.get("selected_versions_manifest_sha256")
     h1a = data.get("h1a_literal_decision", "")
     h1b = data.get("h1b_literal_decision", "")
+    selected_path = _bounded_path(
+        ctx.run_dir,
+        data.get("selected_versions_manifest_path"),
+        "selected_versions_manifest_path",
+    )
+    release_path = _bounded_path(
+        ctx.run_dir, data.get("release_manifest_path"), "release_manifest_path"
+    )
+    expected_h1a = f"H1A APPROVE CORPUS {ctx.run_id} {str(selected_hash)[:12]}"
+    expected_h1b = f"H1B APPROVE DELIVERY {ctx.run_id} {str(release_hash)[:12]}"
     bound = (
         isinstance(release_hash, str)
         and isinstance(selected_hash, str)
         and len(release_hash) == len(selected_hash) == 64
+        and selected_path.is_file()
+        and release_path.is_file()
+        and _sha256(selected_path) == selected_hash
+        and _sha256(release_path) == release_hash
         and isinstance(h1a, str)
         and isinstance(h1b, str)
-        and h1a.startswith(f"H1A APPROVE CORPUS {ctx.run_id} {selected_hash[:12]}")
-        and h1b.startswith(f"H1B APPROVE DELIVERY {ctx.run_id} {release_hash[:12]}")
+        and h1a == expected_h1a
+        and h1b == expected_h1b
     )
-    return _completed("B5", {"h1_approval_hash_bound": bound, "delivery_permission_granted": bound}, [path], ctx)
+    return _completed(
+        "B5",
+        {"h1_approval_hash_bound": bound, "delivery_permission_granted": bound},
+        [path, selected_path, release_path],
+        ctx,
+    )
 
 
 def _b6(ctx: ProducerContext) -> ProducerObservation:
@@ -386,12 +479,23 @@ def _b6(ctx: ProducerContext) -> ProducerObservation:
         and data.get("publish_route") == "/v4/memory/insert"
         and data.get("diagnostic_bridge_used") is False
     )
+    before_count = data.get("logical_count_before_retry")
+    after_count = data.get("logical_count_after_retry")
     passed = (
         data.get("mutation_state") == "COMMITTED"
+        and isinstance(data.get("source_chunk_id"), str)
+        and bool(data.get("source_chunk_id"))
         and data.get("search_source_chunk_id") == data.get("source_chunk_id")
-        and data.get("logical_count_after_retry") == data.get("logical_count_before_retry")
+        and isinstance(before_count, int)
+        and not isinstance(before_count, bool)
+        and isinstance(after_count, int)
+        and not isinstance(after_count, bool)
+        and before_count > 0
+        and after_count == before_count
     )
-    return _completed("B6", {"canary_passed": passed, "no_bridge_substitution": native}, [path], ctx)
+    return _completed(
+        "B6", {"canary_passed": passed, "no_bridge_substitution": native}, [path], ctx
+    )
 
 
 def _b7(ctx: ProducerContext) -> ProducerObservation:
@@ -399,16 +503,28 @@ def _b7(ctx: ProducerContext) -> ProducerObservation:
     planned, delivered = data.get("planned_source_chunk_ids"), data.get("deliveries")
     if not isinstance(planned, list) or not isinstance(delivered, list) or not planned:
         raise ProducerIntegrityError("B7 delivery populations are missing")
+    if (
+        any(not isinstance(item, str) or not item for item in planned)
+        or len(planned) != len(set(planned))
+        or any(not isinstance(row, dict) for row in delivered)
+    ):
+        raise ProducerIntegrityError(
+            "B7 delivery population contains duplicates or invalid rows"
+        )
     terminal = {
         row.get("source_chunk_id")
         for row in delivered
-        if isinstance(row, dict)
-        and row.get("terminal_state") in {"COMMITTED", "ALREADY_COMMITTED"}
+        if row.get("terminal_state") in {"COMMITTED", "ALREADY_COMMITTED"}
         and row.get("mesa_chunk_id")
         and row.get("mutation_id")
     }
     undelivered = len(set(planned) - terminal)
-    mapping = len(terminal) == len(delivered) == len(set(planned))
+    delivered_ids = [row.get("source_chunk_id") for row in delivered]
+    mapping = (
+        len(delivered_ids) == len(set(delivered_ids))
+        and set(delivered_ids) == set(planned)
+        and len(terminal) == len(planned)
+    )
     return _completed(
         "B7",
         {
@@ -424,20 +540,48 @@ def _b7(ctx: ProducerContext) -> ProducerObservation:
 def _b8(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "restart-idempotency.json")
     before, after = data.get("before_restart_probe"), data.get("after_restart_probe")
-    persistence = isinstance(before, dict) and before == after and data.get("restart_observed") is True
-    idempotent = (
-        data.get("logical_count_before_republish") == data.get("logical_count_after_republish")
-        and data.get("stable_idempotency_key") is True
-        and data.get("republish_terminal_state") in {"COMMITTED", "ALREADY_COMMITTED", "SKIPPED_COMMITTED"}
+    persistence = (
+        isinstance(before, dict)
+        and bool(before)
+        and isinstance(after, dict)
+        and before == after
+        and data.get("restart_observed") is True
     )
-    return _completed("B8", {"restart_persistence_proven": persistence, "idempotent_republish_proven": idempotent}, [path], ctx)
+    before_count = data.get("logical_count_before_republish")
+    after_count = data.get("logical_count_after_republish")
+    idempotent = (
+        isinstance(before_count, int)
+        and not isinstance(before_count, bool)
+        and isinstance(after_count, int)
+        and not isinstance(after_count, bool)
+        and before_count > 0
+        and before_count == after_count
+        and data.get("stable_idempotency_key") is True
+        and data.get("republish_terminal_state")
+        in {"COMMITTED", "ALREADY_COMMITTED", "SKIPPED_COMMITTED"}
+    )
+    return _completed(
+        "B8",
+        {
+            "restart_persistence_proven": persistence,
+            "idempotent_republish_proven": idempotent,
+        },
+        [path],
+        ctx,
+    )
 
 
 def _b9(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "scope-isolation.json")
     capabilities = data.get("mesa_contract_capabilities")
-    if not isinstance(capabilities, dict) or not capabilities.get("candidate_scope_identity") or not capabilities.get("pre_rank_exclusion_audit"):
-        return _blocked("B9", "BLOCKED_BY_MESA_CONTRACT: candidate scope/pre-rank audit unavailable")
+    if (
+        not isinstance(capabilities, dict)
+        or not capabilities.get("candidate_scope_identity")
+        or not capabilities.get("pre_rank_exclusion_audit")
+    ):
+        return _blocked(
+            "B9", "BLOCKED_BY_MESA_CONTRACT: candidate scope/pre-rank audit unavailable"
+        )
     cases = data.get("negative_cases")
     if (
         not isinstance(cases, list)
@@ -445,9 +589,41 @@ def _b9(ctx: ProducerContext) -> ProducerObservation:
         or not all(isinstance(case, dict) for case in cases)
     ):
         raise ProducerIntegrityError("B9 negative cases are missing")
-    leaks = sum(len(case.get("returned_forbidden_evidence_ids", [])) for case in cases)
+    required_case_ids = {
+        "cross_tenant_search",
+        "cross_dataset_search",
+        "cross_agent_search",
+        "inactive_status_search",
+        "wrong_jurisdiction_search",
+        "stale_version_search",
+        "effective_date_boundary_search",
+        "context_visibility",
+        "catalog_visibility",
+        "document_visibility",
+        "revision_visibility",
+        "chunk_visibility",
+    }
+    case_ids = {case.get("case_id") for case in cases}
+    if case_ids != required_case_ids:
+        raise ProducerIntegrityError("B9 negative-case matrix is incomplete")
+    forbidden_lists = [case.get("returned_forbidden_evidence_ids") for case in cases]
+    if any(
+        not isinstance(values, list)
+        or any(not isinstance(value, str) or not value for value in values)
+        for values in forbidden_lists
+    ):
+        raise ProducerIntegrityError("B9 forbidden-evidence observations are malformed")
+    leaks = sum(len(values) for values in forbidden_lists)
     complete = all(case.get("pre_rank_audit_verified") is True for case in cases)
-    return _completed("B9", {"cross_tenant_scope_leakage": leaks, "isolation_acl_passed": complete and leaks == 0}, [path], ctx)
+    return _completed(
+        "B9",
+        {
+            "cross_tenant_scope_leakage": leaks,
+            "isolation_acl_passed": complete and leaks == 0,
+        },
+        [path],
+        ctx,
+    )
 
 
 def _score_summary(ctx: ProducerContext) -> tuple[dict[str, Any], Path]:
@@ -496,8 +672,10 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
     if any(metrics.get(key) != value for key, value in expected_population.items()):
         raise ProducerIntegrityError("B10 frozen TEST population is not 40/20/10/10")
     cases = scope.get("negative_cases")
-    if not isinstance(cases, list) or not cases or not all(
-        isinstance(case, dict) for case in cases
+    if (
+        not isinstance(cases, list)
+        or not cases
+        or not all(isinstance(case, dict) for case in cases)
     ):
         raise ProducerIntegrityError("B10 authoritative scope population is missing")
     tenant_leakage = sum(
@@ -516,16 +694,26 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
 def _b11(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "graph-ablation.json")
     caps = data.get("mesa_contract_capabilities")
-    if not isinstance(caps, dict) or not caps.get("stable_path_identity") or not caps.get("native_graph_on_off_switch"):
-        return _blocked("B11", "BLOCKED_BY_MESA_CONTRACT: native stable graph ON/OFF contract unavailable")
+    if (
+        not isinstance(caps, dict)
+        or not caps.get("stable_path_identity")
+        or not caps.get("native_graph_on_off_switch")
+    ):
+        return _blocked(
+            "B11",
+            "BLOCKED_BY_MESA_CONTRACT: native stable graph ON/OFF contract unavailable",
+        )
     pairs = data.get("pairs")
-    if not isinstance(pairs, list) or not pairs:
-        raise ProducerIntegrityError("B11 graph pairs are missing")
+    if not isinstance(pairs, list) or len(pairs) != 10:
+        raise ProducerIntegrityError("B11 requires exactly 10 REL graph pairs")
     contribution = 0
     positive = 0
     neutral = 0
     harm = 0
     provenance_valid = True
+    query_ids: set[str] = set()
+    stable_path_ids: set[str] = set()
+    graph_operational = True
     for pair in pairs:
         if not isinstance(pair, dict):
             raise ProducerIntegrityError("B11 pair is malformed")
@@ -537,8 +725,10 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         matched &= on.get("graph_enabled") is True and off.get("graph_enabled") is False
         if not matched:
             raise ProducerIntegrityError("unmatched graph ON/OFF pair")
-        if on.get("graph_origin_top5") is True:
-            contribution += 1
+        query_id = on.get("query_id")
+        if not isinstance(query_id, str) or not query_id or query_id in query_ids:
+            raise ProducerIntegrityError("B11 query identity is missing or duplicated")
+        query_ids.add(query_id)
         paths = on.get("paths")
         provenance_valid &= (
             isinstance(paths, list)
@@ -550,9 +740,50 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
                 for graph_path in paths
             )
         )
-        on_cov, off_cov = on.get("complete_evidence_at_5"), off.get("complete_evidence_at_5")
-        on_rank, off_rank = on.get("first_relevant_rank"), off.get("first_relevant_rank")
-        if not isinstance(on_cov, (int, float)) or not isinstance(off_cov, (int, float)):
+        if isinstance(paths, list):
+            for graph_path in paths:
+                if not isinstance(graph_path, dict):
+                    continue
+                stable_path_id = graph_path.get("graph_path_id")
+                if stable_path_id in stable_path_ids:
+                    raise ProducerIntegrityError(
+                        "duplicate graph path cannot amplify contribution"
+                    )
+                if isinstance(stable_path_id, str):
+                    stable_path_ids.add(stable_path_id)
+        top5_origins = on.get("top5_origins")
+        if (
+            not isinstance(top5_origins, list)
+            or len(top5_origins) > 5
+            or any(
+                not isinstance(origins, list)
+                or any(not isinstance(origin, str) or not origin for origin in origins)
+                for origins in top5_origins
+            )
+        ):
+            raise ProducerIntegrityError("B11 top-5 origin evidence is malformed")
+        if any("graph" in origins for origins in top5_origins) and paths:
+            contribution += 1
+        graph_operational &= (
+            on.get("graph_backend_status") == "OPERATIONAL"
+            and off.get("graph_backend_status") == "DISABLED_BY_NATIVE_SWITCH"
+            and not on.get("graph_backend_error")
+            and not off.get("graph_backend_error")
+        )
+        on_cov, off_cov = on.get("complete_evidence_at_5"), off.get(
+            "complete_evidence_at_5"
+        )
+        on_rank, off_rank = on.get("first_relevant_rank"), off.get(
+            "first_relevant_rank"
+        )
+        if (
+            isinstance(on_cov, bool)
+            or isinstance(off_cov, bool)
+            or not isinstance(on_cov, (int, float))
+            or not isinstance(off_cov, (int, float))
+            or not 0 <= on_cov <= 1
+            or not 0 <= off_cov <= 1
+        ):
             raise ProducerIntegrityError("B11 evidence coverage is missing")
         if on_rank is not None and (not isinstance(on_rank, int) or on_rank < 1):
             raise ProducerIntegrityError("B11 ON rank is invalid")
@@ -569,7 +800,7 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
     return _completed(
         "B11",
         {
-            "graph_capability_operational": data.get("graph_capability_operational") is True,
+            "graph_capability_operational": graph_operational,
             "graph_causal_ablation_proven": positive > 0,
             "graph_provenance_verified": provenance_valid,
             "graph_rel_contribution_count": contribution,
@@ -585,9 +816,17 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
 def _b12(ctx: ProducerContext) -> ProducerObservation:
     data, path = _score_summary(ctx)
     metrics = data.get("metrics")
-    if not isinstance(metrics, dict) or data.get("lane_status", {}).get("answers") != "PASS":
+    if (
+        not isinstance(metrics, dict)
+        or data.get("lane_status", {}).get("answers") != "PASS"
+    ):
         raise ProducerIntegrityError("B12 answer population is incomplete")
-    required = ("answerable_pass_rate", "no_answer_pass_rate", "unsupported_material_claim_rate", "fabricated_evidence_chunk_ids")
+    required = (
+        "answerable_pass_rate",
+        "no_answer_pass_rate",
+        "unsupported_material_claim_rate",
+        "fabricated_evidence_chunk_ids",
+    )
     if any(metrics.get(key) is None for key in required):
         raise ProducerIntegrityError("B12 required measured population is empty")
     expected_population = {
@@ -603,7 +842,10 @@ def _b12(ctx: ProducerContext) -> ProducerObservation:
 def _b13(ctx: ProducerContext) -> ProducerObservation:
     snapshots = []
     paths = []
-    for name, phase in (("health-pre-test.json", HealthPhase.PRE_TEST), ("health-post-test.json", HealthPhase.POST_TEST)):
+    for name, phase in (
+        ("health-pre-test.json", HealthPhase.PRE_TEST),
+        ("health-post-test.json", HealthPhase.POST_TEST),
+    ):
         data, path = _json(ctx, name)
         snapshot = HealthSnapshot.model_validate(data)
         if snapshot.phase is not phase:
@@ -617,9 +859,13 @@ def _b13(ctx: ProducerContext) -> ProducerObservation:
             host_metrics=snapshot.host_metrics,
         )
         snapshots.append(recomputed)
+        if not snapshot.host_metrics:
+            raise ProducerIntegrityError(f"host metrics are missing in {name}")
         paths.append(path)
     samples, telemetry = _jsonl(ctx, "resource-telemetry.jsonl", ResourceSample)
-    events, event_path = _jsonl(ctx, "resource-pressure-events.jsonl", ResourcePressureEvent)
+    events, event_path = _jsonl(
+        ctx, "resource-pressure-events.jsonl", ResourcePressureEvent
+    )
     resource = evaluate_resource_status(samples, events)
     oom = sum(sample.oom_killed_count for sample in samples)
     catastrophic = int(
@@ -628,7 +874,11 @@ def _b13(ctx: ProducerContext) -> ProducerObservation:
     )
     return _completed(
         "B13",
-        {"catastrophic_resource_failure": catastrophic, "oom_killed_count": oom, "resource_usage_recorded": bool(samples)},
+        {
+            "catastrophic_resource_failure": catastrophic,
+            "oom_killed_count": oom,
+            "resource_usage_recorded": bool(samples),
+        },
         [*paths, telemetry, event_path],
         ctx,
     )
@@ -652,10 +902,20 @@ def _b14(ctx: ProducerContext) -> ProducerObservation:
         and oracle.get("status") == "PASS"
         and oracle.get("finding_count") == 0
     )
-    return _completed("B14", {"evidence_integrity_verified": coherent, "post_freeze_mutations": 0 if coherent else 1}, [raw_path, oracle_path, score_path], ctx)
+    return _completed(
+        "B14",
+        {
+            "evidence_integrity_verified": coherent,
+            "post_freeze_mutations": 0 if coherent else 1,
+        },
+        [raw_path, oracle_path, score_path],
+        ctx,
+    )
 
 
-PRODUCTION_METRIC_PRODUCERS: dict[str, Callable[[ProducerContext], ProducerObservation]] = {
+PRODUCTION_METRIC_PRODUCERS: dict[
+    str, Callable[[ProducerContext], ProducerObservation]
+] = {
     "B0": _b0,
     "B1": _b1,
     "B2": _b2,
@@ -691,5 +951,7 @@ def produce_all(ctx: ProducerContext) -> dict[str, ProducerObservation]:
         try:
             results[gate_id] = producer(ctx)
         except (OSError, ValueError, KeyError, TypeError) as exc:
-            results[gate_id] = _blocked(gate_id, f"authoritative evidence unavailable: {exc}")
+            results[gate_id] = _blocked(
+                gate_id, f"authoritative evidence unavailable: {exc}"
+            )
     return results
