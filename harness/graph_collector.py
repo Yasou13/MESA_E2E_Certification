@@ -209,8 +209,23 @@ def execute_paired_graph_ablation(
             neutral_count += 1
             outcome = "neutral"
 
+        off_origins = [
+            list(r.debug_provenance.get("origins", [])) for r in cap_off.results[:5]
+        ]
+        if any("graph" in origs for origs in off_origins):
+            raise MESAContractIntegrityError(
+                f"query {q_id} OFF results contain graph origin despite graph disabled"
+            )
+
         pairs_evidence.append(
             {
+                "query_id": q_id,
+                "dataset_id": datasets[0],
+                "pair_identity": cap_on.graph_ablation.pair_identity,
+                "scope_identity": {
+                    "tenant_id": cap_on.results[0].scope.tenant_id if cap_on.results else "default",
+                    "agent_id": cap_on.results[0].scope.agent_id if cap_on.results else "default",
+                },
                 "on": {
                     "query_id": q_id,
                     "dataset_id": datasets[0],
@@ -223,6 +238,9 @@ def execute_paired_graph_ablation(
                     "top5_origins": top5_origins,
                     "paths": pair_paths,
                     "raw_response_sha256": cap_on.response_sha256,
+                    "pair_identity": cap_on.graph_ablation.pair_identity,
+                    "contract_version": cap_on.graph_ablation.contract_version,
+                    "retrieval_config_identity": cap_on.graph_ablation.retrieval_config_identity,
                 },
                 "off": {
                     "query_id": q_id,
@@ -233,9 +251,13 @@ def execute_paired_graph_ablation(
                     "graph_backend_status": "DISABLED_BY_NATIVE_SWITCH",
                     "complete_evidence_at_5": off_cov,
                     "first_relevant_rank": off_rank,
+                    "top5_origins": off_origins,
+                    "paths": [],
                     "raw_response_sha256": cap_off.response_sha256,
+                    "pair_identity": cap_off.graph_ablation.pair_identity,
+                    "contract_version": cap_off.graph_ablation.contract_version,
+                    "retrieval_config_identity": cap_off.graph_ablation.retrieval_config_identity,
                 },
-                "pair_identity": cap_on.graph_ablation.pair_identity,
                 "outcome": outcome,
             }
         )

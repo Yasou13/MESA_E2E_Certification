@@ -582,6 +582,15 @@ def _b9(ctx: ProducerContext) -> ProducerObservation:
         return _blocked(
             "B9", "BLOCKED_BY_MESA_CONTRACT: candidate scope/pre-rank audit unavailable"
         )
+    if data.get("run_id") != ctx.run_id:
+        raise ProducerIntegrityError(
+            f"B9 scope artifact run_id mismatch: {data.get('run_id')} != {ctx.run_id}"
+        )
+    mesa_repo_sha = ctx.current_repository_shas.get("MESA")
+    if mesa_repo_sha and data.get("mesa_sha") != mesa_repo_sha:
+        raise ProducerIntegrityError(
+            f"B9 scope artifact mesa_sha mismatch: {data.get('mesa_sha')} != {mesa_repo_sha}"
+        )
     if data.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
         raise ProducerIntegrityError(
             "B9 scope-isolation artifact lacks authoritative producer lineage"
@@ -627,20 +636,29 @@ def _b9(ctx: ProducerContext) -> ProducerObservation:
                 f"B9 case {case.get('case_id')} pre_rank_audit_verified is not True"
             )
         hash_val = case.get("exclusion_audit_hash")
-        if hash_val is not None and (
-            not isinstance(hash_val, str) or not hash_val.startswith("sha256:")
-        ):
+        if not isinstance(hash_val, str) or not hash_val.startswith("sha256:"):
             raise ProducerIntegrityError(
                 f"B9 case {case.get('case_id')} exclusion_audit_hash is invalid"
+            )
+        raw_hash = case.get("raw_response_sha256")
+        if raw_hash is not None and (
+            not isinstance(raw_hash, str) or len(raw_hash) != 64
+        ):
+            raise ProducerIntegrityError(
+                f"B9 case {case.get('case_id')} raw_response_sha256 is invalid"
             )
         eval_c = case.get("evaluated_candidate_count")
         excl_c = case.get("excluded_candidate_count")
         elig_c = case.get("eligible_candidate_count")
-        if eval_c is not None and excl_c is not None and elig_c is not None:
-            if eval_c != excl_c + elig_c:
-                raise ProducerIntegrityError(
-                    f"B9 case {case.get('case_id')} counts are incoherent"
-                )
+        if (
+            not isinstance(eval_c, int)
+            or not isinstance(excl_c, int)
+            or not isinstance(elig_c, int)
+            or eval_c != excl_c + elig_c
+        ):
+            raise ProducerIntegrityError(
+                f"B9 case {case.get('case_id')} counts are incoherent"
+            )
     leaks = sum(len(values) for values in forbidden_lists)
     complete = all(case.get("pre_rank_audit_verified") is True for case in cases)
     return _completed(
@@ -676,6 +694,15 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
             "B10",
             "BLOCKED_BY_MESA_CONTRACT: tenant leakage cannot be measured without "
             "candidate scope identity and pre-rank exclusion audit",
+        )
+    if scope.get("run_id") != ctx.run_id:
+        raise ProducerIntegrityError(
+            f"B10 scope artifact run_id mismatch: {scope.get('run_id')} != {ctx.run_id}"
+        )
+    mesa_repo_sha = ctx.current_repository_shas.get("MESA")
+    if mesa_repo_sha and scope.get("mesa_sha") != mesa_repo_sha:
+        raise ProducerIntegrityError(
+            f"B10 scope artifact mesa_sha mismatch: {scope.get('mesa_sha')} != {mesa_repo_sha}"
         )
     if scope.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
         raise ProducerIntegrityError(
@@ -739,6 +766,15 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
             "B11",
             "BLOCKED_BY_MESA_CONTRACT: native stable graph ON/OFF contract unavailable",
         )
+    if data.get("run_id") != ctx.run_id:
+        raise ProducerIntegrityError(
+            f"B11 graph artifact run_id mismatch: {data.get('run_id')} != {ctx.run_id}"
+        )
+    mesa_repo_sha = ctx.current_repository_shas.get("MESA")
+    if mesa_repo_sha and data.get("mesa_sha") != mesa_repo_sha:
+        raise ProducerIntegrityError(
+            f"B11 graph artifact mesa_sha mismatch: {data.get('mesa_sha')} != {mesa_repo_sha}"
+        )
     if data.get("producer") != "harness.graph_collector.execute_paired_graph_ablation":
         raise ProducerIntegrityError(
             "B11 graph-ablation artifact lacks authoritative producer lineage"
@@ -752,6 +788,14 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         raise ProducerIntegrityError(
             "B11 frozen multi-store state proof missing or unverified"
         )
+    pre_fp = proof.get("pre_composite_fingerprint")
+    post_fp = proof.get("post_composite_fingerprint")
+    if not pre_fp or not post_fp or pre_fp != post_fp:
+        return _blocked(
+            "B11",
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: composite store fingerprint mutated during paired execution",
+        )
+
     pairs = data.get("pairs")
     if not isinstance(pairs, list) or len(pairs) != 10:
         raise ProducerIntegrityError("B11 requires exactly 10 REL graph pairs")
@@ -768,15 +812,43 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         on, off = pair.get("on"), pair.get("off")
         if not isinstance(on, dict) or not isinstance(off, dict):
             raise ProducerIntegrityError("B11 ON/OFF observation is malformed")
-        identity_fields = ("query_id", "dataset_id", "mesa_sha", "settings_sha256")
+        identity_fields = (
+            "query_id",
+            "dataset_id",
+            "mesa_sha",
+            "settings_sha256",
+        )
         matched = all(on.get(key) == off.get(key) for key in identity_fields)
         matched &= on.get("graph_enabled") is True and off.get("graph_enabled") is False
+        if on.get("pair_identity") or off.get("pair_identity"):
+            matched &= on.get("pair_identity") == off.get("pair_identity")
+        if on.get("contract_version") or off.get("contract_version"):
+            matched &= on.get("contract_version") == off.get("contract_version")
+        if on.get("retrieval_config_identity") or off.get("retrieval_config_identity"):
+            matched &= on.get("retrieval_config_identity") == off.get("retrieval_config_identity")
         if not matched:
             raise ProducerIntegrityError("unmatched graph ON/OFF pair")
         query_id = on.get("query_id")
         if not isinstance(query_id, str) or not query_id or query_id in query_ids:
             raise ProducerIntegrityError("B11 query identity is missing or duplicated")
         query_ids.add(query_id)
+        if mesa_repo_sha and on.get("mesa_sha") != mesa_repo_sha:
+            raise ProducerIntegrityError(
+                f"B11 pair MESA SHA mismatch: {on.get('mesa_sha')} != {mesa_repo_sha}"
+            )
+        if pair.get("pair_identity") and pair.get("pair_identity") != on.get("pair_identity"):
+            raise ProducerIntegrityError("B11 pair identity mismatch")
+        scope_id = pair.get("scope_identity")
+        if scope_id is not None and (not isinstance(scope_id, dict) or not scope_id.get("tenant_id")):
+            raise ProducerIntegrityError("B11 pair missing scope_identity")
+
+        # Disallow graph paths or graph origins in OFF
+        if off.get("paths"):
+            raise ProducerIntegrityError("B11 OFF pair leaked graph paths")
+        off_top5 = off.get("top5_origins", [])
+        if any("graph" in origs for origs in off_top5 if isinstance(origs, list)):
+            raise ProducerIntegrityError("B11 OFF pair leaked graph origins in top-5")
+
         paths = on.get("paths")
         provenance_valid &= (
             isinstance(paths, list)

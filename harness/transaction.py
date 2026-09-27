@@ -675,8 +675,9 @@ class CertificationTransaction:
                         )
                     )
                     continue
-                contract_blocked = produced.reason.startswith(
-                    "BLOCKED_BY_MESA_CONTRACT:"
+                contract_blocked = (
+                    produced.reason.startswith("BLOCKED_BY_MESA_CONTRACT:")
+                    or produced.reason.startswith("BLOCKED_BY_RUNTIME_STATE_PROOF:")
                 )
                 results.append(
                     GateResult(
