@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from harness.artifacts import RunArtifactStore
 from harness.mesa_adapters import (
     MESAContractBlocker,
     MESAContractIntegrityError,
@@ -128,8 +129,8 @@ def _mock_mesa_response(
     }
 
 
-def _dummy_ctx(tmp_path: Path) -> ProducerContext:
-    freeze_path = tmp_path / "contract-freeze.json"
+def _dummy_ctx(run_dir: Path) -> ProducerContext:
+    freeze_path = run_dir / "contract-freeze.json"
     freeze_path.write_text(
         json.dumps(
             {
@@ -140,30 +141,36 @@ def _dummy_ctx(tmp_path: Path) -> ProducerContext:
             }
         )
     )
+    store = RunArtifactStore(run_dir, run_id=RUN_ID)
+    manifest_info = store.compute_raw_manifest()
+    store._write_immutable_json(run_dir / "raw-manifest.json", manifest_info)
     return ProducerContext(
-        run_dir=tmp_path,
+        run_dir=run_dir,
         run_id=RUN_ID,
         freeze_path=freeze_path,
-        checksum_path=tmp_path / "SHA256SUMS.txt",
-        repository_root=tmp_path,
+        checksum_path=run_dir / "SHA256SUMS.txt",
+        repository_root=run_dir,
         current_repository_shas={"MESA": MESA_SHA},
-        raw_manifest_hash="m" * 64,
-        gate_config_path=tmp_path / "profile-b-gates.json",
+        raw_manifest_hash=manifest_info["manifest_hash"],
+        gate_config_path=run_dir / "profile-b-gates.json",
     )
 
 
 def test_phase7_collector_end_to_end(tmp_path: Path) -> None:
+    run_dir = tmp_path / RUN_ID
+    run_dir.mkdir()
+
     def executor(case: ScopeTestCase) -> dict:
         return _mock_mesa_response(case, leak=False)
 
     artifact_path = collect_phase7_scope_isolation(
         run_id=RUN_ID,
-        run_dir=tmp_path,
+        run_dir=run_dir,
         mesa_sha=MESA_SHA,
         mesa_executor=executor,
     )
     assert artifact_path.is_file()
-    assert (tmp_path / "scope-isolation.json.SHA256").is_file()
+    assert (run_dir / "scope-isolation.json.SHA256").is_file()
 
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert payload["contract_version"] == "mesa.scope-audit.v1"
@@ -171,7 +178,7 @@ def test_phase7_collector_end_to_end(tmp_path: Path) -> None:
     assert payload["total_forbidden_leakage"] == 0
     assert len(payload["negative_cases"]) == 12
 
-    ctx = _dummy_ctx(tmp_path)
+    ctx = _dummy_ctx(run_dir)
     obs = _b9(ctx)
     assert obs.execution == "COMPLETED"
     assert obs.observed["cross_tenant_scope_leakage"] == 0
@@ -179,20 +186,23 @@ def test_phase7_collector_end_to_end(tmp_path: Path) -> None:
 
 
 def test_phase7_collector_detects_forbidden_leak(tmp_path: Path) -> None:
+    run_dir = tmp_path / RUN_ID
+    run_dir.mkdir()
+
     def executor(case: ScopeTestCase) -> dict:
         # Leak on the cross_tenant_search case
         return _mock_mesa_response(case, leak=(case.case_id == "cross_tenant_search"))
 
     artifact_path = collect_phase7_scope_isolation(
         run_id=RUN_ID,
-        run_dir=tmp_path,
+        run_dir=run_dir,
         mesa_sha=MESA_SHA,
         mesa_executor=executor,
     )
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert payload["total_forbidden_leakage"] > 0
 
-    ctx = _dummy_ctx(tmp_path)
+    ctx = _dummy_ctx(run_dir)
     obs = _b9(ctx)
     assert obs.execution == "COMPLETED"
     assert obs.observed["cross_tenant_scope_leakage"] > 0
@@ -200,72 +210,84 @@ def test_phase7_collector_detects_forbidden_leak(tmp_path: Path) -> None:
 
 
 def test_phase7_collector_rejects_incoherent_audit_counts(tmp_path: Path) -> None:
+    run_dir = tmp_path / RUN_ID
+    run_dir.mkdir()
+
     def executor(case: ScopeTestCase) -> dict:
         return _mock_mesa_response(case, incoherent_counts=True)
 
     with pytest.raises(MESAContractIntegrityError, match="incoherent"):
         collect_phase7_scope_isolation(
             run_id=RUN_ID,
-            run_dir=tmp_path,
+            run_dir=run_dir,
             mesa_sha=MESA_SHA,
             mesa_executor=executor,
         )
 
 
 def test_phase7_collector_rejects_invalid_audit_hash(tmp_path: Path) -> None:
+    run_dir = tmp_path / RUN_ID
+    run_dir.mkdir()
+
     def executor(case: ScopeTestCase) -> dict:
         return _mock_mesa_response(case, invalid_hash=True)
 
     with pytest.raises(MESAContractIntegrityError, match="exclusion_audit_hash"):
         collect_phase7_scope_isolation(
             run_id=RUN_ID,
-            run_dir=tmp_path,
+            run_dir=run_dir,
             mesa_sha=MESA_SHA,
             mesa_executor=executor,
         )
 
 
 def test_b9_rejects_caller_forged_producer(tmp_path: Path) -> None:
+    run_dir = tmp_path / RUN_ID
+    run_dir.mkdir()
+
     def executor(case: ScopeTestCase) -> dict:
         return _mock_mesa_response(case, leak=False)
 
     collect_phase7_scope_isolation(
         run_id=RUN_ID,
-        run_dir=tmp_path,
+        run_dir=run_dir,
         mesa_sha=MESA_SHA,
         mesa_executor=executor,
     )
 
-    path = tmp_path / "scope-isolation.json"
+    path = run_dir / "scope-isolation.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["producer"] = "caller-forged-producer"
     path.unlink()
     path.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(path, payload)
 
-    ctx = _dummy_ctx(tmp_path)
+    ctx = _dummy_ctx(run_dir)
     with pytest.raises(ProducerIntegrityError, match="producer lineage"):
         _b9(ctx)
 
 
 def test_b9_rejects_unsupported_contract_version(tmp_path: Path) -> None:
+    run_dir = tmp_path / RUN_ID
+    run_dir.mkdir()
+
     def executor(case: ScopeTestCase) -> dict:
         return _mock_mesa_response(case, leak=False)
 
     collect_phase7_scope_isolation(
         run_id=RUN_ID,
-        run_dir=tmp_path,
+        run_dir=run_dir,
         mesa_sha=MESA_SHA,
         mesa_executor=executor,
     )
 
-    path = tmp_path / "scope-isolation.json"
+    path = run_dir / "scope-isolation.json"
     payload = json.loads(path.read_text(encoding="utf-8"))
     payload["contract_version"] = "mesa.scope-audit.v999"
     path.unlink()
     path.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(path, payload)
 
-    ctx = _dummy_ctx(tmp_path)
+    ctx = _dummy_ctx(run_dir)
     with pytest.raises(ProducerIntegrityError, match="unsupported scope contract_version"):
         _b9(ctx)

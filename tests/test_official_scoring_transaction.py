@@ -151,7 +151,17 @@ def _authority_freeze(tmp_path: Path):
         shutil.copyfile(ROOT / "harness" / name, destination)
         scorer_files.append(destination)
     producer_files = []
-    for name in ("metric_producers.py", "gates.py", "transaction.py"):
+    for name in (
+        "metric_producers.py",
+        "gates.py",
+        "transaction.py",
+        "scope_collector.py",
+        "graph_collector.py",
+        "state_proof.py",
+        "mesa_adapters.py",
+        "qualification_runner.py",
+        "finalizer.py",
+    ):
         destination = repo / "harness" / name
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(ROOT / "harness" / name, destination)
