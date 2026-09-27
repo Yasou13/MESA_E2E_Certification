@@ -175,6 +175,34 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
             "harness_source",
             source_root / "harness" / "transaction.py",
         ),
+        "harness/scope_collector.py": (
+            "harness_source",
+            source_root / "harness" / "scope_collector.py",
+        ),
+        "harness/graph_collector.py": (
+            "harness_source",
+            source_root / "harness" / "graph_collector.py",
+        ),
+        "harness/state_proof.py": (
+            "harness_source",
+            source_root / "harness" / "state_proof.py",
+        ),
+        "harness/mesa_adapters.py": (
+            "harness_source",
+            source_root / "harness" / "mesa_adapters.py",
+        ),
+        "harness/qualification_runner.py": (
+            "harness_source",
+            source_root / "harness" / "qualification_runner.py",
+        ),
+        "harness/finalizer.py": (
+            "harness_source",
+            source_root / "harness" / "finalizer.py",
+        ),
+        "harness/official_scoring.py": (
+            "scorer_source",
+            source_root / "harness" / "official_scoring.py",
+        ),
         "config/profile-b-gates.json": ("thresholds", ctx.gate_config_path.resolve()),
     }
     authority_rows = []
@@ -206,6 +234,35 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
             )
         authority_rows.append({"path": rel, "sha256": digest})
     return hashlib.sha256(canonical_json_bytes(authority_rows)).hexdigest()
+
+
+def _load_and_verify_raw_manifest(ctx: ProducerContext) -> dict[str, str]:
+    """Verify raw-manifest.json in run_dir against context and return {path: sha256}."""
+    manifest_path = ctx.run_dir / "raw-manifest.json"
+    _verify_sidecar(manifest_path)
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (UnicodeError, json.JSONDecodeError) as exc:
+        raise ProducerIntegrityError(f"invalid raw-manifest.json: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise ProducerIntegrityError("raw-manifest.json must be an object")
+    if manifest.get("run_id") != ctx.run_id:
+        raise ProducerIntegrityError(
+            f"raw-manifest.json run_id mismatch: {manifest.get('run_id')} != {ctx.run_id}"
+        )
+    if manifest.get("manifest_hash") != ctx.raw_manifest_hash:
+        raise ProducerIntegrityError(
+            f"raw-manifest.json manifest_hash mismatch: {manifest.get('manifest_hash')} != {ctx.raw_manifest_hash}"
+        )
+    entries = manifest.get("entries")
+    if not isinstance(entries, list):
+        raise ProducerIntegrityError("raw-manifest.json entries must be a list")
+    manifest_map: dict[str, str] = {}
+    for entry in entries:
+        if not isinstance(entry, dict) or not entry.get("path") or not entry.get("sha256"):
+            raise ProducerIntegrityError("raw-manifest.json entry malformed")
+        manifest_map[entry["path"]] = entry["sha256"]
+    return manifest_map
 
 
 def _blocked(gate_id: str, reason: str) -> ProducerObservation:
@@ -571,41 +628,37 @@ def _b8(ctx: ProducerContext) -> ProducerObservation:
     )
 
 
-def _b9(ctx: ProducerContext) -> ProducerObservation:
-    data, path = _json(ctx, "scope-isolation.json")
-    capabilities = data.get("mesa_contract_capabilities")
-    if (
-        not isinstance(capabilities, dict)
-        or not capabilities.get("candidate_scope_identity")
-        or not capabilities.get("pre_rank_exclusion_audit")
-    ):
-        return _blocked(
-            "B9", "BLOCKED_BY_MESA_CONTRACT: candidate scope/pre-rank audit unavailable"
-        )
-    if data.get("run_id") != ctx.run_id:
+def _validate_scope_cases(
+    scope: dict[str, Any], scope_path: Path, ctx: ProducerContext, gate_name: str
+) -> tuple[int, list[Path]]:
+    if scope.get("run_id") != ctx.run_id:
         raise ProducerIntegrityError(
-            f"B9 scope artifact run_id mismatch: {data.get('run_id')} != {ctx.run_id}"
+            f"{gate_name} scope artifact run_id mismatch: {scope.get('run_id')} != {ctx.run_id}"
         )
     mesa_repo_sha = ctx.current_repository_shas.get("MESA")
-    if mesa_repo_sha and data.get("mesa_sha") != mesa_repo_sha:
+    if mesa_repo_sha and scope.get("mesa_sha") != mesa_repo_sha:
         raise ProducerIntegrityError(
-            f"B9 scope artifact mesa_sha mismatch: {data.get('mesa_sha')} != {mesa_repo_sha}"
+            f"{gate_name} scope artifact mesa_sha mismatch: {scope.get('mesa_sha')} != {mesa_repo_sha}"
         )
-    if data.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
+    if scope.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
         raise ProducerIntegrityError(
-            "B9 scope-isolation artifact lacks authoritative producer lineage"
+            f"{gate_name} scope-isolation artifact lacks authoritative producer lineage"
         )
-    if data.get("contract_version") != "mesa.scope-audit.v1":
+    if scope.get("contract_version") != "mesa.scope-audit.v1":
         raise ProducerIntegrityError(
-            f"B9 unsupported scope contract_version: {data.get('contract_version')!r}"
+            f"{gate_name} unsupported scope contract_version: {scope.get('contract_version')!r}"
         )
-    cases = data.get("negative_cases")
+
+    # Validate raw execution lineage against sealed raw-manifest
+    manifest_entries = _load_and_verify_raw_manifest(ctx)
+
+    cases = scope.get("negative_cases")
     if (
         not isinstance(cases, list)
         or not cases
         or not all(isinstance(case, dict) for case in cases)
     ):
-        raise ProducerIntegrityError("B9 negative cases are missing")
+        raise ProducerIntegrityError(f"{gate_name} negative cases are missing")
     required_case_ids = {
         "cross_tenant_search",
         "cross_dataset_search",
@@ -622,52 +675,142 @@ def _b9(ctx: ProducerContext) -> ProducerObservation:
     }
     case_ids = {case.get("case_id") for case in cases}
     if case_ids != required_case_ids:
-        raise ProducerIntegrityError("B9 negative-case matrix is incomplete")
+        raise ProducerIntegrityError(f"{gate_name} negative-case matrix is incomplete")
     forbidden_lists = [case.get("returned_forbidden_evidence_ids") for case in cases]
     if any(
         not isinstance(values, list)
         or any(not isinstance(value, str) or not value for value in values)
         for values in forbidden_lists
     ):
-        raise ProducerIntegrityError("B9 forbidden-evidence observations are malformed")
+        raise ProducerIntegrityError(f"{gate_name} forbidden-evidence observations are malformed")
+
+    search_case_ids = {
+        "cross_tenant_search",
+        "cross_dataset_search",
+        "cross_agent_search",
+        "inactive_status_search",
+        "wrong_jurisdiction_search",
+        "stale_version_search",
+        "effective_date_boundary_search",
+    }
+
+    raw_paths: list[Path] = [scope_path]
     for case in cases:
-        if case.get("pre_rank_audit_verified") is not True:
+        cid = case.get("case_id")
+        raw_rel = case.get("source_raw_artifact")
+        if not isinstance(raw_rel, str) or not raw_rel.startswith("raw/scope/"):
             raise ProducerIntegrityError(
-                f"B9 case {case.get('case_id')} pre_rank_audit_verified is not True"
+                f"{gate_name} case {cid} lacks authoritative source_raw_artifact in raw/scope/"
             )
-        hash_val = case.get("exclusion_audit_hash")
-        if not isinstance(hash_val, str) or not hash_val.startswith("sha256:"):
+        if raw_rel not in manifest_entries:
             raise ProducerIntegrityError(
-                f"B9 case {case.get('case_id')} exclusion_audit_hash is invalid"
+                f"{gate_name} case {cid} source_raw_artifact is absent from sealed raw manifest"
             )
+        if case.get("source_raw_sha256") != manifest_entries[raw_rel]:
+            raise ProducerIntegrityError(
+                f"{gate_name} case {cid} source_raw_sha256 does not match sealed raw manifest"
+            )
+        raw_file = ctx.run_dir / raw_rel
+        _verify_sidecar(raw_file)
+        try:
+            raw_payload = json.loads(raw_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise ProducerIntegrityError(f"cannot read raw artifact {raw_rel}: {exc}") from exc
+        if raw_payload.get("run_id") != ctx.run_id:
+            raise ProducerIntegrityError(
+                f"{gate_name} raw artifact {raw_rel} run_id mismatch: {raw_payload.get('run_id')} != {ctx.run_id}"
+            )
+        if raw_payload.get("case_id") != cid:
+            raise ProducerIntegrityError(
+                f"{gate_name} raw artifact {raw_rel} case_id mismatch: {raw_payload.get('case_id')} != {cid}"
+            )
+
         raw_hash = case.get("raw_response_sha256")
         if raw_hash is not None and (
             not isinstance(raw_hash, str) or len(raw_hash) != 64
         ):
             raise ProducerIntegrityError(
-                f"B9 case {case.get('case_id')} raw_response_sha256 is invalid"
+                f"{gate_name} case {cid} raw_response_sha256 is invalid"
             )
-        eval_c = case.get("evaluated_candidate_count")
-        excl_c = case.get("excluded_candidate_count")
-        elig_c = case.get("eligible_candidate_count")
-        if (
-            not isinstance(eval_c, int)
-            or not isinstance(excl_c, int)
-            or not isinstance(elig_c, int)
-            or eval_c != excl_c + elig_c
-        ):
-            raise ProducerIntegrityError(
-                f"B9 case {case.get('case_id')} counts are incoherent"
-            )
+
+        if cid in search_case_ids:
+            if case.get("proof_type") != "search_pre_rank_scope":
+                raise ProducerIntegrityError(
+                    f"{gate_name} search case {cid} must have proof_type='search_pre_rank_scope'"
+                )
+            if case.get("pre_rank_audit_verified") is not True:
+                raise ProducerIntegrityError(
+                    f"{gate_name} case {cid} pre_rank_audit_verified is not True"
+                )
+            hash_val = case.get("exclusion_audit_hash")
+            if not isinstance(hash_val, str) or not hash_val.startswith("sha256:"):
+                raise ProducerIntegrityError(
+                    f"{gate_name} case {cid} exclusion_audit_hash is invalid"
+                )
+            eval_c = case.get("evaluated_candidate_count")
+            excl_c = case.get("excluded_candidate_count")
+            elig_c = case.get("eligible_candidate_count")
+            if (
+                not isinstance(eval_c, int)
+                or not isinstance(excl_c, int)
+                or not isinstance(elig_c, int)
+                or eval_c != excl_c + elig_c
+            ):
+                raise ProducerIntegrityError(
+                    f"{gate_name} case {cid} counts are incoherent"
+                )
+        else:
+            # Non-search visibility cases - forbid pretending to have pre-rank audit
+            if case.get("proof_type") != "endpoint_visibility":
+                raise ProducerIntegrityError(
+                    f"{gate_name} non-search case {cid} must have proof_type='endpoint_visibility'"
+                )
+            if case.get("pre_rank_audit_verified") is True:
+                raise ProducerIntegrityError(
+                    f"{gate_name} non-search case {cid} cannot claim pre_rank_audit_verified"
+                )
+            if case.get("exclusion_audit_hash") is not None:
+                raise ProducerIntegrityError(
+                    f"{gate_name} non-search case {cid} cannot synthesize exclusion_audit_hash"
+                )
+            if (
+                case.get("evaluated_candidate_count") is not None
+                or case.get("excluded_candidate_count") is not None
+                or case.get("eligible_candidate_count") is not None
+            ):
+                raise ProducerIntegrityError(
+                    f"{gate_name} non-search case {cid} cannot synthesize candidate counts"
+                )
+            if case.get("endpoint_visibility_verified") is not True:
+                raise ProducerIntegrityError(
+                    f"{gate_name} non-search case {cid} endpoint_visibility_verified is not True"
+                )
+
+        raw_paths.append(raw_file)
+
     leaks = sum(len(values) for values in forbidden_lists)
-    complete = all(case.get("pre_rank_audit_verified") is True for case in cases)
+    return leaks, raw_paths
+
+
+def _b9(ctx: ProducerContext) -> ProducerObservation:
+    data, path = _json(ctx, "scope-isolation.json")
+    capabilities = data.get("mesa_contract_capabilities")
+    if (
+        not isinstance(capabilities, dict)
+        or not capabilities.get("candidate_scope_identity")
+        or not capabilities.get("pre_rank_exclusion_audit")
+    ):
+        return _blocked(
+            "B9", "BLOCKED_BY_MESA_CONTRACT: candidate scope/pre-rank audit unavailable"
+        )
+    leaks, raw_paths = _validate_scope_cases(data, path, ctx, "B9")
     return _completed(
         "B9",
         {
             "cross_tenant_scope_leakage": leaks,
-            "isolation_acl_passed": complete and leaks == 0,
+            "isolation_acl_passed": leaks == 0,
         },
-        [path],
+        raw_paths,
         ctx,
     )
 
@@ -695,23 +838,8 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
             "BLOCKED_BY_MESA_CONTRACT: tenant leakage cannot be measured without "
             "candidate scope identity and pre-rank exclusion audit",
         )
-    if scope.get("run_id") != ctx.run_id:
-        raise ProducerIntegrityError(
-            f"B10 scope artifact run_id mismatch: {scope.get('run_id')} != {ctx.run_id}"
-        )
-    mesa_repo_sha = ctx.current_repository_shas.get("MESA")
-    if mesa_repo_sha and scope.get("mesa_sha") != mesa_repo_sha:
-        raise ProducerIntegrityError(
-            f"B10 scope artifact mesa_sha mismatch: {scope.get('mesa_sha')} != {mesa_repo_sha}"
-        )
-    if scope.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
-        raise ProducerIntegrityError(
-            "B10 scope-isolation artifact lacks authoritative producer lineage"
-        )
-    if scope.get("contract_version") != "mesa.scope-audit.v1":
-        raise ProducerIntegrityError(
-            f"B10 unsupported scope contract_version: {scope.get('contract_version')!r}"
-        )
+    leaks, raw_paths = _validate_scope_cases(scope, scope_path, ctx, "B10")
+
     metrics = data.get("metrics")
     if (
         not isinstance(metrics, dict)
@@ -734,22 +862,11 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
     }
     if any(metrics.get(key) != value for key, value in expected_population.items()):
         raise ProducerIntegrityError("B10 frozen TEST population is not 40/20/10/10")
-    cases = scope.get("negative_cases")
-    if (
-        not isinstance(cases, list)
-        or not cases
-        or not all(isinstance(case, dict) for case in cases)
-    ):
-        raise ProducerIntegrityError("B10 authoritative scope population is missing")
-    tenant_leakage = sum(
-        len(case.get("returned_forbidden_evidence_ids", [])) for case in cases
-    )
-    if not all(case.get("pre_rank_audit_verified") is True for case in cases):
-        raise ProducerIntegrityError("B10 pre-rank scope audit is incomplete")
+
     return _completed(
         "B10",
-        {**{key: metrics[key] for key in required}, "tenant_leakage": tenant_leakage},
-        [path, scope_path],
+        {**{key: metrics[key] for key in required}, "tenant_leakage": leaks},
+        [path] + raw_paths,
         ctx,
     )
 
@@ -783,22 +900,73 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         raise ProducerIntegrityError(
             f"B11 unsupported graph contract_version: {data.get('contract_version')!r}"
         )
-    proof = data.get("frozen_state_proof")
-    if not isinstance(proof, dict) or proof.get("quiescence_verified") is not True:
+
+    # Validate raw execution lineage against sealed raw-manifest
+    manifest_entries = _load_and_verify_raw_manifest(ctx)
+
+    state_proof_rel = data.get("state_proof_artifact")
+    if not isinstance(state_proof_rel, str) or not state_proof_rel.startswith("raw/state/"):
         raise ProducerIntegrityError(
-            "B11 frozen multi-store state proof missing or unverified"
+            "B11 lacks authoritative state_proof_artifact in raw/state/"
         )
-    pre_fp = proof.get("pre_composite_fingerprint")
-    post_fp = proof.get("post_composite_fingerprint")
-    if not pre_fp or not post_fp or pre_fp != post_fp:
+    if state_proof_rel not in manifest_entries:
+        raise ProducerIntegrityError(
+            "B11 state_proof_artifact is absent from sealed raw manifest"
+        )
+    if data.get("state_proof_sha256") != manifest_entries[state_proof_rel]:
+        raise ProducerIntegrityError(
+            "B11 state_proof_sha256 does not match sealed raw manifest"
+        )
+    state_proof_file = ctx.run_dir / state_proof_rel
+    _verify_sidecar(state_proof_file)
+    try:
+        sealed_state_proof = json.loads(state_proof_file.read_text(encoding="utf-8"))
+    except Exception as exc:
+        raise ProducerIntegrityError(f"cannot read state proof {state_proof_rel}: {exc}") from exc
+    if sealed_state_proof.get("run_id") != ctx.run_id:
+        raise ProducerIntegrityError(
+            f"B11 state proof run_id mismatch: {sealed_state_proof.get('run_id')} != {ctx.run_id}"
+        )
+    if sealed_state_proof.get("collector_version") != "harness.state_proof.v1":
+        raise ProducerIntegrityError(
+            "B11 state proof lacks authoritative collector lineage"
+        )
+
+    pre_fp = sealed_state_proof.get("pre_composite_fingerprint")
+    post_fp = sealed_state_proof.get("post_composite_fingerprint")
+    unchanged = sealed_state_proof.get("retrieval_state_unchanged") is True
+    if not pre_fp or not post_fp or pre_fp != post_fp or not unchanged:
         return _blocked(
             "B11",
             "BLOCKED_BY_RUNTIME_STATE_PROOF: composite store fingerprint mutated during paired execution",
         )
 
+    proof = data.get("frozen_state_proof")
+    if not isinstance(proof, dict):
+        raise ProducerIntegrityError("B11 frozen_state_proof is missing")
+    if proof.get("retrieval_state_unchanged") is not True:
+        return _blocked(
+            "B11",
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: retrieval state not proven unchanged",
+        )
+
+    # Check quiescence truthfulness
+    quiescence_verified = sealed_state_proof.get("quiescence_verified") is True
+    if proof.get("quiescence_verified") is True and not quiescence_verified:
+        raise ProducerIntegrityError(
+            "B11 caller claimed quiescence_verified=True but sealed state proof does not verify quiescence"
+        )
+
+    if not quiescence_verified:
+        return _blocked(
+            "B11",
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: runtime quiescence not established",
+        )
+
     pairs = data.get("pairs")
     if not isinstance(pairs, list) or len(pairs) != 10:
         raise ProducerIntegrityError("B11 requires exactly 10 REL graph pairs")
+
     contribution = 0
     positive = 0
     neutral = 0
@@ -806,12 +974,47 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
     provenance_valid = True
     query_ids: set[str] = set()
     graph_operational = True
+    raw_files: list[Path] = [path, state_proof_file]
+
     for pair in pairs:
         if not isinstance(pair, dict):
             raise ProducerIntegrityError("B11 pair is malformed")
         on, off = pair.get("on"), pair.get("off")
         if not isinstance(on, dict) or not isinstance(off, dict):
             raise ProducerIntegrityError("B11 ON/OFF observation is malformed")
+
+        # Validate raw lineage for both ON and OFF
+        on_raw_rel = on.get("on_raw_artifact") or pair.get("on_raw_artifact")
+        off_raw_rel = off.get("off_raw_artifact") or pair.get("off_raw_artifact")
+        on_raw_sha = on.get("on_raw_sha256") or pair.get("on_raw_sha256")
+        off_raw_sha = off.get("off_raw_sha256") or pair.get("off_raw_sha256")
+
+        if not isinstance(on_raw_rel, str) or not on_raw_rel.startswith("raw/graph/"):
+            raise ProducerIntegrityError("B11 pair lacks authoritative on_raw_artifact in raw/graph/")
+        if not isinstance(off_raw_rel, str) or not off_raw_rel.startswith("raw/graph/"):
+            raise ProducerIntegrityError("B11 pair lacks authoritative off_raw_artifact in raw/graph/")
+        if on_raw_rel not in manifest_entries or off_raw_rel not in manifest_entries:
+            raise ProducerIntegrityError("B11 pair raw artifact is absent from sealed raw manifest")
+        if on_raw_sha != manifest_entries[on_raw_rel] or off_raw_sha != manifest_entries[off_raw_rel]:
+            raise ProducerIntegrityError("B11 pair raw sha does not match sealed raw manifest")
+
+        on_raw_file = ctx.run_dir / on_raw_rel
+        off_raw_file = ctx.run_dir / off_raw_rel
+        _verify_sidecar(on_raw_file)
+        _verify_sidecar(off_raw_file)
+        raw_files.extend([on_raw_file, off_raw_file])
+
+        try:
+            on_raw_payload = json.loads(on_raw_file.read_text(encoding="utf-8"))
+            off_raw_payload = json.loads(off_raw_file.read_text(encoding="utf-8"))
+        except Exception as exc:
+            raise ProducerIntegrityError(f"cannot read raw graph pair: {exc}") from exc
+
+        if on_raw_payload.get("run_id") != ctx.run_id or off_raw_payload.get("run_id") != ctx.run_id:
+            raise ProducerIntegrityError("B11 pair raw artifact run_id mismatch")
+        if on_raw_payload.get("graph_enabled") is not True or off_raw_payload.get("graph_enabled") is not False:
+            raise ProducerIntegrityError("B11 pair raw artifact graph_enabled mismatch")
+
         identity_fields = (
             "query_id",
             "dataset_id",
@@ -918,6 +1121,7 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
             harm += 1
         else:
             neutral += 1
+
     return _completed(
         "B11",
         {
@@ -929,7 +1133,7 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
             "graph_neutral_effect_count": neutral,
             "graph_harm_count": harm,
         },
-        [path],
+        raw_files,
         ctx,
     )
 
