@@ -19,6 +19,11 @@ from harness.gates import GateConfig, evaluate_threshold_gate, load_gate_config
 from harness.lifecycle import RunLifecycle
 from harness.models import ExecutionStatus, FinalVerdict, GateResult, GateStatus, RunStatus, VerdictStatus
 from harness.oracle import audit_oracle_surfaces, extract_raw_audit_surfaces
+from harness.official_scoring import (
+    ScoringAuthorityUnavailable,
+    load_frozen_scoring_authority,
+    score_run_from_frozen_authority,
+)
 from harness.verdict import derive_production_verdict
 
 
@@ -315,6 +320,94 @@ class CertificationTransaction:
                 self._fail_transaction(msg)
                 raise TransactionError(msg)
 
+            # Authoritative production path: the freeze must explicitly name
+            # byte-exact GT, qrels, identity-map and normalization inputs.  A
+            # caller callback is never consulted.
+            try:
+                authority = load_frozen_scoring_authority(
+                    freeze_path=self.freeze_path,
+                    repository_root=self.repository_root,
+                    run_id=self.run_id,
+                )
+            except ScoringAuthorityUnavailable:
+                authority = None
+            if authority is not None:
+                official = score_run_from_frozen_authority(
+                    store=self.store, authority=authority
+                )
+                oracle_audit_path = self.run_dir / "oracle-leakage-audit.json"
+                oracle_audit_hash = hashlib.sha256(
+                    oracle_audit_path.read_bytes()
+                ).hexdigest()
+                all_items = [
+                    *official["retrieval"]["items"],
+                    *official["answers"]["items"],
+                ]
+                report = {
+                    **{
+                        key: value
+                        for key, value in official.items()
+                        if key not in {"retrieval", "answers"}
+                    },
+                    "oracle_audit_hash": oracle_audit_hash,
+                    "items": all_items,
+                    "lane_reports": {
+                        "retrieval": official["retrieval"],
+                        "answers": official["answers"],
+                    },
+                }
+                report_bytes = (
+                    json.dumps(report, indent=2, sort_keys=True) + "\n"
+                ).encode("utf-8")
+                score_artifact_hash = hashlib.sha256(report_bytes).hexdigest()
+                (self.run_dir / "scoring-report.json").write_bytes(report_bytes)
+                for lane, filename in (
+                    ("retrieval", "retrieval-test-report.json"),
+                    ("answers", "answer-test-report.json"),
+                ):
+                    self.store._write_immutable_json(
+                        self.run_dir / filename, official[lane]
+                    )
+                    lane_summary = {
+                        key: value
+                        for key, value in official[lane].items()
+                        if key != "items"
+                    }
+                    self.store._write_immutable_json(
+                        self.run_dir
+                        / ("retrieval-summary.json" if lane == "retrieval" else "answer-summary.json"),
+                        lane_summary,
+                    )
+                summary = {
+                    "schema_version": "2.0",
+                    "run_id": self.run_id,
+                    "scorer_version": official["scorer_version"],
+                    "scorer_sha256": official["scorer_sha256"],
+                    "ground_truth_sha256": official["ground_truth_sha256"],
+                    "qrels_sha256": official["qrels_sha256"],
+                    "identity_map_sha256": official["identity_map_sha256"],
+                    "normalization_sha256": official["normalization_sha256"],
+                    "raw_manifest_hash": current_hash,
+                    "oracle_audit_hash": oracle_audit_hash,
+                    "item_count": official["item_count"],
+                    "status": official["status"],
+                    "score_artifact_hash": score_artifact_hash,
+                    "metrics": {
+                        **official["retrieval"]["metrics"],
+                        **official["answers"]["metrics"],
+                    },
+                    "lane_status": {
+                        "retrieval": official["retrieval"]["status"],
+                        "answers": official["answers"]["status"],
+                    },
+                }
+                self.store._write_immutable_json(
+                    self.run_dir / "scoring-summary.json", summary
+                )
+                self.completed_phases.add(TransactionPhase.SCORING)
+                self.current_step_idx += 1
+                return report
+
             evaluated_items = []
             for entry in current_manifest["entries"]:
                 file_path = self.run_dir / entry["path"]
@@ -445,7 +538,15 @@ class CertificationTransaction:
             report = json.loads(report_path.read_text(encoding="utf-8"))
             if report.get("item_count") != summary.get("item_count") or len(report.get("items", [])) != summary.get("item_count"):
                 raise TransactionError("score item count mismatch")
-            if summary.get("scorer_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
+            if summary.get("scorer_version") == "profile-b-official-v2":
+                authority = load_frozen_scoring_authority(
+                    freeze_path=self.freeze_path,
+                    repository_root=self.repository_root,
+                    run_id=self.run_id,
+                )
+                if summary.get("scorer_sha256") != authority.scorer_sha256:
+                    raise TransactionError("scorer source hash mismatch")
+            elif summary.get("scorer_sha256") != hashlib.sha256(Path(__file__).read_bytes()).hexdigest():
                 raise TransactionError("scorer source hash mismatch")
 
             item_count = summary.get("item_count", 0)
