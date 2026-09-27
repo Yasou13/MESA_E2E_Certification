@@ -232,6 +232,9 @@ def collect_phase7_scope_isolation(
     total_elig = 0
     total_leaks = 0
 
+    raw_scope_dir = run_path / "raw" / "scope"
+    raw_scope_dir.mkdir(parents=True, exist_ok=True)
+
     for case in cases:
         raw_response = mesa_executor(case)
         if not isinstance(raw_response, dict):
@@ -239,6 +242,36 @@ def collect_phase7_scope_isolation(
 
         resp_bytes = canonical_json_bytes(raw_response)
         resp_hash = hashlib.sha256(resp_bytes).hexdigest()
+
+        # Persist sealed raw scope execution artifact for lineage validation
+        raw_scope_path = raw_scope_dir / f"{case.case_id}.json"
+        raw_scope_record = {
+            "schema_version": "1.0",
+            "run_id": run_id,
+            "lane": "scope",
+            "case_id": case.case_id,
+            "endpoint": case.endpoint,
+            "request": case.request_payload,
+            "response": raw_response,
+            "response_sha256": resp_hash,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        serialized_raw = (
+            json.dumps(
+                raw_scope_record,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
+        raw_scope_path.write_bytes(serialized_raw)
+        raw_file_sha = hashlib.sha256(serialized_raw).hexdigest()
+        raw_scope_path.with_suffix(raw_scope_path.suffix + ".SHA256").write_text(
+            f"{raw_file_sha}  {raw_scope_path.name}\n", encoding="utf-8", newline="\n"
+        )
+        source_rel_path = f"raw/scope/{case.case_id}.json"
 
         if case.endpoint.startswith("POST /v4/memory/search"):
             capture = normalize_search_response(
@@ -303,6 +336,7 @@ def collect_phase7_scope_isolation(
             negative_cases_evidence.append(
                 {
                     "case_id": case.case_id,
+                    "proof_type": "search_pre_rank_scope",
                     "endpoint": case.endpoint,
                     "requested_scope": req_scope,
                     "requested_principal_id": case.expected_principal_id,
@@ -313,12 +347,14 @@ def collect_phase7_scope_isolation(
                     "returned_evidence_ids": returned_ids,
                     "returned_forbidden_evidence_ids": sorted(set(returned_forbidden)),
                     "pre_rank_audit_verified": True,
+                    "source_raw_artifact": source_rel_path,
+                    "source_raw_sha256": raw_file_sha,
                     "raw_response_sha256": resp_hash,
                 }
             )
         else:
             # Non-search visibility / context endpoints
-            # Check for forbidden items in response
+            # Check for forbidden items in response - genuine endpoint visibility proof, no synthetic pre-rank audit
             resp_str = json.dumps(raw_response, ensure_ascii=False)
             returned_forbidden = [
                 f_id for f_id in case.forbidden_evidence_ids if f_id in resp_str
@@ -328,6 +364,7 @@ def collect_phase7_scope_isolation(
             negative_cases_evidence.append(
                 {
                     "case_id": case.case_id,
+                    "proof_type": "endpoint_visibility",
                     "endpoint": case.endpoint,
                     "requested_scope": {
                         "tenant_id": case.expected_tenant_id,
@@ -335,13 +372,16 @@ def collect_phase7_scope_isolation(
                         "principal_id": case.expected_principal_id,
                     },
                     "requested_principal_id": case.expected_principal_id,
-                    "evaluated_candidate_count": len(raw_response.get("results", [])) or 1,
-                    "excluded_candidate_count": 0,
-                    "eligible_candidate_count": len(raw_response.get("results", [])) or 1,
-                    "exclusion_audit_hash": f"sha256:{resp_hash}",
+                    "evaluated_candidate_count": None,
+                    "excluded_candidate_count": None,
+                    "eligible_candidate_count": None,
+                    "exclusion_audit_hash": None,
                     "returned_evidence_ids": [],
                     "returned_forbidden_evidence_ids": sorted(set(returned_forbidden)),
-                    "pre_rank_audit_verified": True,
+                    "pre_rank_audit_verified": False,
+                    "endpoint_visibility_verified": len(returned_forbidden) == 0,
+                    "source_raw_artifact": source_rel_path,
+                    "source_raw_sha256": raw_file_sha,
                     "raw_response_sha256": resp_hash,
                 }
             )
