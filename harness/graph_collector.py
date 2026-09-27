@@ -30,6 +30,7 @@ from harness.state_proof import (
     FrozenStateProof,
     capture_frozen_state_proof,
     verify_store_quiescence,
+    write_sealed_state_proof,
 )
 
 
@@ -52,6 +53,7 @@ def execute_paired_graph_ablation(
     api_version: str = "v4",
     session_id: str = "session-graph-ablation",
     dataset_ids: list[str] | None = None,
+    quiescence_evidence: dict[str, Any] | None = None,
 ) -> Path:
     """Execute matched Graph ON/OFF queries under frozen multi-store state proof."""
 
@@ -62,6 +64,9 @@ def execute_paired_graph_ablation(
         )
 
     datasets = dataset_ids or ["dataset-legal-1"]
+
+    raw_graph_dir = run_path / "raw" / "graph"
+    raw_graph_dir.mkdir(parents=True, exist_ok=True)
 
     # 1. Capture initial pre-state proof across all stores
     pre_proof = capture_frozen_state_proof(
@@ -93,6 +98,36 @@ def execute_paired_graph_ablation(
         if not isinstance(raw_resp_on, dict):
             raise MESAContractIntegrityError(f"ON response for {q_id} must be an object")
 
+        # Persist sealed raw ON artifact
+        on_raw_file = raw_graph_dir / f"{q_id}_on.json"
+        on_raw_payload = {
+            "schema_version": "1.0",
+            "run_id": run_id,
+            "lane": "graph",
+            "query_id": q_id,
+            "mode": "enabled",
+            "graph_enabled": True,
+            "request": req_on,
+            "response": raw_resp_on,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        on_bytes = (
+            json.dumps(
+                on_raw_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
+        on_raw_file.write_bytes(on_bytes)
+        on_file_sha = hashlib.sha256(on_bytes).hexdigest()
+        on_raw_file.with_suffix(on_raw_file.suffix + ".SHA256").write_text(
+            f"{on_file_sha}  {on_raw_file.name}\n", encoding="utf-8", newline="\n"
+        )
+        on_rel_path = f"raw/graph/{q_id}_on.json"
+
         cap_on = normalize_search_response(
             run_id=run_id,
             query_id=q_id,
@@ -119,6 +154,36 @@ def execute_paired_graph_ablation(
         raw_resp_off = mesa_executor("disabled", req_off)
         if not isinstance(raw_resp_off, dict):
             raise MESAContractIntegrityError(f"OFF response for {q_id} must be an object")
+
+        # Persist sealed raw OFF artifact
+        off_raw_file = raw_graph_dir / f"{q_id}_off.json"
+        off_raw_payload = {
+            "schema_version": "1.0",
+            "run_id": run_id,
+            "lane": "graph",
+            "query_id": q_id,
+            "mode": "disabled",
+            "graph_enabled": False,
+            "request": req_off,
+            "response": raw_resp_off,
+            "timestamp_utc": datetime.now(timezone.utc).isoformat(),
+        }
+        off_bytes = (
+            json.dumps(
+                off_raw_payload,
+                ensure_ascii=False,
+                indent=2,
+                sort_keys=True,
+                allow_nan=False,
+            )
+            + "\n"
+        ).encode("utf-8")
+        off_raw_file.write_bytes(off_bytes)
+        off_file_sha = hashlib.sha256(off_bytes).hexdigest()
+        off_raw_file.with_suffix(off_raw_file.suffix + ".SHA256").write_text(
+            f"{off_file_sha}  {off_raw_file.name}\n", encoding="utf-8", newline="\n"
+        )
+        off_rel_path = f"raw/graph/{q_id}_off.json"
 
         cap_off = normalize_search_response(
             run_id=run_id,
@@ -237,6 +302,8 @@ def execute_paired_graph_ablation(
                     "first_relevant_rank": on_rank,
                     "top5_origins": top5_origins,
                     "paths": pair_paths,
+                    "on_raw_artifact": on_rel_path,
+                    "on_raw_sha256": on_file_sha,
                     "raw_response_sha256": cap_on.response_sha256,
                     "pair_identity": cap_on.graph_ablation.pair_identity,
                     "contract_version": cap_on.graph_ablation.contract_version,
@@ -253,6 +320,8 @@ def execute_paired_graph_ablation(
                     "first_relevant_rank": off_rank,
                     "top5_origins": off_origins,
                     "paths": [],
+                    "off_raw_artifact": off_rel_path,
+                    "off_raw_sha256": off_file_sha,
                     "raw_response_sha256": cap_off.response_sha256,
                     "pair_identity": cap_off.graph_ablation.pair_identity,
                     "contract_version": cap_off.graph_ablation.contract_version,
@@ -262,7 +331,7 @@ def execute_paired_graph_ablation(
             }
         )
 
-    # 2. Capture post-state proof across all stores and verify quiescence
+    # 2. Capture post-state proof across all stores and verify unchanged state
     post_proof = capture_frozen_state_proof(
         run_id=run_id,
         sqlite_path=sqlite_path,
@@ -270,9 +339,25 @@ def execute_paired_graph_ablation(
         kuzu_dir=kuzu_dir,
     )
 
-    quiescent, reason = verify_store_quiescence(pre_proof, post_proof)
-    if not quiescent:
+    unchanged, reason, quiescent_verified = verify_store_quiescence(
+        pre_proof, post_proof, quiescence_evidence=quiescence_evidence
+    )
+    if not unchanged:
         raise RuntimeError(reason)
+
+    state_proof_path, state_proof_sha = write_sealed_state_proof(
+        run_dir=run_path,
+        run_id=run_id,
+        pre_proof=pre_proof,
+        post_proof=post_proof,
+        store_locations={
+            "sqlite": str(sqlite_path),
+            "lancedb": str(lancedb_dir),
+            "kuzu": str(kuzu_dir),
+        },
+        dataset_identity=datasets[0],
+        quiescence_evidence=quiescence_evidence,
+    )
 
     payload = {
         "schema_version": "2.0",
@@ -285,6 +370,8 @@ def execute_paired_graph_ablation(
             "native_graph_on_off_switch": True,
         },
         "graph_capability_operational": True,
+        "state_proof_artifact": "raw/state/state-proof.json",
+        "state_proof_sha256": state_proof_sha,
         "frozen_state_proof": {
             "state_proof_contract_version": pre_proof.contract_version,
             "pre_composite_fingerprint": pre_proof.composite_fingerprint,
@@ -292,7 +379,8 @@ def execute_paired_graph_ablation(
             "sqlite_fingerprint": pre_proof.sqlite_fingerprint,
             "lancedb_fingerprint": pre_proof.lancedb_fingerprint,
             "kuzu_fingerprint": pre_proof.kuzu_fingerprint,
-            "quiescence_verified": True,
+            "retrieval_state_unchanged": unchanged,
+            "quiescence_verified": quiescent_verified,
         },
         "pairs": pairs_evidence,
     }
