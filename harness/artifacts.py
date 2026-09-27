@@ -89,6 +89,80 @@ class AnswerExecutionCapture(BaseModel):
         )
 
 
+class CertifiedAnswerExecutionCapture(BaseModel):
+    """Exact provider-boundary capture used by authoritative answer scoring.
+
+    The legacy ``AnswerExecutionCapture`` remains readable for historical and
+    negative tests, but only this v2 schema carries the current-run/runtime and
+    byte-exact request bindings required for production scoring.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    schema_version: Literal["2.0"] = "2.0"
+    run_id: str = Field(min_length=1)
+    lane: Literal["answers"] = "answers"
+    query_id: str = Field(min_length=1)
+    timestamp_utc: datetime
+    capture_origin: Literal["harness.answer_execution.provider_boundary"]
+    source_context_contract: str = Field(min_length=1)
+    context_contract_version: str = Field(min_length=1)
+    mesa_sha: str = Field(pattern=r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
+    exact_model_visible_context: str
+    context_evidence_ids: list[str]
+    context_sha256: str = Field(pattern=SHA256_PATTERN)
+    system_prompt: str
+    system_prompt_sha256: str = Field(pattern=SHA256_PATTERN)
+    user_prompt: str
+    user_prompt_sha256: str = Field(pattern=SHA256_PATTERN)
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    request_parameters: dict[str, Any]
+    exact_provider_request: dict[str, Any]
+    request_sha256: str = Field(pattern=SHA256_PATTERN)
+    raw_provider_response: dict[str, Any]
+    response_sha256: str = Field(pattern=SHA256_PATTERN)
+    parsed_response: dict[str, Any]
+
+    @field_validator("timestamp_utc")
+    @classmethod
+    def certified_timestamp_must_be_timezone_aware(cls, value: datetime) -> datetime:
+        if value.tzinfo is None or value.utcoffset() is None:
+            raise ValueError("timestamp_utc must be timezone-aware")
+        return value
+
+    @model_validator(mode="after")
+    def exact_hashes_must_match(self) -> "CertifiedAnswerExecutionCapture":
+        expected = {
+            "context_sha256": _sha256_bytes(
+                self.exact_model_visible_context.encode("utf-8")
+            ),
+            "system_prompt_sha256": _sha256_bytes(self.system_prompt.encode("utf-8")),
+            "user_prompt_sha256": _sha256_bytes(self.user_prompt.encode("utf-8")),
+            "request_sha256": _sha256_bytes(canonical_json_bytes(self.exact_provider_request)),
+            "response_sha256": _sha256_bytes(canonical_json_bytes(self.raw_provider_response)),
+        }
+        for field, observed in expected.items():
+            if getattr(self, field) != observed:
+                raise ValueError(f"{field} mismatch: expected {observed}")
+        messages = self.exact_provider_request.get("messages")
+        if messages != [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user", "content": self.user_prompt},
+        ]:
+            raise ValueError("exact provider messages do not match captured prompts")
+        if self.exact_provider_request.get("model") != self.model:
+            raise ValueError("exact provider request model mismatch")
+        for key, value in self.request_parameters.items():
+            if self.exact_provider_request.get(key) != value:
+                raise ValueError(f"exact provider request parameter mismatch: {key}")
+        if self.exact_model_visible_context not in self.user_prompt:
+            raise ValueError("exact model-visible context is absent from provider user prompt")
+        if len(self.context_evidence_ids) != len(set(self.context_evidence_ids)):
+            raise ValueError("context_evidence_ids contains duplicates")
+        return self
+
+
 class RunArtifactStore:
     def __init__(
         self,
@@ -233,12 +307,17 @@ class RunArtifactStore:
             self._query_path(self.raw_retrieval_dir, query_id), payload
         )
 
-    def persist_raw_answer(self, capture: AnswerExecutionCapture) -> Path:
+    def persist_raw_answer(
+        self, capture: AnswerExecutionCapture | CertifiedAnswerExecutionCapture
+    ) -> Path:
         payload = {
             "run_id": self.run_id,
             "lane": "answers",
             **capture.model_dump(mode="json"),
         }
+        if isinstance(capture, CertifiedAnswerExecutionCapture):
+            if capture.run_id != self.run_id:
+                raise ArtifactStoreError("certified answer capture run_id mismatch")
         return self._write_immutable_json(
             self._query_path(self.raw_answers_dir, capture.query_id), payload
         )
