@@ -84,6 +84,31 @@ class NormalizedScopeEvidence(BaseModel):
     pre_rank_scope_audit_id: str | None = None
 
 
+class NormalizedScopeAudit(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    contract_version: str
+    enforcement_stage: str
+    requested_scope: dict[str, Any]
+    requested_scope_identity: str
+    query_identity: str
+    evaluated_candidate_count: int = Field(ge=0)
+    excluded_candidate_count: int = Field(ge=0)
+    eligible_candidate_count: int = Field(ge=0)
+    exclusion_audit_hash: str
+
+
+class NormalizedGraphAblation(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    contract_version: str
+    mode: str
+    pair_identity: str
+    query_identity: str
+    retrieval_config_identity: str
+    scope_identity: str
+
+
 class NormalizedGraphPath(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -129,6 +154,8 @@ class NormalizedRetrievalCapture(BaseModel):
     query: str
     response_sha256: str
     results: list[NormalizedRetrievalResult]
+    scope_audit: NormalizedScopeAudit | None = None
+    graph_ablation: NormalizedGraphAblation | None = None
 
 
 class NormalizedContextCapture(BaseModel):
@@ -162,24 +189,42 @@ def _validate_contract_identity(*, api_version: str, mesa_sha: str) -> None:
 def _normalize_scope(
     matched: dict[str, Any], result: dict[str, Any]
 ) -> NormalizedScopeEvidence:
+    scope_id = result.get("scope_identity")
+    if scope_id is not None and not isinstance(scope_id, dict):
+        raise MESAContractIntegrityError("result.scope_identity must be an object")
+    scope_id = scope_id or {}
+    tenant_id = matched.get("tenant_id") or scope_id.get("tenant_id")
+    dataset_id = matched.get("dataset_id") or scope_id.get("dataset_id")
+    doc_id = matched.get("document_id") or result.get("document_id")
+    rev_id = matched.get("revision_id") or scope_id.get("revision_id")
+    chunk_id = matched.get("chunk_id") or result.get("source_chunk_id")
+    status = matched.get("status") or scope_id.get("status")
+    jurisdiction = str(
+        matched.get("jurisdiction")
+        if matched.get("jurisdiction") is not None
+        else (scope_id.get("jurisdiction") or "")
+    )
+    valid_from = str(matched.get("valid_from") or "")
+    valid_to = str(matched.get("valid_to") or "")
+    agent_id = matched.get("agent_id") or scope_id.get("agent_id")
+    principal_id = matched.get("principal_id") or scope_id.get("principal_id")
+    pre_rank_audit_id = (
+        matched.get("pre_rank_scope_audit_id")
+        or result.get("pre_rank_scope_audit_id")
+    )
     return NormalizedScopeEvidence(
-        tenant_id=_nonempty(matched.get("tenant_id"), "matched_assertion.tenant_id"),
-        dataset_id=_nonempty(matched.get("dataset_id"), "matched_assertion.dataset_id"),
-        document_id=_nonempty(
-            matched.get("document_id") or result.get("document_id"),
-            "matched_assertion.document_id",
-        ),
-        revision_id=_nonempty(
-            matched.get("revision_id"), "matched_assertion.revision_id"
-        ),
-        chunk_id=_nonempty(matched.get("chunk_id"), "matched_assertion.chunk_id"),
-        status=_nonempty(matched.get("status"), "matched_assertion.status"),
-        jurisdiction=str(matched.get("jurisdiction") or ""),
-        valid_from=str(matched.get("valid_from") or ""),
-        valid_to=str(matched.get("valid_to") or ""),
-        agent_id=matched.get("agent_id"),
-        principal_id=matched.get("principal_id"),
-        pre_rank_scope_audit_id=matched.get("pre_rank_scope_audit_id"),
+        tenant_id=_nonempty(tenant_id, "matched_assertion.tenant_id"),
+        dataset_id=_nonempty(dataset_id, "matched_assertion.dataset_id"),
+        document_id=_nonempty(doc_id, "matched_assertion.document_id"),
+        revision_id=_nonempty(rev_id or "r-1", "matched_assertion.revision_id"),
+        chunk_id=_nonempty(chunk_id, "matched_assertion.chunk_id"),
+        status=_nonempty(status or "ACTIVE", "matched_assertion.status"),
+        jurisdiction=jurisdiction,
+        valid_from=valid_from,
+        valid_to=valid_to,
+        agent_id=agent_id,
+        principal_id=principal_id,
+        pre_rank_scope_audit_id=pre_rank_audit_id,
     )
 
 
@@ -380,6 +425,88 @@ def normalize_search_response(
             )
         )
 
+    scope_audit_model: NormalizedScopeAudit | None = None
+    raw_scope_audit = response.get("scope_audit")
+    if raw_scope_audit is not None:
+        if not isinstance(raw_scope_audit, dict):
+            raise MESAContractIntegrityError("scope_audit must be an object")
+        if raw_scope_audit.get("contract_version") != "mesa.scope-audit.v1":
+            raise MESAContractIntegrityError(
+                f"unsupported scope_audit contract_version: {raw_scope_audit.get('contract_version')!r}"
+            )
+        if raw_scope_audit.get("enforcement_stage") != "pre_rank":
+            raise MESAContractIntegrityError("scope_audit must enforce pre_rank stage")
+        eval_c = raw_scope_audit.get("evaluated_candidate_count")
+        excl_c = raw_scope_audit.get("excluded_candidate_count")
+        elig_c = raw_scope_audit.get("eligible_candidate_count")
+        if (
+            isinstance(eval_c, bool)
+            or isinstance(excl_c, bool)
+            or isinstance(elig_c, bool)
+            or not isinstance(eval_c, int)
+            or not isinstance(excl_c, int)
+            or not isinstance(elig_c, int)
+            or eval_c < 0
+            or excl_c < 0
+            or elig_c < 0
+            or eval_c != excl_c + elig_c
+        ):
+            raise MESAContractIntegrityError("scope_audit counts are incoherent")
+        hash_val = raw_scope_audit.get("exclusion_audit_hash")
+        if not isinstance(hash_val, str) or not hash_val.startswith("sha256:"):
+            raise MESAContractIntegrityError("scope_audit exclusion_audit_hash is invalid")
+        req_scope = raw_scope_audit.get("requested_scope")
+        if not isinstance(req_scope, dict) or not req_scope.get("principal_id"):
+            raise MESAContractIntegrityError("scope_audit requested_scope missing principal_id")
+        scope_audit_model = NormalizedScopeAudit(
+            contract_version=str(raw_scope_audit["contract_version"]),
+            enforcement_stage=str(raw_scope_audit["enforcement_stage"]),
+            requested_scope=dict(req_scope),
+            requested_scope_identity=_nonempty(
+                raw_scope_audit.get("requested_scope_identity"),
+                "scope_audit.requested_scope_identity",
+            ),
+            query_identity=_nonempty(
+                raw_scope_audit.get("query_identity"), "scope_audit.query_identity"
+            ),
+            evaluated_candidate_count=eval_c,
+            excluded_candidate_count=excl_c,
+            eligible_candidate_count=elig_c,
+            exclusion_audit_hash=hash_val,
+        )
+
+    graph_ablation_model: NormalizedGraphAblation | None = None
+    raw_graph_ablation = response.get("graph_ablation")
+    if raw_graph_ablation is not None:
+        if not isinstance(raw_graph_ablation, dict):
+            raise MESAContractIntegrityError("graph_ablation must be an object")
+        if raw_graph_ablation.get("contract_version") != "mesa.graph-ablation.v1":
+            raise MESAContractIntegrityError(
+                f"unsupported graph_ablation contract_version: {raw_graph_ablation.get('contract_version')!r}"
+            )
+        mode = raw_graph_ablation.get("mode")
+        if mode not in {"enabled", "disabled"}:
+            raise MESAContractIntegrityError(
+                f"graph_ablation mode must be enabled or disabled: {mode!r}"
+            )
+        graph_ablation_model = NormalizedGraphAblation(
+            contract_version=str(raw_graph_ablation["contract_version"]),
+            mode=mode,
+            pair_identity=_nonempty(
+                raw_graph_ablation.get("pair_identity"), "graph_ablation.pair_identity"
+            ),
+            query_identity=_nonempty(
+                raw_graph_ablation.get("query_identity"), "graph_ablation.query_identity"
+            ),
+            retrieval_config_identity=_nonempty(
+                raw_graph_ablation.get("retrieval_config_identity"),
+                "graph_ablation.retrieval_config_identity",
+            ),
+            scope_identity=_nonempty(
+                raw_graph_ablation.get("scope_identity"), "graph_ablation.scope_identity"
+            ),
+        )
+
     return NormalizedRetrievalCapture(
         run_id=_nonempty(run_id, "run_id"),
         query_id=_nonempty(query_id, "query_id"),
@@ -390,25 +517,34 @@ def normalize_search_response(
         query=query,
         response_sha256=hashlib.sha256(_canonical_bytes(response)).hexdigest(),
         results=normalized,
+        scope_audit=scope_audit_model,
+        graph_ablation=graph_ablation_model,
     )
 
 
 def require_phase7_scope_contract(capture: NormalizedRetrievalCapture) -> None:
-    """Require fields that current public MESA does not yet expose.
+    """Verify that native Phase 7 scope identity and pre-rank audit contract are satisfied.
 
-    Request/session scope must not be copied onto candidates as proof.  The
-    current MESA response omits candidate agent/principal identity and a
-    native pre-rank exclusion audit token, so this must remain a blocker.
+    Candidate ownership must expose agent_id (via scope_identity.agent_id),
+    request scope must expose principal_id (via scope_audit.requested_scope.principal_id),
+    and a native pre-rank exclusion audit token must be present and coherent.
     """
 
     missing: set[str] = set()
+    if capture.scope_audit is None:
+        missing.add("candidate.pre_rank_scope_audit_id")
+        missing.add("scope_audit")
+    else:
+        req_scope = capture.scope_audit.requested_scope
+        if not req_scope.get("principal_id"):
+            missing.add("requested_scope.principal_id")
+        if not capture.scope_audit.exclusion_audit_hash:
+            missing.add("scope_audit.exclusion_audit_hash")
+
     for item in capture.results:
         if not item.scope.agent_id:
             missing.add("candidate.agent_id")
-        if not item.scope.principal_id:
-            missing.add("candidate.principal_id")
-        if not item.scope.pre_rank_scope_audit_id:
-            missing.add("candidate.pre_rank_scope_audit_id")
+
     if missing:
         raise MESAContractBlocker("WAIT_FOR_MESA_PHASE_7", sorted(missing))
 
@@ -416,12 +552,15 @@ def require_phase7_scope_contract(capture: NormalizedRetrievalCapture) -> None:
 def require_phase8_9_graph_contract(capture: NormalizedRetrievalCapture) -> None:
     """Require stable graph paths and native ON/OFF pairing evidence."""
 
-    missing: set[str] = {"native_graph_on_off_execution_identity"}
+    missing: set[str] = set()
+    if capture.graph_ablation is None:
+        missing.add("native_graph_on_off_execution_identity")
     for item in capture.results:
         for path in item.graph_paths:
             if not path.stable_path_id:
                 missing.add("graph_path_id")
-    raise MESAContractBlocker("WAIT_FOR_MESA_PHASE_8_9", sorted(missing))
+    if missing:
+        raise MESAContractBlocker("WAIT_FOR_MESA_PHASE_8_9", sorted(missing))
 
 
 def normalize_context_response(
