@@ -454,7 +454,7 @@ class CertificationTransaction:
                 lane = raw_payload.get(
                     "lane", "answers" if "answers" in entry["path"] else "retrieval"
                 )
-                if lane == "provider_exchange":
+                if lane not in {"retrieval", "answers"}:
                     continue
 
                 # The MESA response/context adapters and frozen GT join are not
