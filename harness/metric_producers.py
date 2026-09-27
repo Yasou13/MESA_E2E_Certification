@@ -739,6 +739,19 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
             "B11",
             "BLOCKED_BY_MESA_CONTRACT: native stable graph ON/OFF contract unavailable",
         )
+    if data.get("producer") != "harness.graph_collector.execute_paired_graph_ablation":
+        raise ProducerIntegrityError(
+            "B11 graph-ablation artifact lacks authoritative producer lineage"
+        )
+    if data.get("contract_version") != "mesa.graph-ablation.v1":
+        raise ProducerIntegrityError(
+            f"B11 unsupported graph contract_version: {data.get('contract_version')!r}"
+        )
+    proof = data.get("frozen_state_proof")
+    if not isinstance(proof, dict) or proof.get("quiescence_verified") is not True:
+        raise ProducerIntegrityError(
+            "B11 frozen multi-store state proof missing or unverified"
+        )
     pairs = data.get("pairs")
     if not isinstance(pairs, list) or len(pairs) != 10:
         raise ProducerIntegrityError("B11 requires exactly 10 REL graph pairs")
@@ -748,7 +761,6 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
     harm = 0
     provenance_valid = True
     query_ids: set[str] = set()
-    stable_path_ids: set[str] = set()
     graph_operational = True
     for pair in pairs:
         if not isinstance(pair, dict):
@@ -776,17 +788,18 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
                 for graph_path in paths
             )
         )
+        pair_seen_paths: set[str] = set()
         if isinstance(paths, list):
             for graph_path in paths:
                 if not isinstance(graph_path, dict):
                     continue
                 stable_path_id = graph_path.get("graph_path_id")
-                if stable_path_id in stable_path_ids:
+                if stable_path_id in pair_seen_paths:
                     raise ProducerIntegrityError(
                         "duplicate graph path cannot amplify contribution"
                     )
                 if isinstance(stable_path_id, str):
-                    stable_path_ids.add(stable_path_id)
+                    pair_seen_paths.add(stable_path_id)
         top5_origins = on.get("top5_origins")
         if (
             not isinstance(top5_origins, list)

@@ -290,9 +290,19 @@ def test_b11_distinguishes_positive_neutral_and_harm(tmp_path: Path) -> None:
         tmp_path,
         "graph-ablation.json",
         {
+            "schema_version": "2.0",
+            "run_id": RUN_ID,
+            "contract_version": "mesa.graph-ablation.v1",
+            "producer": "harness.graph_collector.execute_paired_graph_ablation",
             "mesa_contract_capabilities": {
                 "stable_path_identity": True,
                 "native_graph_on_off_switch": True,
+            },
+            "frozen_state_proof": {
+                "state_proof_contract_version": "mesa.state-proof.v1",
+                "pre_composite_fingerprint": "sha256:" + "0" * 64,
+                "post_composite_fingerprint": "sha256:" + "0" * 64,
+                "quiescence_verified": True,
             },
             "graph_capability_operational": True,
             "pairs": pairs,
@@ -321,9 +331,19 @@ def test_b11_rejects_unmatched_on_off_pair(tmp_path: Path, mutation: str) -> Non
         tmp_path,
         "graph-ablation.json",
         {
+            "schema_version": "2.0",
+            "run_id": RUN_ID,
+            "contract_version": "mesa.graph-ablation.v1",
+            "producer": "harness.graph_collector.execute_paired_graph_ablation",
             "mesa_contract_capabilities": {
                 "stable_path_identity": True,
                 "native_graph_on_off_switch": True,
+            },
+            "frozen_state_proof": {
+                "state_proof_contract_version": "mesa.state-proof.v1",
+                "pre_composite_fingerprint": "sha256:" + "0" * 64,
+                "post_composite_fingerprint": "sha256:" + "0" * 64,
+                "quiescence_verified": True,
             },
             "graph_capability_operational": True,
             "pairs": [
@@ -355,9 +375,19 @@ def test_b11_logging_only_claim_cannot_prove_graph(tmp_path: Path) -> None:
         tmp_path,
         "graph-ablation.json",
         {
+            "schema_version": "2.0",
+            "run_id": RUN_ID,
+            "contract_version": "mesa.graph-ablation.v1",
+            "producer": "harness.graph_collector.execute_paired_graph_ablation",
             "mesa_contract_capabilities": {
                 "stable_path_identity": True,
                 "native_graph_on_off_switch": True,
+            },
+            "frozen_state_proof": {
+                "state_proof_contract_version": "mesa.state-proof.v1",
+                "pre_composite_fingerprint": "sha256:" + "0" * 64,
+                "post_composite_fingerprint": "sha256:" + "0" * 64,
+                "quiescence_verified": True,
             },
             "graph_capability_operational": True,
             "pairs": [
