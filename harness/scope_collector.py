@@ -75,8 +75,11 @@ def build_canonical_scope_test_matrix(
     forbidden_agent: str = "agent-forbidden",
     authorized_principal: str = "principal-user-1",
     session_id: str = "session-scope-test",
+    case_evidence_fixtures: dict[str, list[str]] | None = None,
 ) -> list[ScopeTestCase]:
     """Construct the canonical 12-case negative scope audit matrix."""
+
+    fixtures = case_evidence_fixtures or {}
 
     base_search = {
         "session_id": session_id,
@@ -93,7 +96,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"ev-{forbidden_tenant}-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "cross_tenant_search", [f"ev-{forbidden_tenant}-001"]
+            ),
             forbidden_tenant_ids=[forbidden_tenant],
         ),
         ScopeTestCase(
@@ -103,7 +108,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"ev-{forbidden_dataset}-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "cross_dataset_search", [f"ev-{forbidden_dataset}-001"]
+            ),
             forbidden_dataset_ids=[forbidden_dataset],
         ),
         ScopeTestCase(
@@ -113,7 +120,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"ev-{forbidden_agent}-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "cross_agent_search", [f"ev-{forbidden_agent}-001"]
+            ),
             forbidden_agent_ids=[forbidden_agent],
         ),
         ScopeTestCase(
@@ -123,7 +132,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=["ev-inactive-tombstoned-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "inactive_status_search", ["ev-inactive-tombstoned-001"]
+            ),
         ),
         ScopeTestCase(
             case_id="wrong_jurisdiction_search",
@@ -132,7 +143,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=["ev-jurisdiction-us-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "wrong_jurisdiction_search", ["ev-jurisdiction-us-001"]
+            ),
         ),
         ScopeTestCase(
             case_id="stale_version_search",
@@ -141,7 +154,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=["ev-stale-rev0-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "stale_version_search", ["ev-stale-rev0-001"]
+            ),
         ),
         ScopeTestCase(
             case_id="effective_date_boundary_search",
@@ -155,7 +170,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=["ev-expired-2025-001"],
+            forbidden_evidence_ids=fixtures.get(
+                "effective_date_boundary_search", ["ev-expired-2025-001"]
+            ),
         ),
         ScopeTestCase(
             case_id="context_visibility",
@@ -164,7 +181,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"chunk-{forbidden_tenant}-ctx"],
+            forbidden_evidence_ids=fixtures.get(
+                "context_visibility", [f"chunk-{forbidden_tenant}-ctx"]
+            ),
         ),
         ScopeTestCase(
             case_id="catalog_visibility",
@@ -173,7 +192,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"catalog-{forbidden_tenant}"],
+            forbidden_evidence_ids=fixtures.get(
+                "catalog_visibility", [f"catalog-{forbidden_tenant}"]
+            ),
         ),
         ScopeTestCase(
             case_id="document_visibility",
@@ -186,7 +207,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"doc-{forbidden_tenant}"],
+            forbidden_evidence_ids=fixtures.get(
+                "document_visibility", [f"doc-{forbidden_tenant}"]
+            ),
         ),
         ScopeTestCase(
             case_id="revision_visibility",
@@ -200,7 +223,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"rev-{forbidden_tenant}"],
+            forbidden_evidence_ids=fixtures.get(
+                "revision_visibility", [f"rev-{forbidden_tenant}"]
+            ),
         ),
         ScopeTestCase(
             case_id="chunk_visibility",
@@ -213,7 +238,9 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=[f"chunk-{forbidden_tenant}"],
+            forbidden_evidence_ids=fixtures.get(
+                "chunk_visibility", [f"chunk-{forbidden_tenant}"]
+            ),
         ),
     ]
     return cases
@@ -230,10 +257,26 @@ def collect_phase7_scope_isolation(
     ) = None,
     api_version: str = "v4",
     execution_session: "OfficialExecutionSession | None" = None,
+    session_id: str | None = None,
 ) -> Path:
     """Execute Phase 7 scope evaluation, verify pre-rank audit, and seal artifact."""
 
     run_path = Path(run_dir)
+    if execution_session is not None:
+        if test_cases is None:
+            raise RuntimeError(
+                "official Phase 7 execution requires explicit frozen test_cases"
+            )
+        if not session_id or session_id in {"session-scope-test", "session-graph-ablation"}:
+            raise RuntimeError(
+                f"official Phase 7 execution requires native MESA session; got prohibited session_id {session_id!r}"
+            )
+        for case in test_cases:
+            case_session = case.request_payload.get("session_id")
+            if case_session and case_session != session_id:
+                raise RuntimeError(
+                    f"scope test case {case.case_id} uses session {case_session!r} differing from native session {session_id!r}"
+                )
     cases = test_cases or build_canonical_scope_test_matrix()
     case_ids = {c.case_id for c in cases}
     if case_ids != set(REQUIRED_SCOPE_CASE_IDS):
@@ -428,6 +471,9 @@ def collect_phase7_scope_isolation(
                 }
             )
 
+    effective_session_id = session_id or (
+        cases[0].request_payload.get("session_id") if cases else None
+    )
     payload = {
         "schema_version": "2.0",
         "run_id": run_id,
@@ -445,6 +491,8 @@ def collect_phase7_scope_isolation(
         "total_forbidden_leakage": total_leaks,
         "negative_cases": negative_cases_evidence,
     }
+    if effective_session_id:
+        payload["session_id"] = str(effective_session_id)
     if execution_session is not None:
         payload.update(execution_session.public_binding())
 
