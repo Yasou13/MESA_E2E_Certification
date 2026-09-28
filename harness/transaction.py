@@ -7,15 +7,17 @@ from enum import Enum
 import hashlib
 import json
 from pathlib import Path
-import re
 from typing import Any, Callable, Iterable, Optional
 
-from harness.answer_scorer import score_answer
 from harness.artifacts import RunArtifactStore
 from harness.evidence import build_evidence_index, validate_run_id_consistency
-from harness.finalizer import finalize_release, ReleaseFinalizationError
-from harness.freeze import verify_contract_freeze, FreezeStatus
-from harness.gates import GateConfig, evaluate_threshold_gate, load_gate_config
+from harness.execution_provenance import (
+    ExecutionProvenanceError,
+    OfficialExecutionSession,
+)
+from harness.finalizer import finalize_release
+from harness.freeze import FreezeStatus, FreezeVerification, verify_contract_freeze
+from harness.gates import evaluate_threshold_gate, load_gate_config
 from harness.lifecycle import RunLifecycle
 from harness.models import (
     ExecutionStatus,
@@ -87,6 +89,7 @@ class CertificationTransaction:
         run_dir: str | Path,
         *,
         gate_config_path: str | Path | None = None,
+        execution_session: OfficialExecutionSession | None = None,
     ) -> None:
         if not run_id or not run_id.strip():
             raise TransactionError("run_id must be non-empty")
@@ -109,6 +112,14 @@ class CertificationTransaction:
         self.gate_results: list[GateResult] = []
         self.final_verdict: Optional[FinalVerdict] = None
         self.evidence_index: Optional[dict[str, object]] = None
+        self.execution_session = execution_session
+        if execution_session is not None and (
+            execution_session.run_id != self.run_id
+            or execution_session.run_dir.resolve() != self.run_dir.resolve()
+        ):
+            raise TransactionError(
+                "official execution session does not match transaction"
+            )
 
     def _require_phase(self, phase: TransactionPhase) -> None:
         if self.failed:
@@ -128,13 +139,19 @@ class CertificationTransaction:
             expected_status = (
                 RunStatus.CREATED
                 if self.current_step_idx == 0
-                else RunStatus.HARNESS_READY
-                if self.current_step_idx == 1
-                else RunStatus.CONTRACT_FROZEN
-                if self.current_step_idx == 2
-                else RunStatus.TEST_RUNNING
-                if self.current_step_idx == 3
-                else RunStatus.TEST_COMPLETED
+                else (
+                    RunStatus.HARNESS_READY
+                    if self.current_step_idx == 1
+                    else (
+                        RunStatus.CONTRACT_FROZEN
+                        if self.current_step_idx == 2
+                        else (
+                            RunStatus.TEST_RUNNING
+                            if self.current_step_idx == 3
+                            else RunStatus.TEST_COMPLETED
+                        )
+                    )
+                )
             )
             if (
                 replay.status != self.lifecycle.status
@@ -164,8 +181,14 @@ class CertificationTransaction:
         self._require_phase(TransactionPhase.BOOTSTRAP)
         try:
             self.run_dir.mkdir(parents=True, exist_ok=True)
-            self.store = RunArtifactStore(self.run_dir, self.run_id)
+            self.store = RunArtifactStore(
+                self.run_dir,
+                self.run_id,
+                execution_session=self.execution_session,
+            )
             self.store.initialize()
+            if self.execution_session is not None:
+                self.execution_session.write_execution_record()
 
             layout = layout_info or {
                 "schema_version": "1.0",
@@ -237,7 +260,13 @@ class CertificationTransaction:
         try:
             self.lifecycle.transition(RunStatus.TEST_RUNNING)
             if self.store is None:
-                self.store = RunArtifactStore(self.run_dir, self.run_id)
+                self.store = RunArtifactStore(
+                    self.run_dir,
+                    self.run_id,
+                    execution_session=self.execution_session,
+                )
+            if self.execution_session is not None:
+                self.execution_session.start_capture()
             raw_artifacts_builder(self.run_dir)
             self.completed_phases.add(TransactionPhase.RAW_EXECUTION)
             self.current_step_idx += 1
@@ -249,8 +278,12 @@ class CertificationTransaction:
         self._require_phase(TransactionPhase.RAW_SEALING)
         try:
             if self.store is None:
-                self.store = RunArtifactStore(self.run_dir, self.run_id)
-            manifest_info = self.store.compute_raw_manifest()
+                self.store = RunArtifactStore(
+                    self.run_dir,
+                    self.run_id,
+                    execution_session=self.execution_session,
+                )
+            manifest_info = self.store.compute_raw_manifest(self.execution_session)
             self.raw_manifest_hash = manifest_info["manifest_hash"]
             raw_manifest_path = self.run_dir / "raw-manifest.json"
             self.store._write_immutable_json(raw_manifest_path, manifest_info)
@@ -270,8 +303,12 @@ class CertificationTransaction:
         self._require_phase(TransactionPhase.ORACLE_AUDIT)
         try:
             if self.store is None:
-                self.store = RunArtifactStore(self.run_dir, self.run_id)
-            current_manifest = self.store.compute_raw_manifest()
+                self.store = RunArtifactStore(
+                    self.run_dir,
+                    self.run_id,
+                    execution_session=self.execution_session,
+                )
+            current_manifest = self.store.compute_raw_manifest(self.execution_session)
             current_hash = current_manifest["manifest_hash"]
             if self.raw_manifest_hash and current_hash != self.raw_manifest_hash:
                 msg = "raw artifact manifest hash modified after sealing"
@@ -329,8 +366,12 @@ class CertificationTransaction:
         self._require_phase(TransactionPhase.SCORING)
         try:
             if self.store is None:
-                self.store = RunArtifactStore(self.run_dir, self.run_id)
-            current_manifest = self.store.compute_raw_manifest()
+                self.store = RunArtifactStore(
+                    self.run_dir,
+                    self.run_id,
+                    execution_session=self.execution_session,
+                )
+            current_manifest = self.store.compute_raw_manifest(self.execution_session)
             current_hash = current_manifest["manifest_hash"]
 
             if self.raw_manifest_hash and current_hash != self.raw_manifest_hash:
@@ -362,11 +403,17 @@ class CertificationTransaction:
                     repository_root=self.repository_root,
                     run_id=self.run_id,
                 )
-            except ScoringAuthorityUnavailable:
+            except ScoringAuthorityUnavailable as exc:
+                if self.execution_session is not None:
+                    raise TransactionError(
+                        f"official frozen scoring authority unavailable: {exc}"
+                    ) from exc
                 authority = None
             if authority is not None:
                 official = score_run_from_frozen_authority(
-                    store=self.store, authority=authority
+                    store=self.store,
+                    authority=authority,
+                    raw_manifest=current_manifest,
                 )
                 oracle_audit_path = self.run_dir / "oracle-leakage-audit.json"
                 oracle_audit_hash = hashlib.sha256(
@@ -491,9 +538,11 @@ class CertificationTransaction:
                 "raw_manifest_hash": current_hash,
                 "oracle_audit_hash": oracle_audit_hash,
                 "item_count": len(evaluated_items),
-                "status": "PASS"
-                if all(it.get("status") == "PASS" for it in evaluated_items)
-                else "FAIL",
+                "status": (
+                    "PASS"
+                    if all(it.get("status") == "PASS" for it in evaluated_items)
+                    else "FAIL"
+                ),
                 "items": evaluated_items,
             }
             report_bytes = json.dumps(report, indent=2, sort_keys=True).encode("utf-8")
@@ -520,12 +569,14 @@ class CertificationTransaction:
                 "raw_manifest_hash": current_hash,
                 "oracle_audit_hash": oracle_audit_hash,
                 "item_count": len(evaluated_items),
-                "status": "PASS"
-                if (
-                    evaluated_items
-                    and all(it.get("status") == "PASS" for it in evaluated_items)
-                )
-                else "FAIL",
+                "status": (
+                    "PASS"
+                    if (
+                        evaluated_items
+                        and all(it.get("status") == "PASS" for it in evaluated_items)
+                    )
+                    else "FAIL"
+                ),
                 "score_artifact_hash": score_artifact_hash,
                 "metrics": metrics_computed,
             }
@@ -556,9 +607,13 @@ class CertificationTransaction:
         self._require_phase(TransactionPhase.GATE_EVALUATION)
         try:
             if self.store is None:
-                self.store = RunArtifactStore(self.run_dir, self.run_id)
+                self.store = RunArtifactStore(
+                    self.run_dir,
+                    self.run_id,
+                    execution_session=self.execution_session,
+                )
 
-            current_manifest = self.store.compute_raw_manifest()
+            current_manifest = self.store.compute_raw_manifest(self.execution_session)
             if (
                 self.raw_manifest_hash
                 and current_manifest["manifest_hash"] != self.raw_manifest_hash
@@ -647,8 +702,13 @@ class CertificationTransaction:
                 current_repository_shas=self.current_repository_shas,
                 raw_manifest_hash=self.raw_manifest_hash,
                 gate_config_path=self.gate_config_path,
+                execution_mode=(
+                    "official" if self.execution_session is not None else "test"
+                ),
+                execution_session=self.execution_session,
             )
             producer_results = produce_all(producer_context)
+            execution_mode = producer_context.execution_mode
             try:
                 producer_authority_hash = frozen_producer_code_sha256(producer_context)
             except (OSError, ValueError, KeyError, TypeError):
@@ -660,6 +720,7 @@ class CertificationTransaction:
                 produced = producer_results[gate_id]
                 observations[gate_id] = produced.observed
                 producer_audit[gate_id] = {
+                    "authority_mode": execution_mode,
                     "execution": produced.execution,
                     "reason": produced.reason,
                     "evidence": list(produced.evidence),
@@ -675,10 +736,9 @@ class CertificationTransaction:
                         )
                     )
                     continue
-                contract_blocked = (
-                    produced.reason.startswith("BLOCKED_BY_MESA_CONTRACT:")
-                    or produced.reason.startswith("BLOCKED_BY_RUNTIME_STATE_PROOF:")
-                )
+                contract_blocked = produced.reason.startswith(
+                    "BLOCKED_BY_MESA_CONTRACT:"
+                ) or produced.reason.startswith("BLOCKED_BY_RUNTIME_STATE_PROOF:")
                 results.append(
                     GateResult(
                         gate_id=gate_id,
@@ -706,6 +766,7 @@ class CertificationTransaction:
                 "schema_version": "1.0",
                 "run_id": self.run_id,
                 "raw_manifest_hash": self.raw_manifest_hash,
+                "execution_mode": execution_mode,
                 "derived_at_utc": datetime.now(timezone.utc).isoformat(),
                 "producer_code_sha256": producer_authority_hash,
                 "observations": observations,
@@ -726,6 +787,7 @@ class CertificationTransaction:
                 {
                     "schema_version": "1.0",
                     "run_id": self.run_id,
+                    "execution_mode": execution_mode,
                     "gates": [g.model_dump(mode="json") for g in results],
                     "mandatory_gate_ids": config.mandatory_gate_ids,
                     "status": "FAIL" if failed_hard else "PASS",
@@ -742,6 +804,33 @@ class CertificationTransaction:
             self._fail_transaction(f"gate evaluation failed: {exc}")
             raise TransactionError(f"gate evaluation failed: {exc}") from exc
 
+    def _verify_official_execution(self) -> bool:
+        if self.execution_session is None:
+            return False
+        if not self.raw_manifest_hash:
+            raise TransactionError("official raw manifest was not sealed")
+        manifest_path = self.run_dir / "raw-manifest.json"
+        try:
+            manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+            self.execution_session.verify_raw_manifest(manifest, self.raw_manifest_hash)
+            for name, artifact_type in (
+                ("scope-isolation.json", "scope_isolation"),
+                ("graph-ablation.json", "graph_ablation"),
+            ):
+                self.execution_session.verify_derived_artifact(
+                    self.run_dir / name, artifact_type
+                )
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            ExecutionProvenanceError,
+        ) as exc:
+            raise TransactionError(
+                f"official execution provenance verification failed: {exc}"
+            ) from exc
+        return True
+
     def execute_verdict_derivation(self) -> FinalVerdict:
         self._require_phase(TransactionPhase.VERDICT_DERIVATION)
         try:
@@ -753,6 +842,14 @@ class CertificationTransaction:
                 "status": "COMPLETED",
                 "lifecycle_valid": not self.failed,
                 "lifecycle_status": self.lifecycle.status.value,
+                "execution_mode": (
+                    "official" if self.execution_session is not None else "test"
+                ),
+                "execution_id": (
+                    self.execution_session.execution_id
+                    if self.execution_session is not None
+                    else None
+                ),
             }
             manifest_path.write_text(
                 json.dumps(manifest_payload, indent=2) + "\n", encoding="utf-8"
@@ -773,6 +870,7 @@ class CertificationTransaction:
                 repository_root=repo_root,
                 current_repository_shas=repo_shas,
                 mandatory_artifact_names=["contract-freeze.json"],
+                official_execution_verified=self._verify_official_execution(),
             )
             self.final_verdict = verdict
             verdict_path = self.run_dir / "verdict.json"
@@ -898,6 +996,7 @@ class CertificationTransaction:
                 run_id=self.run_id,
                 sources=sources,
                 release_root=target_release_dir,
+                execution_session=self.execution_session,
             )
             self.completed_phases.add(TransactionPhase.RELEASE_FINALIZATION)
             self.completed_phases.add(TransactionPhase.COMPLETED)

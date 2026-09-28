@@ -277,6 +277,7 @@ def score_run_from_frozen_authority(
     *,
     store: RunArtifactStore,
     authority: FrozenScoringAuthority,
+    raw_manifest: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Score only sealed current-run raw artifacts against frozen authority."""
 
@@ -316,7 +317,7 @@ def score_run_from_frozen_authority(
     answer_scores: list[dict[str, Any]] = []
     retrieval_identities: dict[str, tuple[str, tuple[str, ...]]] = {}
     answer_identities: dict[str, tuple[str, tuple[str, ...]]] = {}
-    raw_manifest = store.compute_raw_manifest()
+    raw_manifest = raw_manifest or store.compute_raw_manifest()
     provider_exchanges: dict[str, tuple[dict[str, Any], str]] = {}
     for entry in raw_manifest["entries"]:
         path = store.run_dir / entry["path"]
@@ -457,7 +458,13 @@ def score_run_from_frozen_authority(
             retrieval_scores.append(serialized)
         elif lane == "answers":
             try:
-                capture = CertifiedAnswerExecutionCapture.model_validate(payload)
+                capture = CertifiedAnswerExecutionCapture.model_validate(
+                    {
+                        key: value
+                        for key, value in payload.items()
+                        if key != "execution_id"
+                    }
+                )
             except Exception as exc:
                 raise OfficialScoringError(
                     f"answer {query_id} is not an exact provider-boundary v2 capture"

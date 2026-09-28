@@ -9,7 +9,7 @@ from pathlib import Path
 import re
 import shutil
 import tempfile
-from typing import Any, Mapping
+from typing import TYPE_CHECKING, Any, Mapping
 
 from pydantic import ValidationError
 
@@ -27,6 +27,9 @@ from harness.gates import (
     load_gate_config,
 )
 from harness.evidence import _confined_path, EvidenceIndexError, sha256_file
+
+if TYPE_CHECKING:
+    from harness.execution_provenance import OfficialExecutionSession
 
 
 REQUIRED_RELEASE_FILES = {
@@ -382,7 +385,11 @@ def _validate_pass_claim(payloads: Mapping[str, dict[str, Any]]) -> None:
 
 
 def finalize_release(
-    *, run_id: str, sources: Mapping[str, str | Path], release_root: str | Path
+    *,
+    run_id: str,
+    sources: Mapping[str, str | Path],
+    release_root: str | Path,
+    execution_session: "OfficialExecutionSession | None" = None,
 ) -> Path:
     """Validate, checksum, and atomically promote a sanitized release bundle."""
 
@@ -474,6 +481,51 @@ def finalize_release(
                     raise ReleaseFinalizationError(
                         f"gate evidence is absent from the authoritative index or hash-mismatched: {relative}"
                     )
+
+        if execution_session is None:
+            raise ReleaseFinalizationError(
+                "PASS release lacks active official qualification execution authority"
+            )
+        if json_payloads["gate-results.json"].get("execution_mode") != "official":
+            raise ReleaseFinalizationError(
+                "PASS release contains non-authoritative gate evaluation"
+            )
+        run_manifest = json_payloads["run_manifest.json"]
+        if (
+            run_manifest.get("execution_mode") != "official"
+            or run_manifest.get("execution_id") != execution_session.execution_id
+        ):
+            raise ReleaseFinalizationError(
+                "PASS release contains test or stale execution evidence"
+            )
+        try:
+            for source in sources.values():
+                if Path(source).resolve().parent != execution_session.run_dir.resolve():
+                    raise ReleaseFinalizationError(
+                        "PASS release source is outside the active official run"
+                    )
+            raw_manifest_path = execution_session.run_dir / "raw-manifest.json"
+            raw_manifest = json.loads(raw_manifest_path.read_text(encoding="utf-8"))
+            raw_manifest_hash = raw_manifest.get("manifest_hash")
+            if not isinstance(raw_manifest_hash, str):
+                raise ReleaseFinalizationError(
+                    "PASS release lacks an official raw manifest"
+                )
+            execution_session.verify_raw_manifest(raw_manifest, raw_manifest_hash)
+            execution_session.verify_derived_artifact(
+                execution_session.run_dir / "scope-isolation.json",
+                "scope_isolation",
+            )
+            execution_session.verify_derived_artifact(
+                execution_session.run_dir / "graph-ablation.json",
+                "graph_ablation",
+            )
+        except ReleaseFinalizationError:
+            raise
+        except Exception as exc:
+            raise ReleaseFinalizationError(
+                f"PASS release official execution provenance is invalid: {exc}"
+            ) from exc
 
     staging_path: Path | None = None
     try:
