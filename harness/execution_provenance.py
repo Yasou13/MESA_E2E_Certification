@@ -241,21 +241,21 @@ class OfficialExecutionSession:
         self._raw_records[relative] = record
 
     def register_state_artifact(
-        self, path: Path, *, quiescence_lease: Any, collector: str
+        self, path: Path, *, state_stability_guard: Any, collector: str
     ) -> None:
         if not self._capture_started or self._sealed:
             raise ExecutionProvenanceError(
                 "state capture is outside the official capture window"
             )
-        from harness.state_proof import RuntimeQuiescenceLease
+        from harness.state_proof import PairedStateStabilityGuard
 
         if type(
-            quiescence_lease
-        ) is not RuntimeQuiescenceLease or not quiescence_lease.is_held_for(
+            state_stability_guard
+        ) is not PairedStateStabilityGuard or not state_stability_guard.is_verified_for(
             self.run_id
         ):
             raise ExecutionProvenanceError(
-                "state proof lacks a live trusted quiescence lease"
+                "state proof lacks runner-owned paired state stability"
             )
         relative = self._relative_raw_path(path)
         digest = _verify_sidecar(path)
@@ -265,8 +265,14 @@ class OfficialExecutionSession:
             or payload.get("execution_id") != self.execution_id
         ):
             raise ExecutionProvenanceError("state proof execution identity mismatch")
-        if payload.get("quiescence_verified") is not True:
-            raise ExecutionProvenanceError("state proof does not verify quiescence")
+        if (
+            payload.get("proof_mode") != "stable_state_pair"
+            or payload.get("pair_state_stability_verified") is not True
+            or payload.get("runtime_quiescence_verified") is not False
+        ):
+            raise ExecutionProvenanceError(
+                "state proof does not verify an honest stable-state pair"
+            )
         record = {
             "path": relative,
             "sha256": digest,
@@ -280,9 +286,9 @@ class OfficialExecutionSession:
                 )
             ).hexdigest(),
             "collector": collector,
-            "source": "trusted_runtime_quiescence",
+            "source": "trusted_pair_state_stability",
             "request_sha256": hashlib.sha256(
-                _canonical_bytes(quiescence_lease.evidence())
+                _canonical_bytes(state_stability_guard.evidence())
             ).hexdigest(),
             "response_sha256": digest,
             **self.public_binding(),
