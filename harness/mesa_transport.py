@@ -177,8 +177,11 @@ class TrustedMESATransport:
             TimeoutError,
             OSError,
         ) as exc:
+            code_suffix = (
+                f" HTTP {exc.code}" if isinstance(exc, urllib.error.HTTPError) else ""
+            )
             raise MESATransportError(
-                f"MESA request failed for {method} {path}: {type(exc).__name__}"
+                f"MESA request failed for {method} {path}{code_suffix}: {type(exc).__name__}"
             ) from exc
         latency_ms = (time.monotonic() - started) * 1000.0
         if len(raw) > _MAX_RESPONSE_BYTES:
@@ -242,6 +245,15 @@ class TrustedMESATransport:
 
     def search(self, payload: dict[str, Any]) -> TrustedMESAResponse:
         return self._request("POST", "/v4/memory/search", payload)
+
+    def start_session(self, payload: dict[str, Any]) -> TrustedMESAResponse:
+        return self._request("POST", "/v4/sessions/start", payload)
+
+    def end_session(self, session_id: str) -> TrustedMESAResponse:
+        if not isinstance(session_id, str) or not session_id:
+            raise MESATransportError("MESA session end requires session_id")
+        path = f"/v4/sessions/{urllib.parse.quote(session_id, safe='')}/end"
+        return self._request("POST", path, {"session_id": session_id})
 
     def preflight(self) -> TrustedMESAResponse:
         receipt = self._request("GET", "/health", None)

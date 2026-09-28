@@ -244,6 +244,10 @@ class RunArtifactStore:
         return self.run_dir / "raw" / "state"
 
     @property
+    def raw_sessions_dir(self) -> Path:
+        return self.run_dir / "raw" / "sessions"
+
+    @property
     def scored_retrieval_dir(self) -> Path:
         return self.run_dir / "scored" / "retrieval"
 
@@ -272,6 +276,7 @@ class RunArtifactStore:
             self.raw_scope_dir,
             self.raw_graph_dir,
             self.raw_state_dir,
+            self.raw_sessions_dir,
             self.scored_retrieval_dir,
             self.scored_answers_dir,
         ):
@@ -423,6 +428,49 @@ class RunArtifactStore:
             self._query_path(self.raw_context_dir, query_id), payload
         )
 
+    def persist_raw_session_bootstrap(
+        self,
+        *,
+        purpose: str,
+        request: dict[str, Any],
+        response: dict[str, Any],
+        transport_status: int,
+        timestamp_utc: datetime,
+        latency_ms: float,
+        mesa_runtime_profile: str,
+        mesa_sha: str,
+        api_version: str,
+        execution_id: str | None = None,
+    ) -> Path:
+        if not purpose or not isinstance(purpose, str):
+            raise ArtifactStoreError(
+                "session bootstrap purpose must be a non-empty string"
+            )
+        session_id = response.get("session_id")
+        if not session_id or not isinstance(session_id, str):
+            raise ArtifactStoreError("session bootstrap response missing session_id")
+        payload = {
+            "schema_version": "1.0",
+            "run_id": self.run_id,
+            "lane": "sessions",
+            "purpose": purpose,
+            "native_session_id": session_id,
+            "request": request,
+            "request_sha256": _sha256_bytes(canonical_json_bytes(request)),
+            "response": response,
+            "response_sha256": _sha256_bytes(canonical_json_bytes(response)),
+            "transport_status": transport_status,
+            "timestamp_utc": timestamp_utc.isoformat(),
+            "latency_ms": latency_ms,
+            "mesa_runtime_profile": mesa_runtime_profile,
+            "mesa_sha": mesa_sha,
+            "api_version": api_version,
+        }
+        if execution_id is not None:
+            payload["execution_id"] = execution_id
+        path = self.raw_sessions_dir / f"{purpose}.json"
+        return self._write_immutable_json(path, payload)
+
     def persist_raw_provider_exchange(
         self,
         *,
@@ -499,6 +547,7 @@ class RunArtifactStore:
             self.raw_scope_dir,
             self.raw_graph_dir,
             self.raw_state_dir,
+            self.raw_sessions_dir,
         ):
             if lane_dir.is_dir():
                 for json_file in sorted(lane_dir.glob("*.json")):

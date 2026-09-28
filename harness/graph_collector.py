@@ -67,6 +67,12 @@ def execute_paired_graph_ablation(
         raise ValueError(
             f"B11 requires exactly 10 REL ground truth queries, got {len(rel_queries)}"
         )
+    if execution_session is not None and (
+        not session_id or session_id == "session-graph-ablation"
+    ):
+        raise RuntimeError(
+            "official Graph execution requires a native session_id"
+        )
 
     datasets = dataset_ids or ["dataset-legal-1"]
 
@@ -258,6 +264,15 @@ def execute_paired_graph_ablation(
                 f"query {q_id} ON and OFF pair_identity mismatch: "
                 f"{cap_on.graph_ablation.pair_identity} != {cap_off.graph_ablation.pair_identity}"
             )
+        if cap_on.session_id != session_id or cap_off.session_id != session_id:
+            raise MESAContractIntegrityError(
+                f"query {q_id} ON/OFF session_id mismatch with graph session: "
+                f"{cap_on.session_id!r}, {cap_off.session_id!r} != {session_id!r}"
+            )
+        if cap_on.session_id != cap_off.session_id:
+            raise MESAContractIntegrityError(
+                f"query {q_id} ON and OFF sessions are not identical"
+            )
         if (
             cap_on.graph_ablation.retrieval_config_identity
             != cap_off.graph_ablation.retrieval_config_identity
@@ -433,6 +448,7 @@ def execute_paired_graph_ablation(
         "contract_version": GRAPH_ABLATION_CONTRACT_VERSION,
         "mesa_sha": mesa_sha,
         "producer": GRAPH_ABLATION_PRODUCER,
+        "session_id": session_id,
         "mesa_contract_capabilities": {
             "stable_path_identity": True,
             "native_graph_on_off_switch": True,

@@ -32,13 +32,44 @@ from harness.official_scoring import (
     ScoringAuthorityUnavailable,
     load_frozen_scoring_authority,
 )
-from harness.scope_collector import ScopeTestCase, collect_phase7_scope_isolation
+from harness.scope_collector import (
+    ScopeTestCase,
+    build_canonical_scope_test_matrix,
+    collect_phase7_scope_isolation,
+)
 from harness.state_proof import StateProofError, establish_paired_state_stability
 from harness.transaction import CertificationTransaction, TransactionError
 
 
 class QualificationRunnerError(RuntimeError):
     """Raised when official qualification cannot establish its authority chain."""
+
+
+@dataclass(frozen=True)
+class QualificationScope:
+    tenant_id: str
+    workspace_id: str
+    dataset_ids: list[str]
+    agent_id: str
+    expected_principal: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "tenant_id": self.tenant_id,
+            "workspace_id": self.workspace_id,
+            "dataset_ids": list(self.dataset_ids),
+            "agent_id": self.agent_id,
+            "expected_principal": self.expected_principal,
+        }
+
+
+@dataclass(frozen=True)
+class ScopeTestAuthority:
+    forbidden_tenant: str
+    forbidden_dataset: str
+    forbidden_agent: str
+    authorized_document: str = "document-auth"
+    case_evidence_fixtures: dict[str, list[str]] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -60,6 +91,7 @@ class QualificationConfig:
     gate_config_path: Path | None = None
     release_root: Path | None = None
     api_version: str = "v4"
+    qualification_scope: QualificationScope | None = None
     answer_provider_base_url: str = ""
     answer_provider_api_key: str = ""
     answer_provider_timeout_seconds: float = 60.0
@@ -249,6 +281,99 @@ def _trusted_answer_transport(
         ) from exc
 
 
+def _load_frozen_scope_authority(
+    freeze: dict[str, Any],
+) -> tuple[QualificationScope, ScopeTestAuthority]:
+    runtime = freeze.get("runtime_identities")
+    if not isinstance(runtime, dict):
+        raise QualificationRunnerError(
+            "contract freeze runtime_identities is missing"
+        )
+    scope_dict = runtime.get("qualification_scope")
+    if not isinstance(scope_dict, dict):
+        raise QualificationRunnerError(
+            "frozen qualification scope authority (runtime_identities.qualification_scope) is missing"
+        )
+    required_scope = {
+        "tenant_id",
+        "workspace_id",
+        "dataset_ids",
+        "agent_id",
+        "expected_principal",
+    }
+    missing_scope = sorted(required_scope - scope_dict.keys())
+    if missing_scope:
+        raise QualificationRunnerError(
+            f"frozen qualification scope authority is missing fields: {missing_scope}"
+        )
+    tenant_id = scope_dict["tenant_id"]
+    workspace_id = scope_dict["workspace_id"]
+    dataset_ids = scope_dict["dataset_ids"]
+    agent_id = scope_dict["agent_id"]
+    expected_principal = scope_dict["expected_principal"]
+    if not isinstance(tenant_id, str) or not tenant_id.strip():
+        raise QualificationRunnerError("qualification scope tenant_id must be non-empty")
+    if not isinstance(workspace_id, str) or not workspace_id.strip():
+        raise QualificationRunnerError("qualification scope workspace_id must be non-empty")
+    if not isinstance(agent_id, str) or not agent_id.strip():
+        raise QualificationRunnerError("qualification scope agent_id must be non-empty")
+    if not isinstance(expected_principal, str) or not expected_principal.strip():
+        raise QualificationRunnerError("qualification scope expected_principal must be non-empty")
+    if (
+        not isinstance(dataset_ids, list)
+        or not dataset_ids
+        or any(not isinstance(d, str) or not d.strip() for d in dataset_ids)
+    ):
+        raise QualificationRunnerError(
+            "qualification scope dataset_ids must be a non-empty list of strings"
+        )
+
+    fixtures_dict = (
+        runtime.get("scope_test_authority")
+        or scope_dict.get("scope_test_fixtures")
+        or scope_dict.get("scope_test_authority")
+    )
+    if not isinstance(fixtures_dict, dict):
+        raise QualificationRunnerError(
+            "frozen scope test authority (runtime_identities.scope_test_authority) is missing"
+        )
+    required_fixtures = {"forbidden_tenant", "forbidden_dataset", "forbidden_agent"}
+    missing_fixtures = sorted(required_fixtures - fixtures_dict.keys())
+    if missing_fixtures:
+        raise QualificationRunnerError(
+            f"frozen scope test authority is missing fields: {missing_fixtures}"
+        )
+    forbidden_tenant = fixtures_dict["forbidden_tenant"]
+    forbidden_dataset = fixtures_dict["forbidden_dataset"]
+    forbidden_agent = fixtures_dict["forbidden_agent"]
+    authorized_document = fixtures_dict.get("authorized_document", "document-auth")
+    case_evidence_fixtures = fixtures_dict.get("case_evidence_fixtures", {})
+    if not isinstance(forbidden_tenant, str) or not forbidden_tenant.strip():
+        raise QualificationRunnerError("scope test authority forbidden_tenant must be non-empty")
+    if not isinstance(forbidden_dataset, str) or not forbidden_dataset.strip():
+        raise QualificationRunnerError("scope test authority forbidden_dataset must be non-empty")
+    if not isinstance(forbidden_agent, str) or not forbidden_agent.strip():
+        raise QualificationRunnerError("scope test authority forbidden_agent must be non-empty")
+
+    scope = QualificationScope(
+        tenant_id=tenant_id,
+        workspace_id=workspace_id,
+        dataset_ids=list(dataset_ids),
+        agent_id=agent_id,
+        expected_principal=expected_principal,
+    )
+    test_authority = ScopeTestAuthority(
+        forbidden_tenant=forbidden_tenant,
+        forbidden_dataset=forbidden_dataset,
+        forbidden_agent=forbidden_agent,
+        authorized_document=authorized_document,
+        case_evidence_fixtures=(
+            case_evidence_fixtures if isinstance(case_evidence_fixtures, dict) else {}
+        ),
+    )
+    return scope, test_authority
+
+
 def _validate_static_preconditions(config: QualificationConfig) -> None:
     if not config.run_id or not config.run_id.strip():
         raise QualificationRunnerError("run_id must be non-empty")
@@ -299,6 +424,11 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
         relational,
         identity_map,
     ) = _load_required_scoring_authority(config)
+    scope, test_scope_authority = _load_frozen_scope_authority(freeze)
+    if config.qualification_scope is not None and config.qualification_scope != scope:
+        raise QualificationRunnerError(
+            "caller-provided qualification_scope contradicts frozen qualification authority"
+        )
     transport = _trusted_transport_from_freeze(config, freeze)
     answer_transport = _trusted_answer_transport(config, freeze, authority)
     freeze_sha256 = hashlib.sha256(config.freeze_path.read_bytes()).hexdigest()
@@ -334,107 +464,196 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
             )
             mesa_sha = config.current_repository_shas["MESA"]
 
-            for item in ground_truth:
-                request = {
-                    "session_id": f"session-{config.run_id}",
-                    "dataset_ids": ["dataset-legal-1"],
-                    "query": item.question,
-                    "limit": 5,
-                }
-                receipt = transport.search(request)
-                raw_path = store.persist_raw_retrieval(
-                    query_id=item.query_id,
-                    request=request,
-                    response=receipt.payload,
-                    transport_status=receipt.status_code,
-                    timestamp_utc=datetime.now(timezone.utc),
-                    latency_ms=receipt.latency_ms,
-                    runtime_lock_sha256=freeze_sha256,
-                    execution_id=execution_session.execution_id,
+            # 1. Start native MESA session with frozen qualification scope
+            session_start_request = {
+                "tenant_id": scope.tenant_id,
+                "workspace_id": scope.workspace_id,
+                "dataset_ids": list(scope.dataset_ids),
+                "agent_id": scope.agent_id,
+            }
+            session_receipt = transport.start_session(session_start_request)
+            if not 200 <= session_receipt.status_code < 300:
+                raise QualificationRunnerError(
+                    f"native MESA session bootstrap returned HTTP {session_receipt.status_code}"
                 )
-                execution_session.register_transport_artifact(
-                    raw_path,
-                    receipt=receipt,
-                    request=request,
-                    response=receipt.payload,
-                    collector="harness.qualification_runner.retrieval",
-                )
-                context_request = {
-                    "query": item.question,
-                    "token_budget": 2048,
-                }
-                context_receipt = transport.call_endpoint(
-                    f"GET /v4/sessions/{request['session_id']}/context",
-                    context_request,
-                )
-                context_path = store.persist_raw_context(
-                    query_id=item.query_id,
-                    request=context_request,
-                    response=context_receipt.payload,
-                    transport_status=context_receipt.status_code,
-                    timestamp_utc=datetime.now(timezone.utc),
-                    latency_ms=context_receipt.latency_ms,
-                    execution_id=execution_session.execution_id,
-                )
-                execution_session.register_transport_artifact(
-                    context_path,
-                    receipt=context_receipt,
-                    request=context_request,
-                    response=context_receipt.payload,
-                    collector="harness.qualification_runner.context",
-                )
-                context_capture = normalize_context_response(
-                    run_id=config.run_id,
-                    query_id=item.query_id,
-                    response=context_receipt.payload,
-                    api_version=config.api_version,
-                    mesa_sha=mesa_sha,
-                )
-                execute_answer_and_persist(
-                    store=store,
-                    context=context_capture,
-                    question=item.question,
-                    system_prompt=config.answer_system_prompt,
-                    answer_instruction=config.answer_instruction,
-                    model=authority.answer_model,
-                    request_parameters=config.answer_request_parameters,
-                    transport=answer_transport,
-                    execution_session=execution_session,
-                    context_raw_path=context_path,
+            session_payload = session_receipt.payload
+            native_session_id = session_payload.get("session_id")
+            if not isinstance(native_session_id, str) or not native_session_id:
+                raise QualificationRunnerError(
+                    "native MESA session bootstrap response missing session_id"
                 )
 
-            def _scope_executor(case: ScopeTestCase):
-                return transport.call_endpoint(case.endpoint, case.request_payload)
+            # Validate scope fields against frozen qualification scope
+            if session_payload.get("tenant_id") != scope.tenant_id:
+                raise QualificationRunnerError(
+                    f"session bootstrap tenant mismatch: {session_payload.get('tenant_id')} != {scope.tenant_id}"
+                )
+            if session_payload.get("workspace_id") != scope.workspace_id:
+                raise QualificationRunnerError(
+                    f"session bootstrap workspace mismatch: {session_payload.get('workspace_id')} != {scope.workspace_id}"
+                )
+            if sorted(session_payload.get("dataset_ids", [])) != sorted(scope.dataset_ids):
+                raise QualificationRunnerError(
+                    f"session bootstrap datasets mismatch: {session_payload.get('dataset_ids')} != {scope.dataset_ids}"
+                )
+            if session_payload.get("agent_id") != scope.agent_id:
+                raise QualificationRunnerError(
+                    f"session bootstrap agent mismatch: {session_payload.get('agent_id')} != {scope.agent_id}"
+                )
+            if (
+                "principal_id" in session_payload
+                and session_payload.get("principal_id") != scope.expected_principal
+            ):
+                raise QualificationRunnerError(
+                    f"session bootstrap principal mismatch: {session_payload.get('principal_id')} != {scope.expected_principal}"
+                )
 
-            collect_phase7_scope_isolation(
-                run_id=config.run_id,
-                run_dir=run_dir,
+            # Persist and seal raw session bootstrap artifact
+            session_bootstrap_path = store.persist_raw_session_bootstrap(
+                purpose="qualification",
+                request=session_start_request,
+                response=session_payload,
+                transport_status=session_receipt.status_code,
+                timestamp_utc=datetime.now(timezone.utc),
+                latency_ms=session_receipt.latency_ms,
+                mesa_runtime_profile=config.mesa_runtime_profile,
                 mesa_sha=mesa_sha,
-                mesa_executor=_scope_executor,
                 api_version=config.api_version,
-                execution_session=execution_session,
+                execution_id=execution_session.execution_id,
+            )
+            execution_session.register_transport_artifact(
+                session_bootstrap_path,
+                receipt=session_receipt,
+                request=session_start_request,
+                response=session_payload,
+                collector="harness.qualification_runner.session_bootstrap",
             )
 
-            storage_root = config.mesa_storage_root or config.sqlite_path.parent
-            with establish_paired_state_stability(
-                run_id=config.run_id,
-                sqlite_path=config.sqlite_path,
-                storage_root=storage_root,
-            ) as state_stability_guard:
-                execute_paired_graph_ablation(
+            primary_dataset = scope.dataset_ids[0]
+            try:
+                for item in ground_truth:
+                    request = {
+                        "session_id": native_session_id,
+                        "dataset_ids": [primary_dataset],
+                        "query": item.question,
+                        "limit": 5,
+                    }
+                    receipt = transport.search(request)
+                    raw_path = store.persist_raw_retrieval(
+                        query_id=item.query_id,
+                        request=request,
+                        response=receipt.payload,
+                        transport_status=receipt.status_code,
+                        timestamp_utc=datetime.now(timezone.utc),
+                        latency_ms=receipt.latency_ms,
+                        runtime_lock_sha256=freeze_sha256,
+                        execution_id=execution_session.execution_id,
+                    )
+                    execution_session.register_transport_artifact(
+                        raw_path,
+                        receipt=receipt,
+                        request=request,
+                        response=receipt.payload,
+                        collector="harness.qualification_runner.retrieval",
+                    )
+                    context_request = {
+                        "query": item.question,
+                        "token_budget": 2048,
+                    }
+                    context_receipt = transport.call_endpoint(
+                        f"GET /v4/sessions/{native_session_id}/context",
+                        context_request,
+                    )
+                    context_path = store.persist_raw_context(
+                        query_id=item.query_id,
+                        request=context_request,
+                        response=context_receipt.payload,
+                        transport_status=context_receipt.status_code,
+                        timestamp_utc=datetime.now(timezone.utc),
+                        latency_ms=context_receipt.latency_ms,
+                        execution_id=execution_session.execution_id,
+                    )
+                    execution_session.register_transport_artifact(
+                        context_path,
+                        receipt=context_receipt,
+                        request=context_request,
+                        response=context_receipt.payload,
+                        collector="harness.qualification_runner.context",
+                    )
+                    context_capture = normalize_context_response(
+                        run_id=config.run_id,
+                        query_id=item.query_id,
+                        response=context_receipt.payload,
+                        api_version=config.api_version,
+                        mesa_sha=mesa_sha,
+                    )
+                    execute_answer_and_persist(
+                        store=store,
+                        context=context_capture,
+                        question=item.question,
+                        system_prompt=config.answer_system_prompt,
+                        answer_instruction=config.answer_instruction,
+                        model=authority.answer_model,
+                        request_parameters=config.answer_request_parameters,
+                        transport=answer_transport,
+                        execution_session=execution_session,
+                        context_raw_path=context_path,
+                    )
+
+                def _scope_executor(case: ScopeTestCase):
+                    return transport.call_endpoint(case.endpoint, case.request_payload)
+
+                phase7_cases = build_canonical_scope_test_matrix(
+                    authorized_tenant=scope.tenant_id,
+                    authorized_workspace=scope.workspace_id,
+                    authorized_dataset=primary_dataset,
+                    authorized_agent=scope.agent_id,
+                    authorized_principal=scope.expected_principal,
+                    session_id=native_session_id,
+                    forbidden_tenant=test_scope_authority.forbidden_tenant,
+                    forbidden_dataset=test_scope_authority.forbidden_dataset,
+                    forbidden_agent=test_scope_authority.forbidden_agent,
+                    authorized_document=test_scope_authority.authorized_document,
+                    case_evidence_fixtures=test_scope_authority.case_evidence_fixtures,
+                )
+                collect_phase7_scope_isolation(
                     run_id=config.run_id,
                     run_dir=run_dir,
                     mesa_sha=mesa_sha,
-                    rel_queries=relational,
-                    identity_map=identity_map,
-                    sqlite_path=config.sqlite_path,
-                    lancedb_dir=config.lancedb_dir,
-                    kuzu_dir=config.kuzu_dir,
-                    mesa_executor=lambda _mode, request: transport.search(request),
-                    state_stability_guard=state_stability_guard,
-                    execution_session=execution_session,
+                    test_cases=phase7_cases,
+                    mesa_executor=_scope_executor,
                     api_version=config.api_version,
+                    execution_session=execution_session,
+                    session_id=native_session_id,
                 )
+
+                storage_root = config.mesa_storage_root or config.sqlite_path.parent
+                with establish_paired_state_stability(
+                    run_id=config.run_id,
+                    sqlite_path=config.sqlite_path,
+                    storage_root=storage_root,
+                ) as state_stability_guard:
+                    execute_paired_graph_ablation(
+                        run_id=config.run_id,
+                        run_dir=run_dir,
+                        mesa_sha=mesa_sha,
+                        rel_queries=relational,
+                        identity_map=identity_map,
+                        sqlite_path=config.sqlite_path,
+                        lancedb_dir=config.lancedb_dir,
+                        kuzu_dir=config.kuzu_dir,
+                        mesa_executor=lambda _mode, request: transport.search(request),
+                        state_stability_guard=state_stability_guard,
+                        execution_session=execution_session,
+                        api_version=config.api_version,
+                        session_id=native_session_id,
+                        dataset_ids=[primary_dataset],
+                    )
+            finally:
+                try:
+                    transport.end_session(native_session_id)
+                except Exception:
+                    pass
 
         tx.execute_raw_execution(_execute_production_workload)
         raw_manifest_hash = tx.execute_raw_sealing()
