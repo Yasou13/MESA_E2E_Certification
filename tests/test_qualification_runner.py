@@ -210,6 +210,19 @@ def _setup_test_repo(
                 "provider": "openai_compatible",
                 "implementation": "harness.answer_execution.urllib-openai-compatible.v1",
             },
+            "qualification_scope": {
+                "tenant_id": "tenant-auth",
+                "workspace_id": "workspace-auth",
+                "dataset_ids": ["dataset-legal-1"],
+                "agent_id": "agent-auth",
+                "expected_principal": "principal-user-1",
+            },
+            "scope_test_authority": {
+                "forbidden_tenant": "tenant-forbidden",
+                "forbidden_dataset": "dataset-forbidden",
+                "forbidden_agent": "agent-forbidden",
+                "authorized_document": "document-auth",
+            },
         },
     )
 
