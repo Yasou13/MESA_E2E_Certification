@@ -4,27 +4,18 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from unittest.mock import MagicMock
 
 import pytest
 
 from harness.artifacts import RunArtifactStore
-from harness.mesa_adapters import (
-    MESAContractBlocker,
-    MESAContractIntegrityError,
-    normalize_search_response,
-    require_phase7_scope_contract,
-)
+from harness.mesa_adapters import MESAContractIntegrityError
 from harness.metric_producers import (
-    PRODUCTION_METRIC_PRODUCERS,
     ProducerContext,
     ProducerIntegrityError,
     _b9,
-    _b10,
     write_sealed_measurement,
 )
 from harness.scope_collector import (
-    REQUIRED_SCOPE_CASE_IDS,
     ScopeTestCase,
     build_canonical_scope_test_matrix,
     collect_phase7_scope_isolation,
@@ -156,6 +147,28 @@ def _dummy_ctx(run_dir: Path) -> ProducerContext:
     )
 
 
+def test_canonical_visibility_cases_use_real_mesa_v4_read_contracts() -> None:
+    cases = {case.case_id: case for case in build_canonical_scope_test_matrix()}
+
+    assert cases["context_visibility"].endpoint == (
+        "GET /v4/sessions/{session_id}/context"
+    )
+    assert cases["catalog_visibility"].endpoint == "GET /v4/catalog/workspaces"
+    assert cases["document_visibility"].endpoint == "GET /v4/catalog/documents"
+    assert cases["revision_visibility"].endpoint == "GET /v4/catalog/revisions"
+    assert cases["chunk_visibility"].endpoint == (
+        "GET /v4/sessions/{session_id}/context"
+    )
+    assert cases["document_visibility"].request_payload == {
+        "tenant_id": "tenant-auth",
+        "workspace_id": "workspace-auth",
+        "dataset_id": "dataset-auth",
+    }
+    assert cases["revision_visibility"].request_payload["document_id"] == (
+        "document-auth"
+    )
+
+
 def test_phase7_collector_end_to_end(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     run_dir.mkdir()
@@ -174,7 +187,9 @@ def test_phase7_collector_end_to_end(tmp_path: Path) -> None:
 
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
     assert payload["contract_version"] == "mesa.scope-audit.v1"
-    assert payload["producer"] == "harness.scope_collector.collect_phase7_scope_isolation"
+    assert (
+        payload["producer"] == "harness.scope_collector.collect_phase7_scope_isolation"
+    )
     assert payload["total_forbidden_leakage"] == 0
     assert len(payload["negative_cases"]) == 12
 
@@ -289,5 +304,7 @@ def test_b9_rejects_unsupported_contract_version(tmp_path: Path) -> None:
     write_sealed_measurement(path, payload)
 
     ctx = _dummy_ctx(run_dir)
-    with pytest.raises(ProducerIntegrityError, match="unsupported scope contract_version"):
+    with pytest.raises(
+        ProducerIntegrityError, match="unsupported scope contract_version"
+    ):
         _b9(ctx)

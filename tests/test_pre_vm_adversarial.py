@@ -12,13 +12,11 @@ from harness.metric_producers import (
     ProducerContext,
     ProducerIntegrityError,
     _b9,
-    _b10,
     _b11,
     write_sealed_measurement,
 )
 from harness.scope_collector import (
     MESAContractIntegrityError,
-    ScopeTestCase,
     collect_phase7_scope_isolation,
 )
 from tests.independent_support import placeholder_sources
@@ -286,7 +284,9 @@ def test_missing_mandatory_gate_in_registry_cannot_finalize(tmp_path) -> None:
         )
 
 
-def _adversarial_ctx(run_dir: Path, run_id: str = "RUN-ADV", mesa_sha: str = "a" * 40) -> ProducerContext:
+def _adversarial_ctx(
+    run_dir: Path, run_id: str = "RUN-ADV", mesa_sha: str = "a" * 40
+) -> ProducerContext:
     from pathlib import Path
     from harness.artifacts import RunArtifactStore
     from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
@@ -324,11 +324,15 @@ def _adversarial_ctx(run_dir: Path, run_id: str = "RUN-ADV", mesa_sha: str = "a"
         repository_root=run_dir,
         current_repository_shas=repository_shas,
         raw_manifest_hash=raw_hash,
-        gate_config_path=Path(__file__).resolve().parents[1] / "config" / "profile-b-gates.json",
+        gate_config_path=Path(__file__).resolve().parents[1]
+        / "config"
+        / "profile-b-gates.json",
     )
 
 
-def _make_valid_scope_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40) -> None:
+def _make_valid_scope_artifact(
+    path: Path, run_id: str, mesa_sha: str = "a" * 40
+) -> None:
     import hashlib
 
     run_dir = path.parent
@@ -364,7 +368,9 @@ def _make_valid_scope_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40
         raw_bytes = (json.dumps(raw_payload, sort_keys=True) + "\n").encode("utf-8")
         raw_file.write_bytes(raw_bytes)
         raw_sha = hashlib.sha256(raw_bytes).hexdigest()
-        raw_file.with_suffix(raw_file.suffix + ".SHA256").write_text(f"{raw_sha}  {raw_file.name}\n")
+        raw_file.with_suffix(raw_file.suffix + ".SHA256").write_text(
+            f"{raw_sha}  {raw_file.name}\n"
+        )
 
         if cid in search_ids:
             case_entry = {
@@ -412,7 +418,9 @@ def _make_valid_scope_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40
     write_sealed_measurement(path, payload)
 
 
-def _make_valid_graph_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40) -> None:
+def _make_valid_graph_artifact(
+    path: Path, run_id: str, mesa_sha: str = "a" * 40
+) -> None:
     import hashlib
 
     run_dir = path.parent
@@ -434,7 +442,9 @@ def _make_valid_graph_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40
     state_bytes = (json.dumps(state_payload, sort_keys=True) + "\n").encode("utf-8")
     state_file.write_bytes(state_bytes)
     state_sha = hashlib.sha256(state_bytes).hexdigest()
-    state_file.with_suffix(state_file.suffix + ".SHA256").write_text(f"{state_sha}  {state_file.name}\n")
+    state_file.with_suffix(state_file.suffix + ".SHA256").write_text(
+        f"{state_sha}  {state_file.name}\n"
+    )
 
     pairs = []
     for i in range(10):
@@ -450,7 +460,9 @@ def _make_valid_graph_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40
         on_bytes = (json.dumps(on_payload, sort_keys=True) + "\n").encode("utf-8")
         on_file.write_bytes(on_bytes)
         on_sha = hashlib.sha256(on_bytes).hexdigest()
-        on_file.with_suffix(on_file.suffix + ".SHA256").write_text(f"{on_sha}  {on_file.name}\n")
+        on_file.with_suffix(on_file.suffix + ".SHA256").write_text(
+            f"{on_sha}  {on_file.name}\n"
+        )
 
         off_file = raw_graph_dir / f"{qid}_off.json"
         off_payload = {
@@ -463,7 +475,9 @@ def _make_valid_graph_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40
         off_bytes = (json.dumps(off_payload, sort_keys=True) + "\n").encode("utf-8")
         off_file.write_bytes(off_bytes)
         off_sha = hashlib.sha256(off_bytes).hexdigest()
-        off_file.with_suffix(off_file.suffix + ".SHA256").write_text(f"{off_sha}  {off_file.name}\n")
+        off_file.with_suffix(off_file.suffix + ".SHA256").write_text(
+            f"{off_sha}  {off_file.name}\n"
+        )
 
         pairs.append(
             {
@@ -542,7 +556,9 @@ def _make_valid_graph_artifact(path: Path, run_id: str, mesa_sha: str = "a" * 40
 # ---------------- BLOCKER 1 ATTACKS: FORGED ARTIFACT REJECTION ----------------
 
 
-def test_adversarial_b9_forged_scope_artifact_without_raw_manifest_rejected(tmp_path) -> None:
+def test_adversarial_b9_forged_scope_artifact_without_raw_manifest_rejected(
+    tmp_path,
+) -> None:
     """Blocker 1: Valid JSON + valid sidecar without raw manifest fails closed."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -551,7 +567,9 @@ def test_adversarial_b9_forged_scope_artifact_without_raw_manifest_rejected(tmp_
     cases = [
         {
             "case_id": cid,
-            "proof_type": "search_pre_rank_scope" if "search" in cid else "endpoint_visibility",
+            "proof_type": (
+                "search_pre_rank_scope" if "search" in cid else "endpoint_visibility"
+            ),
             "source_raw_artifact": f"raw/scope/{cid}.json",
             "source_raw_sha256": "0" * 64,
             "returned_forbidden_evidence_ids": [],
@@ -563,10 +581,18 @@ def test_adversarial_b9_forged_scope_artifact_without_raw_manifest_rejected(tmp_
             "eligible_candidate_count": 5 if "search" in cid else None,
         }
         for cid in [
-            "cross_tenant_search", "cross_dataset_search", "cross_agent_search",
-            "inactive_status_search", "wrong_jurisdiction_search", "stale_version_search",
-            "effective_date_boundary_search", "context_visibility", "catalog_visibility",
-            "document_visibility", "revision_visibility", "chunk_visibility",
+            "cross_tenant_search",
+            "cross_dataset_search",
+            "cross_agent_search",
+            "inactive_status_search",
+            "wrong_jurisdiction_search",
+            "stale_version_search",
+            "effective_date_boundary_search",
+            "context_visibility",
+            "catalog_visibility",
+            "document_visibility",
+            "revision_visibility",
+            "chunk_visibility",
         ]
     ]
     payload = {
@@ -587,7 +613,11 @@ def test_adversarial_b9_forged_scope_artifact_without_raw_manifest_rejected(tmp_
     freeze_dir = run_dir / "freeze"
     freeze_dir.mkdir()
     from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
-    materials = {cat: [freeze_dir / f"{cat}.txt"] for cat in sorted(MANDATORY_MATERIAL_CATEGORIES)}
+
+    materials = {
+        cat: [freeze_dir / f"{cat}.txt"]
+        for cat in sorted(MANDATORY_MATERIAL_CATEGORIES)
+    }
     for cat in materials:
         materials[cat][0].write_text(cat)
     shas = {"MESA": "a" * 40, "MESA_Data": "b" * 40, "MESA_E2E_Certification": "c" * 40}
@@ -607,13 +637,19 @@ def test_adversarial_b9_forged_scope_artifact_without_raw_manifest_rejected(tmp_
         repository_root=run_dir,
         current_repository_shas=shas,
         raw_manifest_hash="m" * 64,
-        gate_config_path=Path(__file__).resolve().parents[1] / "config" / "profile-b-gates.json",
+        gate_config_path=Path(__file__).resolve().parents[1]
+        / "config"
+        / "profile-b-gates.json",
     )
-    with pytest.raises(ProducerIntegrityError, match="missing sealed artifact: raw-manifest.json"):
+    with pytest.raises(
+        ProducerIntegrityError, match="missing sealed artifact: raw-manifest.json"
+    ):
         _b9(ctx)
 
 
-def test_adversarial_b11_forged_graph_artifact_without_raw_manifest_rejected(tmp_path) -> None:
+def test_adversarial_b11_forged_graph_artifact_without_raw_manifest_rejected(
+    tmp_path,
+) -> None:
     """Blocker 1: Valid JSON + valid sidecar without raw manifest fails closed."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -648,7 +684,11 @@ def test_adversarial_b11_forged_graph_artifact_without_raw_manifest_rejected(tmp
     freeze_dir = run_dir / "freeze"
     freeze_dir.mkdir()
     from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
-    materials = {cat: [freeze_dir / f"{cat}.txt"] for cat in sorted(MANDATORY_MATERIAL_CATEGORIES)}
+
+    materials = {
+        cat: [freeze_dir / f"{cat}.txt"]
+        for cat in sorted(MANDATORY_MATERIAL_CATEGORIES)
+    }
     for cat in materials:
         materials[cat][0].write_text(cat)
     shas = {"MESA": "a" * 40, "MESA_Data": "b" * 40, "MESA_E2E_Certification": "c" * 40}
@@ -668,13 +708,19 @@ def test_adversarial_b11_forged_graph_artifact_without_raw_manifest_rejected(tmp
         repository_root=run_dir,
         current_repository_shas=shas,
         raw_manifest_hash="m" * 64,
-        gate_config_path=Path(__file__).resolve().parents[1] / "config" / "profile-b-gates.json",
+        gate_config_path=Path(__file__).resolve().parents[1]
+        / "config"
+        / "profile-b-gates.json",
     )
-    with pytest.raises(ProducerIntegrityError, match="missing sealed artifact: raw-manifest.json"):
+    with pytest.raises(
+        ProducerIntegrityError, match="missing sealed artifact: raw-manifest.json"
+    ):
         _b11(ctx)
 
 
-def test_adversarial_raw_lineage_valid_sha_not_in_raw_manifest_rejected(tmp_path) -> None:
+def test_adversarial_raw_lineage_valid_sha_not_in_raw_manifest_rejected(
+    tmp_path,
+) -> None:
     """Raw file exists and sidecar is valid, but raw-manifest does NOT list it."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -687,6 +733,7 @@ def test_adversarial_raw_lineage_valid_sha_not_in_raw_manifest_rejected(tmp_path
     unindexed = run_dir / "raw" / "scope" / "unindexed.json"
     unindexed.write_text('{"run_id": "RUN-ADV", "case_id": "cross_tenant_search"}\n')
     import hashlib
+
     u_sha = hashlib.sha256(unindexed.read_bytes()).hexdigest()
     unindexed.with_suffix(".json.SHA256").write_text(f"{u_sha}  unindexed.json\n")
 
@@ -714,7 +761,9 @@ def test_adversarial_raw_lineage_wrong_raw_hash_rejected(tmp_path) -> None:
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)
 
-    with pytest.raises(ProducerIntegrityError, match="does not match sealed raw manifest"):
+    with pytest.raises(
+        ProducerIntegrityError, match="does not match sealed raw manifest"
+    ):
         _b9(ctx)
 
 
@@ -727,14 +776,20 @@ def test_adversarial_raw_lineage_stale_raw_from_other_run_rejected(tmp_path) -> 
 
     # Overwrite one raw file with wrong run_id
     raw_file = run_dir / "raw" / "scope" / "cross_tenant_search.json"
-    raw_payload = {"schema_version": "1.0", "run_id": "RUN-STALE-PREVIOUS", "case_id": "cross_tenant_search"}
+    raw_payload = {
+        "schema_version": "1.0",
+        "run_id": "RUN-STALE-PREVIOUS",
+        "case_id": "cross_tenant_search",
+    }
     raw_bytes = (json.dumps(raw_payload, sort_keys=True) + "\n").encode("utf-8")
     raw_file.write_bytes(raw_bytes)
     import hashlib
+
     raw_sha = hashlib.sha256(raw_bytes).hexdigest()
     raw_file.with_suffix(".json.SHA256").write_text(f"{raw_sha}  {raw_file.name}\n")
 
     from harness.artifacts import ArtifactStoreError, RunArtifactStore
+
     store = RunArtifactStore(run_dir, run_id="RUN-ADV")
     with pytest.raises(ArtifactStoreError, match="raw artifact run_id mismatch"):
         store.compute_raw_manifest()
@@ -743,7 +798,9 @@ def test_adversarial_raw_lineage_stale_raw_from_other_run_rejected(tmp_path) -> 
 # ---------------- BLOCKER 2 ATTACKS: SYNTHETIC AUDIT PROOF ----------------
 
 
-def test_adversarial_phase7_non_search_synthetic_pre_rank_verified_rejected(tmp_path) -> None:
+def test_adversarial_phase7_non_search_synthetic_pre_rank_verified_rejected(
+    tmp_path,
+) -> None:
     """Blocker 2: Non-search case claiming pre_rank_audit_verified=True is rejected."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -761,11 +818,15 @@ def test_adversarial_phase7_non_search_synthetic_pre_rank_verified_rejected(tmp_
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)
 
-    with pytest.raises(ProducerIntegrityError, match="cannot claim pre_rank_audit_verified"):
+    with pytest.raises(
+        ProducerIntegrityError, match="cannot claim pre_rank_audit_verified"
+    ):
         _b9(ctx)
 
 
-def test_adversarial_phase7_non_search_synthetic_audit_counts_rejected(tmp_path) -> None:
+def test_adversarial_phase7_non_search_synthetic_audit_counts_rejected(
+    tmp_path,
+) -> None:
     """Blocker 2: Non-search case synthesizing candidate counts is rejected."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -784,11 +845,15 @@ def test_adversarial_phase7_non_search_synthetic_audit_counts_rejected(tmp_path)
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)
 
-    with pytest.raises(ProducerIntegrityError, match="cannot synthesize candidate counts"):
+    with pytest.raises(
+        ProducerIntegrityError, match="cannot synthesize candidate counts"
+    ):
         _b9(ctx)
 
 
-def test_adversarial_phase7_non_search_synthetic_exclusion_hash_rejected(tmp_path) -> None:
+def test_adversarial_phase7_non_search_synthetic_exclusion_hash_rejected(
+    tmp_path,
+) -> None:
     """Blocker 2: Non-search case synthesizing exclusion_audit_hash is rejected."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -805,11 +870,15 @@ def test_adversarial_phase7_non_search_synthetic_exclusion_hash_rejected(tmp_pat
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)
 
-    with pytest.raises(ProducerIntegrityError, match="cannot synthesize exclusion_audit_hash"):
+    with pytest.raises(
+        ProducerIntegrityError, match="cannot synthesize exclusion_audit_hash"
+    ):
         _b9(ctx)
 
 
-def test_adversarial_phase7_endpoint_visibility_proof_passed_as_search_proof_rejected(tmp_path) -> None:
+def test_adversarial_phase7_endpoint_visibility_proof_passed_as_search_proof_rejected(
+    tmp_path,
+) -> None:
     """Search case pretending to be endpoint_visibility is rejected."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
@@ -826,7 +895,9 @@ def test_adversarial_phase7_endpoint_visibility_proof_passed_as_search_proof_rej
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)
 
-    with pytest.raises(ProducerIntegrityError, match="must have proof_type='search_pre_rank_scope'"):
+    with pytest.raises(
+        ProducerIntegrityError, match="must have proof_type='search_pre_rank_scope'"
+    ):
         _b9(ctx)
 
 
@@ -847,6 +918,7 @@ def test_adversarial_b11_forged_quiescence_boolean_rejected(tmp_path) -> None:
     s_bytes = (json.dumps(s_payload, sort_keys=True) + "\n").encode("utf-8")
     state_file.write_bytes(s_bytes)
     import hashlib
+
     s_sha = hashlib.sha256(s_bytes).hexdigest()
     state_file.with_suffix(".json.SHA256").write_text(f"{s_sha}  {state_file.name}\n")
 
@@ -859,7 +931,10 @@ def test_adversarial_b11_forged_quiescence_boolean_rejected(tmp_path) -> None:
     write_sealed_measurement(p, payload)
 
     ctx = _adversarial_ctx(run_dir, run_id="RUN-ADV")
-    with pytest.raises(ProducerIntegrityError, match="claimed quiescence_verified=True but sealed state proof does not verify quiescence"):
+    with pytest.raises(
+        ProducerIntegrityError,
+        match="claimed quiescence_verified=True but sealed state proof does not verify quiescence",
+    ):
         _b11(ctx)
 
 
@@ -876,6 +951,7 @@ def test_adversarial_b11_unquiescent_state_blocks_b11(tmp_path) -> None:
     s_bytes = (json.dumps(s_payload, sort_keys=True) + "\n").encode("utf-8")
     state_file.write_bytes(s_bytes)
     import hashlib
+
     s_sha = hashlib.sha256(s_bytes).hexdigest()
     state_file.with_suffix(".json.SHA256").write_text(f"{s_sha}  {state_file.name}\n")
 
@@ -931,7 +1007,9 @@ def test_adversarial_phase7_principal_mismatch_rejected(tmp_path) -> None:
     def evil_executor(case):
         resp = _mock_mesa_response(case)
         if "scope_audit" in resp:
-            resp["scope_audit"]["requested_scope"]["principal_id"] = "principal-forged-evil"
+            resp["scope_audit"]["requested_scope"][
+                "principal_id"
+            ] = "principal-forged-evil"
         return resp
 
     with pytest.raises(MESAContractIntegrityError, match="principal mismatch"):
@@ -977,7 +1055,9 @@ def test_adversarial_b11_off_leaking_graph_paths_rejected(tmp_path) -> None:
     p = run_dir / "graph-ablation.json"
     _make_valid_graph_artifact(p, run_id="RUN-ADV")
     payload = json.loads(p.read_text(encoding="utf-8"))
-    payload["pairs"][0]["off"]["paths"] = [{"graph_path_id": "leak", "path_valid": True}]
+    payload["pairs"][0]["off"]["paths"] = [
+        {"graph_path_id": "leak", "path_valid": True}
+    ]
     p.unlink()
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)
@@ -999,7 +1079,9 @@ def test_adversarial_b11_off_leaking_graph_origins_rejected(tmp_path) -> None:
     write_sealed_measurement(p, payload)
 
     ctx = _adversarial_ctx(run_dir, run_id="RUN-ADV")
-    with pytest.raises(ProducerIntegrityError, match="OFF pair leaked graph origins in top-5"):
+    with pytest.raises(
+        ProducerIntegrityError, match="OFF pair leaked graph origins in top-5"
+    ):
         _b11(ctx)
 
 
@@ -1017,6 +1099,7 @@ def test_adversarial_b11_mutated_store_during_execution_blocks_b11(tmp_path) -> 
     s_bytes = (json.dumps(s_payload, sort_keys=True) + "\n").encode("utf-8")
     state_file.write_bytes(s_bytes)
     import hashlib
+
     s_sha = hashlib.sha256(s_bytes).hexdigest()
     state_file.with_suffix(".json.SHA256").write_text(f"{s_sha}  {state_file.name}\n")
 
@@ -1071,12 +1154,25 @@ def test_freeze_drift_in_authoritative_code_rejected(tmp_path) -> None:
     root = Path(__file__).resolve().parents[1]
     harness_files = []
     for name in (
-        "metric_producers.py", "gates.py", "transaction.py",
-        "scope_collector.py", "graph_collector.py", "state_proof.py",
-        "mesa_adapters.py", "qualification_runner.py", "finalizer.py",
+        "answer_execution.py",
+        "artifacts.py",
+        "execution_provenance.py",
+        "metric_producers.py",
+        "gates.py",
+        "transaction.py",
+        "scope_collector.py",
+        "graph_collector.py",
+        "state_proof.py",
+        "mesa_adapters.py",
+        "mesa_transport.py",
+        "qualification_runner.py",
+        "finalizer.py",
+        "verdict.py",
     ):
         dest = harness_dir / name
-        dest.write_text((root / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8")
+        dest.write_text(
+            (root / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
         harness_files.append(dest)
     materials["harness_source"] = harness_files
 
@@ -1084,13 +1180,18 @@ def test_freeze_drift_in_authoritative_code_rejected(tmp_path) -> None:
     scorer_files = []
     for name in ("retrieval_scorer.py", "answer_scorer.py", "official_scoring.py"):
         dest = scorer_dir / name
-        dest.write_text((root / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8")
+        dest.write_text(
+            (root / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
         scorer_files.append(dest)
     materials["scorer_source"] = scorer_files
 
     gate_config = repo / "config" / "profile-b-gates.json"
     gate_config.parent.mkdir(parents=True, exist_ok=True)
-    gate_config.write_text((root / "config" / "profile-b-gates.json").read_text(encoding="utf-8"), encoding="utf-8")
+    gate_config.write_text(
+        (root / "config" / "profile-b-gates.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     materials["thresholds"] = [gate_config]
 
     shas = {"MESA": "a" * 40, "MESA_Data": "b" * 40, "MESA_E2E_Certification": "c" * 40}
@@ -1115,8 +1216,13 @@ def test_freeze_drift_in_authoritative_code_rejected(tmp_path) -> None:
     )
 
     # Mutate scope_collector.py in repo
-    (harness_dir / "scope_collector.py").write_text("# mutated scope collector\n", encoding="utf-8")
-    with pytest.raises(ProducerIntegrityError, match="producer execution source differs from frozen authority"):
+    (harness_dir / "scope_collector.py").write_text(
+        "# mutated scope collector\n", encoding="utf-8"
+    )
+    with pytest.raises(
+        ProducerIntegrityError,
+        match="producer execution source differs from frozen authority",
+    ):
         frozen_producer_code_sha256(ctx)
 
     all_res = produce_all(ctx)
@@ -1125,17 +1231,22 @@ def test_freeze_drift_in_authoritative_code_rejected(tmp_path) -> None:
 
 
 def test_qualification_runner_rejects_code_drift(tmp_path) -> None:
-    from harness.qualification_runner import QualificationConfig, run_profile_b_qualification
-    from harness.transaction import TransactionError
-    from tests.test_qualification_runner import _setup_test_repo, _mock_mesa_response, _mock_graph_executor
+    from harness.qualification_runner import (
+        QualificationConfig,
+        run_profile_b_qualification,
+    )
+    from harness.qualification_runner import QualificationRunnerError
+    from tests.test_qualification_runner import _setup_test_repo
 
     run_id = "RUN-DRIFT-QUAL"
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
     run_dir = tmp_path / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    # Drift authoritative code in repo after freeze
-    (repo / "harness" / "graph_collector.py").write_text("# drift graph collector\n", encoding="utf-8")
+    # Drift the newly frozen trusted-transport boundary after freeze.
+    (repo / "harness" / "mesa_transport.py").write_text(
+        "# drift trusted MESA transport\n", encoding="utf-8"
+    )
 
     config = QualificationConfig(
         run_id=run_id,
@@ -1143,16 +1254,18 @@ def test_qualification_runner_rejects_code_drift(tmp_path) -> None:
         freeze_path=fp,
         checksum_path=cp,
         repository_root=repo,
-        current_repository_shas={"MESA": "a" * 40, "MESA_Data": "b" * 40, "MESA_E2E_Certification": "c" * 40},
+        current_repository_shas={
+            "MESA": "a" * 40,
+            "MESA_Data": "b" * 40,
+            "MESA_E2E_Certification": "c" * 40,
+        },
         sqlite_path=sql,
         lancedb_dir=lance,
         kuzu_dir=kuzu,
         gate_config_path=repo / "config" / "profile-b-gates.json",
     )
 
-    with pytest.raises(TransactionError, match="[Cc]ontract freeze verification failed"):
-        run_profile_b_qualification(
-            config,
-            mesa_scope_executor=lambda case: _mock_mesa_response(case, leak=False),
-            mesa_graph_executor=_mock_graph_executor,
-        )
+    with pytest.raises(
+        QualificationRunnerError, match="Contract freeze verification failed"
+    ):
+        run_profile_b_qualification(config)

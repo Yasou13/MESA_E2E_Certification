@@ -3,22 +3,23 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from pathlib import Path
-import sqlite3
 
 import pytest
 
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
 from harness.qualification_runner import (
     QualificationConfig,
-    QualificationResult,
     QualificationRunnerError,
     run_profile_b_qualification,
 )
 from harness.scope_collector import ScopeTestCase
 from tests.test_phase7_scope_collector import _mock_mesa_response
-from tests.test_phase8_9_graph_and_state_proof import _mock_graph_executor, _setup_mock_stores
-
+from tests.test_phase8_9_graph_and_state_proof import (
+    _mock_graph_executor,
+    _setup_mock_stores,
+)
 
 ROOT = Path(__file__).resolve().parents[1]
 MESA_SHA = "a" * 40
@@ -26,7 +27,9 @@ DATA_SHA = "b" * 40
 CERT_SHA = "c" * 40
 
 
-def _setup_test_repo(tmp_path: Path, run_id: str = "RUN-QUAL-TEST") -> tuple[Path, Path, Path, Path, Path, Path]:
+def _setup_test_repo(
+    tmp_path: Path, run_id: str = "RUN-QUAL-TEST"
+) -> tuple[Path, Path, Path, Path, Path, Path]:
     repo = tmp_path / "repo"
     repo.mkdir(parents=True, exist_ok=True)
     freeze_dir = repo / "freeze"
@@ -115,7 +118,10 @@ def _setup_test_repo(tmp_path: Path, run_id: str = "RUN-QUAL-TEST") -> tuple[Pat
 
     normalization = repo / "config" / "scoring-normalization.json"
     normalization.parent.mkdir(parents=True, exist_ok=True)
-    normalization.write_text((ROOT / "config" / "scoring-normalization.json").read_text(encoding="utf-8"), encoding="utf-8")
+    normalization.write_text(
+        (ROOT / "config" / "scoring-normalization.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     materials["normalization"] = [normalization]
 
     # Required harness source files
@@ -123,12 +129,25 @@ def _setup_test_repo(tmp_path: Path, run_id: str = "RUN-QUAL-TEST") -> tuple[Pat
     harness_dir.mkdir(parents=True, exist_ok=True)
     harness_files = []
     for name in (
-        "metric_producers.py", "gates.py", "transaction.py",
-        "scope_collector.py", "graph_collector.py", "state_proof.py",
-        "mesa_adapters.py", "qualification_runner.py", "finalizer.py",
+        "answer_execution.py",
+        "artifacts.py",
+        "execution_provenance.py",
+        "metric_producers.py",
+        "gates.py",
+        "transaction.py",
+        "scope_collector.py",
+        "graph_collector.py",
+        "state_proof.py",
+        "mesa_adapters.py",
+        "qualification_runner.py",
+        "finalizer.py",
+        "mesa_transport.py",
+        "verdict.py",
     ):
         dest = harness_dir / name
-        dest.write_text((ROOT / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8")
+        dest.write_text(
+            (ROOT / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
         harness_files.append(dest)
     materials["harness_source"] = harness_files
 
@@ -136,13 +155,18 @@ def _setup_test_repo(tmp_path: Path, run_id: str = "RUN-QUAL-TEST") -> tuple[Pat
     scorer_files = []
     for name in ("retrieval_scorer.py", "answer_scorer.py", "official_scoring.py"):
         dest = scorer_dir / name
-        dest.write_text((ROOT / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8")
+        dest.write_text(
+            (ROOT / "harness" / name).read_text(encoding="utf-8"), encoding="utf-8"
+        )
         scorer_files.append(dest)
     materials["scorer_source"] = scorer_files
 
     gate_config = repo / "config" / "profile-b-gates.json"
     gate_config.parent.mkdir(parents=True, exist_ok=True)
-    gate_config.write_text((ROOT / "config" / "profile-b-gates.json").read_text(encoding="utf-8"), encoding="utf-8")
+    gate_config.write_text(
+        (ROOT / "config" / "profile-b-gates.json").read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
     materials["thresholds"] = [gate_config]
 
     shas = {
@@ -174,6 +198,18 @@ def _setup_test_repo(tmp_path: Path, run_id: str = "RUN-QUAL-TEST") -> tuple[Pat
                 "normalization_path": normalization.relative_to(repo).as_posix(),
                 "mesa_api_version": "v4",
             },
+            "mesa_transport": {
+                "base_url": "http://127.0.0.1:9",
+                "api_version": "v4",
+                "expected_mesa_sha": MESA_SHA,
+                "implementation": "harness.mesa_transport.urllib-json.v1",
+                "runtime_profile": "combined",
+            },
+            "answer_transport": {
+                "base_url": "https://provider.invalid/v1",
+                "provider": "openai_compatible",
+                "implementation": "harness.answer_execution.urllib-openai-compatible.v1",
+            },
         },
     )
 
@@ -187,11 +223,15 @@ def test_qualification_runner_rejects_missing_or_empty_run_id(tmp_path: Path) ->
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path)
     config = QualificationConfig(
         run_id="",
-        run_dir=tmp_path / "run",
+        run_dir=tmp_path / "RUN-TEST",
         freeze_path=fp,
         checksum_path=cp,
         repository_root=repo,
-        current_repository_shas={"MESA": MESA_SHA, "MESA_Data": DATA_SHA, "MESA_E2E_Certification": CERT_SHA},
+        current_repository_shas={
+            "MESA": MESA_SHA,
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
         sqlite_path=sql,
         lancedb_dir=lance,
         kuzu_dir=kuzu,
@@ -204,11 +244,15 @@ def test_qualification_runner_rejects_missing_freeze(tmp_path: Path) -> None:
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path)
     config = QualificationConfig(
         run_id="RUN-TEST",
-        run_dir=tmp_path / "run",
+        run_dir=tmp_path / "RUN-TEST",
         freeze_path=tmp_path / "nonexistent-freeze.json",
         checksum_path=cp,
         repository_root=repo,
-        current_repository_shas={"MESA": MESA_SHA, "MESA_Data": DATA_SHA, "MESA_E2E_Certification": CERT_SHA},
+        current_repository_shas={
+            "MESA": MESA_SHA,
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
         sqlite_path=sql,
         lancedb_dir=lance,
         kuzu_dir=kuzu,
@@ -217,20 +261,28 @@ def test_qualification_runner_rejects_missing_freeze(tmp_path: Path) -> None:
         run_profile_b_qualification(config)
 
 
-def test_qualification_runner_rejects_unresolved_repository_shas(tmp_path: Path) -> None:
+def test_qualification_runner_rejects_unresolved_repository_shas(
+    tmp_path: Path,
+) -> None:
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path)
     config = QualificationConfig(
         run_id="RUN-TEST",
-        run_dir=tmp_path / "run",
+        run_dir=tmp_path / "RUN-TEST",
         freeze_path=fp,
         checksum_path=cp,
         repository_root=repo,
-        current_repository_shas={"MESA": "short", "MESA_Data": DATA_SHA, "MESA_E2E_Certification": CERT_SHA},
+        current_repository_shas={
+            "MESA": "short",
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
         sqlite_path=sql,
         lancedb_dir=lance,
         kuzu_dir=kuzu,
     )
-    with pytest.raises(QualificationRunnerError, match="unresolved repository identity"):
+    with pytest.raises(
+        QualificationRunnerError, match="unresolved repository identity"
+    ):
         run_profile_b_qualification(config)
 
 
@@ -238,46 +290,47 @@ def test_qualification_runner_rejects_missing_stores(tmp_path: Path) -> None:
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path)
     config = QualificationConfig(
         run_id="RUN-TEST",
-        run_dir=tmp_path / "run",
+        run_dir=tmp_path / "RUN-TEST",
         freeze_path=fp,
         checksum_path=cp,
         repository_root=repo,
-        current_repository_shas={"MESA": MESA_SHA, "MESA_Data": DATA_SHA, "MESA_E2E_Certification": CERT_SHA},
+        current_repository_shas={
+            "MESA": MESA_SHA,
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
         sqlite_path=tmp_path / "missing.db",
         lancedb_dir=lance,
         kuzu_dir=kuzu,
     )
     with pytest.raises(QualificationRunnerError, match="SQLite store not found"):
-        run_profile_b_qualification(
-            config,
-            mesa_scope_executor=lambda case: {},
-            mesa_graph_executor=lambda mode, req: {},
-        )
+        run_profile_b_qualification(config)
 
 
-def test_qualification_runner_rejects_unquiescent_preconditions(tmp_path: Path) -> None:
+def test_qualification_config_rejects_caller_quiescence_claims(tmp_path: Path) -> None:
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path)
-    config = QualificationConfig(
-        run_id="RUN-TEST",
-        run_dir=tmp_path / "run",
-        freeze_path=fp,
-        checksum_path=cp,
-        repository_root=repo,
-        current_repository_shas={"MESA": MESA_SHA, "MESA_Data": DATA_SHA, "MESA_E2E_Certification": CERT_SHA},
-        sqlite_path=sql,
-        lancedb_dir=lance,
-        kuzu_dir=kuzu,
-        quiescence_evidence={"workers_stopped_or_read_only": False, "queues_drained": False},
-    )
-    with pytest.raises(QualificationRunnerError, match="BLOCKED_BY_RUNTIME_STATE_PROOF: quiescence preconditions failed"):
-        run_profile_b_qualification(
-            config,
-            mesa_scope_executor=lambda case: {},
-            mesa_graph_executor=lambda mode, req: {},
+    with pytest.raises(TypeError, match="quiescence_evidence"):
+        QualificationConfig(
+            run_id="RUN-TEST",
+            run_dir=tmp_path / "RUN-TEST",
+            freeze_path=fp,
+            checksum_path=cp,
+            repository_root=repo,
+            current_repository_shas={
+                "MESA": MESA_SHA,
+                "MESA_Data": DATA_SHA,
+                "MESA_E2E_Certification": CERT_SHA,
+            },
+            sqlite_path=sql,
+            lancedb_dir=lance,
+            kuzu_dir=kuzu,
+            quiescence_evidence={"runtime_freeze_verified": True},  # type: ignore[call-arg]
         )
 
 
-def test_qualification_runner_executes_pipeline_with_authoritative_evidence(tmp_path: Path) -> None:
+def test_qualification_runner_rejects_arbitrary_executor_callables(
+    tmp_path: Path,
+) -> None:
     run_id = "RUN-CANONICAL-01"
     repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
     run_dir = tmp_path / run_id
@@ -331,24 +384,154 @@ def test_qualification_runner_executes_pipeline_with_authoritative_evidence(tmp_
         freeze_path=fp,
         checksum_path=cp,
         repository_root=repo,
-        current_repository_shas={"MESA": MESA_SHA, "MESA_Data": DATA_SHA, "MESA_E2E_Certification": CERT_SHA},
+        current_repository_shas={
+            "MESA": MESA_SHA,
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
         sqlite_path=sql,
         lancedb_dir=lance,
         kuzu_dir=kuzu,
         gate_config_path=repo / "config" / "profile-b-gates.json",
-        quiescence_evidence={"runtime_freeze_verified": True},
+        mesa_base_url="http://127.0.0.1:9",
+        mesa_api_key="test-only-key",
     )
 
-    result = run_profile_b_qualification(
-        config,
-        mesa_scope_executor=scope_executor,
-        mesa_graph_executor=_mock_graph_executor,
-        mesa_search_executor=search_executor,
+    with pytest.raises(TypeError, match="mesa_scope_executor"):
+        run_profile_b_qualification(
+            config,
+            mesa_scope_executor=scope_executor,  # type: ignore[call-arg]
+            mesa_graph_executor=_mock_graph_executor,  # type: ignore[call-arg]
+            mesa_search_executor=search_executor,  # type: ignore[call-arg]
+        )
+
+
+def test_qualification_runner_missing_rel_authority_fails_before_transport(
+    tmp_path: Path,
+) -> None:
+    run_id = "RUN-MISSING-REL"
+    repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
+    config = QualificationConfig(
+        run_id=run_id,
+        run_dir=tmp_path / run_id,
+        freeze_path=fp,
+        checksum_path=cp,
+        repository_root=repo,
+        current_repository_shas={
+            "MESA": MESA_SHA,
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
+        sqlite_path=sql,
+        lancedb_dir=lance,
+        kuzu_dir=kuzu,
+        mesa_base_url="http://127.0.0.1:9",
+        mesa_api_key="test-only-key",
+    )
+    with pytest.raises(
+        QualificationRunnerError,
+        match="exactly 10 RELATIONAL queries",
+    ):
+        run_profile_b_qualification(config)
+
+
+def _reseal_freeze(freeze_path: Path, checksum_path: Path, payload: dict) -> None:
+    freeze_path.write_text(
+        json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    digest = hashlib.sha256(freeze_path.read_bytes()).hexdigest()
+    checksum_path.write_text(f"{digest}  {freeze_path.name}\n", encoding="utf-8")
+
+
+def _runner_config(
+    tmp_path: Path,
+    run_id: str,
+    repo: Path,
+    freeze_path: Path,
+    checksum_path: Path,
+    sql: Path,
+    lance: Path,
+    kuzu: Path,
+) -> QualificationConfig:
+    return QualificationConfig(
+        run_id=run_id,
+        run_dir=tmp_path / run_id,
+        freeze_path=freeze_path,
+        checksum_path=checksum_path,
+        repository_root=repo,
+        current_repository_shas={
+            "MESA": MESA_SHA,
+            "MESA_Data": DATA_SHA,
+            "MESA_E2E_Certification": CERT_SHA,
+        },
+        sqlite_path=sql,
+        lancedb_dir=lance,
+        kuzu_dir=kuzu,
+        mesa_base_url="http://127.0.0.1:9",
+        mesa_api_key="test-only-key",
     )
 
-    assert isinstance(result, QualificationResult)
-    assert result.run_id == run_id
-    assert (run_dir / "raw-manifest.json").is_file()
-    assert (run_dir / "scope-isolation.json").is_file()
-    assert (run_dir / "graph-ablation.json").is_file()
-    assert (run_dir / "raw" / "state" / "state-proof.json").is_file()
+
+def test_qualification_runner_missing_ground_truth_fails_closed(tmp_path: Path) -> None:
+    run_id = "RUN-MISSING-GT"
+    repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
+    (repo / "ground-truth" / "test.jsonl").unlink()
+    with pytest.raises(
+        QualificationRunnerError, match="Contract freeze verification failed"
+    ):
+        run_profile_b_qualification(
+            _runner_config(tmp_path, run_id, repo, fp, cp, sql, lance, kuzu)
+        )
+
+
+def test_qualification_runner_invalid_qrels_fails_before_transport(
+    tmp_path: Path,
+) -> None:
+    run_id = "RUN-INVALID-QRELS"
+    repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
+    qrels = repo / "ground-truth" / "qrels.jsonl"
+    qrels.write_text('{"query_id": 7}\n', encoding="utf-8")
+    freeze = json.loads(fp.read_text(encoding="utf-8"))
+    rel = qrels.relative_to(repo).as_posix()
+    for material in freeze["materials"]:
+        if material["path"] == rel:
+            material["sha256"] = hashlib.sha256(qrels.read_bytes()).hexdigest()
+    _reseal_freeze(fp, cp, freeze)
+    with pytest.raises(QualificationRunnerError, match="GT/qrels validation failed"):
+        run_profile_b_qualification(
+            _runner_config(tmp_path, run_id, repo, fp, cp, sql, lance, kuzu)
+        )
+
+
+def test_qualification_runner_scoring_loader_exception_fails_closed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    run_id = "RUN-SCORING-LOAD-FAIL"
+    repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
+
+    def fail_loader(**_kwargs):
+        from harness.official_scoring import ScoringAuthorityUnavailable
+
+        raise ScoringAuthorityUnavailable("injected load failure")
+
+    monkeypatch.setattr(
+        "harness.qualification_runner.load_frozen_scoring_authority",
+        fail_loader,
+    )
+    with pytest.raises(
+        QualificationRunnerError, match="official frozen scoring authority unavailable"
+    ):
+        run_profile_b_qualification(
+            _runner_config(tmp_path, run_id, repo, fp, cp, sql, lance, kuzu)
+        )
+
+
+def test_qualification_runner_rejects_answer_executor_injection(tmp_path: Path) -> None:
+    run_id = "RUN-ANSWER-INJECTION"
+    repo, fp, cp, sql, lance, kuzu = _setup_test_repo(tmp_path, run_id=run_id)
+    with pytest.raises(TypeError, match="answer_executor"):
+        run_profile_b_qualification(
+            _runner_config(tmp_path, run_id, repo, fp, cp, sql, lance, kuzu),
+            answer_executor=lambda *_args: {},  # type: ignore[call-arg]
+        )
