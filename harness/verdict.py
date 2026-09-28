@@ -137,9 +137,15 @@ def evaluate_final_verdict(
 
 
 def write_final_verdict(verdict: FinalVerdict, path: str | Path) -> None:
-    serialized = json.dumps(
-        verdict.model_dump(mode="json"), ensure_ascii=False, indent=2, sort_keys=True
-    ) + "\n"
+    serialized = (
+        json.dumps(
+            verdict.model_dump(mode="json"),
+            ensure_ascii=False,
+            indent=2,
+            sort_keys=True,
+        )
+        + "\n"
+    )
     Path(path).write_text(serialized, encoding="utf-8", newline="\n")
 
 
@@ -154,15 +160,23 @@ def derive_production_verdict(
     repository_root: str | Path,
     current_repository_shas: dict[str, str],
     mandatory_artifact_names: Iterable[str],
+    official_execution_verified: bool = False,
 ) -> FinalVerdict:
     """Production entrypoint that recomputes trust directly from filesystem artifacts."""
     from harness.freeze import verify_contract_freeze
     from harness.gates import PROFILE_B_GATE_IDS, PRODUCTION_METRIC_PRODUCERS
 
     gate_list = list(gates)
-    if mandatory_gate_ids != PROFILE_B_GATE_IDS or {g.gate_id for g in gate_list} != PROFILE_B_GATE_IDS:
-        return _verdict(run_id, VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
-                        ["mandatory production gate registry must be exactly B0-B14"], gate_list)
+    if (
+        mandatory_gate_ids != PROFILE_B_GATE_IDS
+        or {g.gate_id for g in gate_list} != PROFILE_B_GATE_IDS
+    ):
+        return _verdict(
+            run_id,
+            VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
+            ["mandatory production gate registry must be exactly B0-B14"],
+            gate_list,
+        )
 
     run_path = Path(run_dir)
     freeze_verif = verify_contract_freeze(
@@ -181,7 +195,12 @@ def derive_production_verdict(
                 lifecycle_valid = True
             if m.get("lifecycle_valid") is False:
                 lifecycle_valid = False
-            if m.get("lifecycle_status") in {"FAIL", "INVALIDATED", "BLOCKED", "INVALID"}:
+            if m.get("lifecycle_status") in {
+                "FAIL",
+                "INVALIDATED",
+                "BLOCKED",
+                "INVALID",
+            }:
                 lifecycle_valid = False
         except Exception:
             lifecycle_valid = False
@@ -198,7 +217,26 @@ def derive_production_verdict(
         freeze_verification=freeze_verif,
         lifecycle_valid=lifecycle_valid,
     )
-    if verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE and PROFILE_B_GATE_IDS - PRODUCTION_METRIC_PRODUCERS:
-        return _verdict(run_id, VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
-                        ["authoritative metric producers unavailable; caller gate claims cannot certify"], gate_list)
+    if (
+        verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+        and not official_execution_verified
+    ):
+        return _verdict(
+            run_id,
+            VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
+            ["official qualification execution provenance is absent or invalid"],
+            gate_list,
+        )
+    if (
+        verdict.status == VerdictStatus.PROFILE_B_PASS_NATIVE
+        and PROFILE_B_GATE_IDS - PRODUCTION_METRIC_PRODUCERS
+    ):
+        return _verdict(
+            run_id,
+            VerdictStatus.PROFILE_B_BLOCKED_PRECONDITION,
+            [
+                "authoritative metric producers unavailable; caller gate claims cannot certify"
+            ],
+            gate_list,
+        )
     return verdict

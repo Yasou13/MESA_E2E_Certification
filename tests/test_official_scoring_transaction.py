@@ -16,7 +16,6 @@ from harness.metric_producers import write_sealed_measurement
 from harness.models import GateStatus
 from harness.transaction import CertificationTransaction, TransactionError
 
-
 RUN_ID = "RUN-official-scoring"
 NOW = datetime(2026, 9, 27, tzinfo=timezone.utc)
 MESA_SHA = "a" * 40
@@ -152,6 +151,9 @@ def _authority_freeze(tmp_path: Path):
         scorer_files.append(destination)
     producer_files = []
     for name in (
+        "answer_execution.py",
+        "artifacts.py",
+        "execution_provenance.py",
         "metric_producers.py",
         "gates.py",
         "transaction.py",
@@ -159,8 +161,10 @@ def _authority_freeze(tmp_path: Path):
         "graph_collector.py",
         "state_proof.py",
         "mesa_adapters.py",
+        "mesa_transport.py",
         "qualification_runner.py",
         "finalizer.py",
+        "verdict.py",
     ):
         destination = repo / "harness" / name
         destination.parent.mkdir(parents=True, exist_ok=True)

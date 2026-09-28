@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 import urllib.error
 import urllib.request
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Protocol
 
 from harness.artifacts import (
@@ -33,6 +35,7 @@ class OpenAICompatibleHTTPTransport:
     """Minimal production transport with bounded timeout and no SDK retries."""
 
     provider_name = "openai_compatible"
+    implementation_id = "harness.answer_execution.urllib-openai-compatible.v1"
 
     def __init__(self, *, base_url: str, api_key: str, timeout_seconds: float):
         if not base_url.startswith("https://"):
@@ -41,9 +44,20 @@ class OpenAICompatibleHTTPTransport:
             raise ValueError("provider API key is required")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
-        self._url = base_url.rstrip("/") + "/chat/completions"
+        self._base_url = base_url.rstrip("/")
+        self._url = self._base_url + "/chat/completions"
         self._api_key = api_key
         self._timeout = float(timeout_seconds)
+        self._verified_exchanges: dict[tuple[str, str], list[str]] = {}
+        self.identity_sha256 = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "implementation": self.implementation_id,
+                    "provider": self.provider_name,
+                    "base_url": self._base_url,
+                }
+            )
+        ).hexdigest()
 
     def complete(self, request_payload: dict[str, Any]) -> dict[str, Any]:
         body = canonical_json_bytes(request_payload)
@@ -69,7 +83,38 @@ class OpenAICompatibleHTTPTransport:
             raise AnswerExecutionError("provider returned invalid JSON") from exc
         if not isinstance(payload, dict):
             raise AnswerExecutionError("provider response must be a JSON object")
+        request_sha = hashlib.sha256(canonical_json_bytes(request_payload)).hexdigest()
+        response_sha = hashlib.sha256(canonical_json_bytes(payload)).hexdigest()
+        capture_id = hashlib.sha256(
+            canonical_json_bytes(
+                {
+                    "provider": self.provider_name,
+                    "request_sha256": request_sha,
+                    "response_sha256": response_sha,
+                }
+            )
+        ).hexdigest()
+        self._verified_exchanges.setdefault((request_sha, response_sha), []).append(
+            capture_id
+        )
         return payload
+
+    def consume_exchange_receipt(
+        self, request_payload: dict[str, Any], response_payload: dict[str, Any]
+    ) -> str:
+        key = (
+            hashlib.sha256(canonical_json_bytes(request_payload)).hexdigest(),
+            hashlib.sha256(canonical_json_bytes(response_payload)).hexdigest(),
+        )
+        receipts = self._verified_exchanges.get(key)
+        if not receipts:
+            raise AnswerExecutionError(
+                "provider exchange lacks a runner-owned HTTP receipt"
+            )
+        capture_id = receipts.pop(0)
+        if not receipts:
+            self._verified_exchanges.pop(key, None)
+        return capture_id
 
 
 def _parse_openai_compatible_response(raw_response: dict[str, Any]) -> AnswerResponse:
@@ -101,6 +146,8 @@ def execute_answer_and_persist(
     request_parameters: dict[str, Any],
     transport: ProviderTransport,
     timestamp_utc: datetime | None = None,
+    execution_session: Any | None = None,
+    context_raw_path: Path | None = None,
 ) -> CertifiedAnswerExecutionCapture:
     """Call the provider once and seal the exact boundary capture before scoring."""
 
@@ -160,13 +207,21 @@ def execute_answer_and_persist(
     }
     raw_response = transport.complete(exact_request)
     capture_time = timestamp_utc or datetime.now(timezone.utc)
-    _, provider_exchange_sha256 = store.persist_raw_provider_exchange(
+    provider_path, provider_exchange_sha256 = store.persist_raw_provider_exchange(
         query_id=context.query_id,
         timestamp_utc=capture_time,
         provider=transport.provider_name,
         request=exact_request,
         response=raw_response,
     )
+    if execution_session is not None:
+        execution_session.register_provider_artifact(
+            provider_path,
+            transport=transport,
+            request=exact_request,
+            response=raw_response,
+            collector="harness.answer_execution.provider_boundary",
+        )
     parsed = _parse_openai_compatible_response(raw_response)
     capture = CertifiedAnswerExecutionCapture(
         run_id=store.run_id,
@@ -203,5 +258,18 @@ def execute_answer_and_persist(
         provider_exchange_sha256=provider_exchange_sha256,
         parsed_response=parsed.model_dump(mode="json"),
     )
-    store.persist_raw_answer(capture)
+    answer_path = store.persist_raw_answer(
+        capture,
+        execution_id=(execution_session.execution_id if execution_session else None),
+    )
+    if execution_session is not None:
+        if context_raw_path is None:
+            raise AnswerExecutionError(
+                "official answer capture lacks its trusted MESA context artifact"
+            )
+        execution_session.register_answer_artifact(
+            answer_path,
+            provider_raw_path=provider_path,
+            context_raw_path=context_raw_path,
+        )
     return capture

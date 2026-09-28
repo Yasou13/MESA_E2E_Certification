@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import hashlib
+import fcntl
 import json
 import sqlite3
 from pathlib import Path
@@ -12,7 +12,6 @@ import pytest
 from harness.identity import IdentityMap
 from harness.mesa_adapters import MESAContractIntegrityError
 from harness.metric_producers import (
-    PRODUCTION_METRIC_PRODUCERS,
     ProducerContext,
     ProducerIntegrityError,
     _b11,
@@ -23,10 +22,11 @@ from harness.models import GroundTruthItem
 from harness.graph_collector import execute_paired_graph_ablation
 from harness.state_proof import (
     STATE_PROOF_CONTRACT_VERSION,
+    StateProofError,
+    acquire_runtime_quiescence,
     capture_frozen_state_proof,
     verify_store_quiescence,
 )
-
 
 RUN_ID = "RUN-graph-test"
 MESA_SHA = "b" * 40
@@ -37,8 +37,15 @@ def _setup_mock_stores(tmp_path: Path) -> tuple[Path, Path, Path]:
     conn = sqlite3.connect(sql_path)
     conn.execute("CREATE TABLE assertions (id TEXT PRIMARY KEY, text TEXT)")
     conn.execute("INSERT INTO assertions VALUES ('a1', 'legal text')")
+    conn.execute("CREATE TABLE projection_outbox (state TEXT NOT NULL)")
+    conn.execute("CREATE TABLE artifact_cleanup_outbox (state TEXT NOT NULL)")
+    conn.execute("CREATE TABLE dispatch_queue (state TEXT NOT NULL)")
+    conn.execute("CREATE TABLE lancedb_wal (state TEXT NOT NULL)")
+    conn.execute("CREATE TABLE session_finalization_journal (state TEXT NOT NULL)")
+    conn.execute("CREATE TABLE raw_logs (status TEXT NOT NULL)")
     conn.commit()
     conn.close()
+    (tmp_path / ".mesa-single-writer.lock").write_text("owner=stopped\n")
 
     lance_dir = tmp_path / "lancedb_data"
     lance_dir.mkdir()
@@ -228,12 +235,11 @@ def test_state_proof_quiescence_and_mutation_detection(tmp_path: Path) -> None:
     assert msg == "RETRIEVAL_STATE_UNCHANGED"
     assert quiescent is False
 
-    # With authentic quiescence evidence: quiescence IS verified
-    ok, msg, quiescent = verify_store_quiescence(
-        pre, post, quiescence_evidence={"runtime_freeze_verified": True}
-    )
-    assert ok is True
-    assert quiescent is True
+    # With the real MESA writer fence and drained durable queues: verified.
+    with acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql) as lease:
+        ok, msg, quiescent = verify_store_quiescence(pre, post, quiescence_lease=lease)
+        assert ok is True
+        assert quiescent is True
 
     # SQLite mutation
     conn = sqlite3.connect(sql)
@@ -266,6 +272,25 @@ def test_state_proof_quiescence_and_mutation_detection(tmp_path: Path) -> None:
     assert ok is False
 
 
+def test_runtime_quiescence_rejects_active_mesa_writer(tmp_path: Path) -> None:
+    sql, _lance, _kuzu = _setup_mock_stores(tmp_path)
+    lock_path = tmp_path / ".mesa-single-writer.lock"
+
+    with lock_path.open("r+", encoding="utf-8") as active_writer:
+        fcntl.flock(active_writer.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        with pytest.raises(StateProofError, match="active writer"):
+            acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql)
+
+
+def test_runtime_quiescence_rejects_durable_worker_backlog(tmp_path: Path) -> None:
+    sql, _lance, _kuzu = _setup_mock_stores(tmp_path)
+    with sqlite3.connect(sql) as connection:
+        connection.execute("INSERT INTO projection_outbox VALUES ('PENDING')")
+
+    with pytest.raises(StateProofError, match="backlog has not drained"):
+        acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql)
+
+
 def test_paired_graph_ablation_end_to_end(tmp_path: Path) -> None:
     run_dir = tmp_path / RUN_ID
     run_dir.mkdir()
@@ -273,18 +298,19 @@ def test_paired_graph_ablation_end_to_end(tmp_path: Path) -> None:
     queries = _mock_rel_queries()
     id_map = _mock_identity_map()
 
-    artifact_path = execute_paired_graph_ablation(
-        run_id=RUN_ID,
-        run_dir=run_dir,
-        mesa_sha=MESA_SHA,
-        rel_queries=queries,
-        identity_map=id_map,
-        sqlite_path=sql,
-        lancedb_dir=lance,
-        kuzu_dir=kuzu,
-        mesa_executor=_mock_graph_executor,
-        quiescence_evidence={"runtime_freeze_verified": True},
-    )
+    with acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql) as lease:
+        artifact_path = execute_paired_graph_ablation(
+            run_id=RUN_ID,
+            run_dir=run_dir,
+            mesa_sha=MESA_SHA,
+            rel_queries=queries,
+            identity_map=id_map,
+            sqlite_path=sql,
+            lancedb_dir=lance,
+            kuzu_dir=kuzu,
+            mesa_executor=_mock_graph_executor,
+            quiescence_lease=lease,
+        )
     assert artifact_path.is_file()
     assert (run_dir / "graph-ablation.json.SHA256").is_file()
 
@@ -307,7 +333,9 @@ def test_regression_duplicate_path_scoped_to_pair(tmp_path: Path) -> None:
     def executor_with_shared_path(mode: str, req: dict) -> dict:
         resp = _mock_graph_executor(mode, req)
         if mode == "enabled" and resp.get("results"):
-            resp["results"][0]["retrieval_provenance"]["graph_paths"][0]["graph_path_id"] = shared_path_id
+            resp["results"][0]["retrieval_provenance"]["graph_paths"][0][
+                "graph_path_id"
+            ] = shared_path_id
         return resp
 
     run_dir = tmp_path / RUN_ID
@@ -317,18 +345,19 @@ def test_regression_duplicate_path_scoped_to_pair(tmp_path: Path) -> None:
     id_map = _mock_identity_map()
 
     # Shared path across separate queries should succeed without error!
-    artifact_path = execute_paired_graph_ablation(
-        run_id=RUN_ID,
-        run_dir=run_dir,
-        mesa_sha=MESA_SHA,
-        rel_queries=queries,
-        identity_map=id_map,
-        sqlite_path=sql,
-        lancedb_dir=lance,
-        kuzu_dir=kuzu,
-        mesa_executor=executor_with_shared_path,
-        quiescence_evidence={"runtime_freeze_verified": True},
-    )
+    with acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql) as lease:
+        execute_paired_graph_ablation(
+            run_id=RUN_ID,
+            run_dir=run_dir,
+            mesa_sha=MESA_SHA,
+            rel_queries=queries,
+            identity_map=id_map,
+            sqlite_path=sql,
+            lancedb_dir=lance,
+            kuzu_dir=kuzu,
+            mesa_executor=executor_with_shared_path,
+            quiescence_lease=lease,
+        )
 
     ctx = _dummy_ctx(run_dir)
     obs = _b11(ctx)
@@ -342,23 +371,26 @@ def test_regression_duplicate_path_scoped_to_pair(tmp_path: Path) -> None:
     def executor_with_duplicate_in_query(mode: str, req: dict) -> dict:
         resp = _mock_graph_executor(mode, req)
         if mode == "enabled" and resp.get("results"):
-            path_copy = dict(resp["results"][0]["retrieval_provenance"]["graph_paths"][0])
+            path_copy = dict(
+                resp["results"][0]["retrieval_provenance"]["graph_paths"][0]
+            )
             resp["results"][0]["retrieval_provenance"]["graph_paths"].append(path_copy)
         return resp
 
-    with pytest.raises(MESAContractIntegrityError, match="duplicate graph path"):
-        execute_paired_graph_ablation(
-            run_id=RUN_ID,
-            run_dir=dup_dir,
-            mesa_sha=MESA_SHA,
-            rel_queries=queries,
-            identity_map=id_map,
-            sqlite_path=sql,
-            lancedb_dir=lance,
-            kuzu_dir=kuzu,
-            mesa_executor=executor_with_duplicate_in_query,
-            quiescence_evidence={"runtime_freeze_verified": True},
-        )
+    with acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql) as lease:
+        with pytest.raises(MESAContractIntegrityError, match="duplicate graph path"):
+            execute_paired_graph_ablation(
+                run_id=RUN_ID,
+                run_dir=dup_dir,
+                mesa_sha=MESA_SHA,
+                rel_queries=queries,
+                identity_map=id_map,
+                sqlite_path=sql,
+                lancedb_dir=lance,
+                kuzu_dir=kuzu,
+                mesa_executor=executor_with_duplicate_in_query,
+                quiescence_lease=lease,
+            )
 
 
 def test_b11_rejects_missing_or_unverified_state_proof(tmp_path: Path) -> None:
@@ -368,7 +400,7 @@ def test_b11_rejects_missing_or_unverified_state_proof(tmp_path: Path) -> None:
     queries = _mock_rel_queries()
     id_map = _mock_identity_map()
 
-    artifact_path = execute_paired_graph_ablation(
+    execute_paired_graph_ablation(
         run_id=RUN_ID,
         run_dir=run_dir,
         mesa_sha=MESA_SHA,
@@ -378,7 +410,7 @@ def test_b11_rejects_missing_or_unverified_state_proof(tmp_path: Path) -> None:
         lancedb_dir=lance,
         kuzu_dir=kuzu,
         mesa_executor=_mock_graph_executor,
-        quiescence_evidence=None,  # No quiescence evidence
+        quiescence_lease=None,  # No runner-owned quiescence lease
     )
 
     ctx = _dummy_ctx(run_dir)
@@ -395,7 +427,9 @@ def test_b11_rejects_missing_or_unverified_state_proof(tmp_path: Path) -> None:
     path.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(path, payload)
 
-    with pytest.raises(ProducerIntegrityError, match="claimed quiescence_verified=True"):
+    with pytest.raises(
+        ProducerIntegrityError, match="claimed quiescence_verified=True"
+    ):
         _b11(ctx)
 
 
@@ -406,18 +440,19 @@ def test_b11_rejects_forged_producer(tmp_path: Path) -> None:
     queries = _mock_rel_queries()
     id_map = _mock_identity_map()
 
-    artifact_path = execute_paired_graph_ablation(
-        run_id=RUN_ID,
-        run_dir=run_dir,
-        mesa_sha=MESA_SHA,
-        rel_queries=queries,
-        identity_map=id_map,
-        sqlite_path=sql,
-        lancedb_dir=lance,
-        kuzu_dir=kuzu,
-        mesa_executor=_mock_graph_executor,
-        quiescence_evidence={"runtime_freeze_verified": True},
-    )
+    with acquire_runtime_quiescence(run_id=RUN_ID, sqlite_path=sql) as lease:
+        execute_paired_graph_ablation(
+            run_id=RUN_ID,
+            run_dir=run_dir,
+            mesa_sha=MESA_SHA,
+            rel_queries=queries,
+            identity_map=id_map,
+            sqlite_path=sql,
+            lancedb_dir=lance,
+            kuzu_dir=kuzu,
+            mesa_executor=_mock_graph_executor,
+            quiescence_lease=lease,
+        )
 
     path = run_dir / "graph-ablation.json"
     payload = json.loads(path.read_text(encoding="utf-8"))

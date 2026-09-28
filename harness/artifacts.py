@@ -7,11 +7,14 @@ import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Literal
+from typing import TYPE_CHECKING, Any, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from harness.models import RawRequestRecord, RawResponseRecord, SHA256_PATTERN
+
+if TYPE_CHECKING:
+    from harness.execution_provenance import OfficialExecutionSession
 
 
 QUERY_ID = re.compile(r"^[A-Za-z0-9._-]+$")
@@ -201,10 +204,12 @@ class RunArtifactStore:
         run_id: str,
         *,
         max_response_bytes: int = 16 * 1024 * 1024,
+        execution_session: "OfficialExecutionSession | None" = None,
     ):
         self.run_dir = Path(run_dir)
         self.run_id = run_id
         self.max_response_bytes = max_response_bytes
+        self.execution_session = execution_session
         if not run_id or self.run_dir.name != run_id:
             raise ArtifactStoreError("run directory basename must equal run_id")
         if max_response_bytes <= 0:
@@ -221,6 +226,10 @@ class RunArtifactStore:
     @property
     def raw_provider_dir(self) -> Path:
         return self.run_dir / "raw" / "provider"
+
+    @property
+    def raw_context_dir(self) -> Path:
+        return self.run_dir / "raw" / "context"
 
     @property
     def raw_scope_dir(self) -> Path:
@@ -259,6 +268,7 @@ class RunArtifactStore:
             self.raw_retrieval_dir,
             self.raw_answers_dir,
             self.raw_provider_dir,
+            self.raw_context_dir,
             self.raw_scope_dir,
             self.raw_graph_dir,
             self.raw_state_dir,
@@ -327,6 +337,7 @@ class RunArtifactStore:
         timestamp_utc: datetime,
         latency_ms: float,
         runtime_lock_sha256: str,
+        execution_id: str | None = None,
     ) -> Path:
         response_bytes = canonical_json_bytes(response)
         if len(response_bytes) > self.max_response_bytes:
@@ -356,23 +367,60 @@ class RunArtifactStore:
             "request": request_record.model_dump(mode="json"),
             "response": response_record.model_dump(mode="json"),
         }
+        if execution_id is not None:
+            payload["execution_id"] = execution_id
         return self._write_immutable_json(
             self._query_path(self.raw_retrieval_dir, query_id), payload
         )
 
     def persist_raw_answer(
-        self, capture: AnswerExecutionCapture | CertifiedAnswerExecutionCapture
+        self,
+        capture: AnswerExecutionCapture | CertifiedAnswerExecutionCapture,
+        *,
+        execution_id: str | None = None,
     ) -> Path:
         payload = {
             "run_id": self.run_id,
             "lane": "answers",
             **capture.model_dump(mode="json"),
         }
+        if execution_id is not None:
+            payload["execution_id"] = execution_id
         if isinstance(capture, CertifiedAnswerExecutionCapture):
             if capture.run_id != self.run_id:
                 raise ArtifactStoreError("certified answer capture run_id mismatch")
         return self._write_immutable_json(
             self._query_path(self.raw_answers_dir, capture.query_id), payload
+        )
+
+    def persist_raw_context(
+        self,
+        *,
+        query_id: str,
+        request: dict[str, Any],
+        response: dict[str, Any],
+        transport_status: int,
+        timestamp_utc: datetime,
+        latency_ms: float,
+        execution_id: str | None = None,
+    ) -> Path:
+        payload = {
+            "schema_version": "1.0",
+            "run_id": self.run_id,
+            "lane": "context",
+            "query_id": query_id,
+            "request": request,
+            "request_sha256": _sha256_bytes(canonical_json_bytes(request)),
+            "response": response,
+            "response_sha256": _sha256_bytes(canonical_json_bytes(response)),
+            "transport_status": transport_status,
+            "timestamp_utc": timestamp_utc.isoformat(),
+            "latency_ms": latency_ms,
+        }
+        if execution_id is not None:
+            payload["execution_id"] = execution_id
+        return self._write_immutable_json(
+            self._query_path(self.raw_context_dir, query_id), payload
         )
 
     def persist_raw_provider_exchange(
@@ -439,12 +487,15 @@ class RunArtifactStore:
         self._write_immutable_json(path, payload)
         return path, self._verify_seal(path)
 
-    def compute_raw_manifest(self) -> dict[str, Any]:
+    def compute_raw_manifest(
+        self, execution_session: "OfficialExecutionSession | None" = None
+    ) -> dict[str, Any]:
         entries: list[dict[str, str]] = []
         for lane_dir in (
             self.raw_retrieval_dir,
             self.raw_answers_dir,
             self.raw_provider_dir,
+            self.raw_context_dir,
             self.raw_scope_dir,
             self.raw_graph_dir,
             self.raw_state_dir,
@@ -463,10 +514,16 @@ class RunArtifactStore:
                     rel_path = json_file.relative_to(self.run_dir).as_posix()
                     entries.append({"path": rel_path, "sha256": sha})
         entries.sort(key=lambda item: item["path"])
+        authority = execution_session or self.execution_session
+        if authority is not None:
+            if authority.run_id != self.run_id:
+                raise ArtifactStoreError("official execution session run_id mismatch")
+            return authority.build_raw_manifest(entries)
         manifest_hash = _sha256_bytes(canonical_json_bytes(entries))
         return {
             "schema_version": "1.0",
             "run_id": self.run_id,
+            "execution_mode": "test",
             "manifest_hash": manifest_hash,
             "entries": entries,
         }

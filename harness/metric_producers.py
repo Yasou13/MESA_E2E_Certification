@@ -12,7 +12,7 @@ import json
 import math
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from harness.artifacts import canonical_json_bytes
 from harness.freeze import FreezeStatus, verify_contract_freeze
@@ -25,6 +25,9 @@ from harness.operations import (
     capture_health_snapshot,
     evaluate_resource_status,
 )
+
+if TYPE_CHECKING:
+    from harness.execution_provenance import OfficialExecutionSession
 
 
 PRODUCER_VERSION = "1.0"
@@ -45,6 +48,8 @@ class ProducerContext:
     current_repository_shas: dict[str, str]
     raw_manifest_hash: str
     gate_config_path: Path
+    execution_mode: str = "test"
+    execution_session: "OfficialExecutionSession | None" = None
 
 
 @dataclass(frozen=True)
@@ -169,6 +174,18 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
 
     source_root = Path(__file__).resolve().parents[1]
     required = {
+        "harness/answer_execution.py": (
+            "harness_source",
+            source_root / "harness" / "answer_execution.py",
+        ),
+        "harness/artifacts.py": (
+            "harness_source",
+            source_root / "harness" / "artifacts.py",
+        ),
+        "harness/execution_provenance.py": (
+            "harness_source",
+            source_root / "harness" / "execution_provenance.py",
+        ),
         "harness/metric_producers.py": ("harness_source", Path(__file__).resolve()),
         "harness/gates.py": ("harness_source", source_root / "harness" / "gates.py"),
         "harness/transaction.py": (
@@ -191,6 +208,10 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
             "harness_source",
             source_root / "harness" / "mesa_adapters.py",
         ),
+        "harness/mesa_transport.py": (
+            "harness_source",
+            source_root / "harness" / "mesa_transport.py",
+        ),
         "harness/qualification_runner.py": (
             "harness_source",
             source_root / "harness" / "qualification_runner.py",
@@ -198,6 +219,10 @@ def frozen_producer_code_sha256(ctx: ProducerContext) -> str:
         "harness/finalizer.py": (
             "harness_source",
             source_root / "harness" / "finalizer.py",
+        ),
+        "harness/verdict.py": (
+            "harness_source",
+            source_root / "harness" / "verdict.py",
         ),
         "harness/official_scoring.py": (
             "scorer_source",
@@ -254,12 +279,31 @@ def _load_and_verify_raw_manifest(ctx: ProducerContext) -> dict[str, str]:
         raise ProducerIntegrityError(
             f"raw-manifest.json manifest_hash mismatch: {manifest.get('manifest_hash')} != {ctx.raw_manifest_hash}"
         )
+    if ctx.execution_mode == "official":
+        if ctx.execution_session is None:
+            raise ProducerIntegrityError(
+                "official metric production lacks active execution authority"
+            )
+        try:
+            ctx.execution_session.verify_raw_manifest(manifest, ctx.raw_manifest_hash)
+        except Exception as exc:
+            raise ProducerIntegrityError(
+                f"raw manifest is not rooted in official execution: {exc}"
+            ) from exc
+    elif ctx.execution_mode != "test":
+        raise ProducerIntegrityError(
+            f"unsupported metric execution mode: {ctx.execution_mode!r}"
+        )
     entries = manifest.get("entries")
     if not isinstance(entries, list):
         raise ProducerIntegrityError("raw-manifest.json entries must be a list")
     manifest_map: dict[str, str] = {}
     for entry in entries:
-        if not isinstance(entry, dict) or not entry.get("path") or not entry.get("sha256"):
+        if (
+            not isinstance(entry, dict)
+            or not entry.get("path")
+            or not entry.get("sha256")
+        ):
             raise ProducerIntegrityError("raw-manifest.json entry malformed")
         manifest_map[entry["path"]] = entry["sha256"]
     return manifest_map
@@ -272,12 +316,17 @@ def _blocked(gate_id: str, reason: str) -> ProducerObservation:
 def _completed(
     gate_id: str, observed: dict[str, Any], paths: list[Path], ctx: ProducerContext
 ) -> ProducerObservation:
+    reason = (
+        "authoritative_artifacts_recomputed"
+        if ctx.execution_mode == "official"
+        else "non_authoritative_test_artifacts_recomputed"
+    )
     return ProducerObservation(
         gate_id,
         "COMPLETED",
         observed,
         tuple(_evidence(path, ctx.run_dir) for path in paths),
-        "authoritative_artifacts_recomputed",
+        reason,
     )
 
 
@@ -631,6 +680,17 @@ def _b8(ctx: ProducerContext) -> ProducerObservation:
 def _validate_scope_cases(
     scope: dict[str, Any], scope_path: Path, ctx: ProducerContext, gate_name: str
 ) -> tuple[int, list[Path]]:
+    if ctx.execution_mode == "official":
+        if ctx.execution_session is None:
+            raise ProducerIntegrityError(
+                f"{gate_name} lacks active official execution authority"
+            )
+        try:
+            ctx.execution_session.verify_derived_artifact(scope_path, "scope_isolation")
+        except Exception as exc:
+            raise ProducerIntegrityError(
+                f"{gate_name} scope evidence is not runner-owned: {exc}"
+            ) from exc
     if scope.get("run_id") != ctx.run_id:
         raise ProducerIntegrityError(
             f"{gate_name} scope artifact run_id mismatch: {scope.get('run_id')} != {ctx.run_id}"
@@ -640,7 +700,10 @@ def _validate_scope_cases(
         raise ProducerIntegrityError(
             f"{gate_name} scope artifact mesa_sha mismatch: {scope.get('mesa_sha')} != {mesa_repo_sha}"
         )
-    if scope.get("producer") != "harness.scope_collector.collect_phase7_scope_isolation":
+    if (
+        scope.get("producer")
+        != "harness.scope_collector.collect_phase7_scope_isolation"
+    ):
         raise ProducerIntegrityError(
             f"{gate_name} scope-isolation artifact lacks authoritative producer lineage"
         )
@@ -682,7 +745,9 @@ def _validate_scope_cases(
         or any(not isinstance(value, str) or not value for value in values)
         for values in forbidden_lists
     ):
-        raise ProducerIntegrityError(f"{gate_name} forbidden-evidence observations are malformed")
+        raise ProducerIntegrityError(
+            f"{gate_name} forbidden-evidence observations are malformed"
+        )
 
     search_case_ids = {
         "cross_tenant_search",
@@ -715,7 +780,9 @@ def _validate_scope_cases(
         try:
             raw_payload = json.loads(raw_file.read_text(encoding="utf-8"))
         except Exception as exc:
-            raise ProducerIntegrityError(f"cannot read raw artifact {raw_rel}: {exc}") from exc
+            raise ProducerIntegrityError(
+                f"cannot read raw artifact {raw_rel}: {exc}"
+            ) from exc
         if raw_payload.get("run_id") != ctx.run_id:
             raise ProducerIntegrityError(
                 f"{gate_name} raw artifact {raw_rel} run_id mismatch: {raw_payload.get('run_id')} != {ctx.run_id}"
@@ -873,6 +940,17 @@ def _b10(ctx: ProducerContext) -> ProducerObservation:
 
 def _b11(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "graph-ablation.json")
+    if ctx.execution_mode == "official":
+        if ctx.execution_session is None:
+            raise ProducerIntegrityError(
+                "B11 lacks active official execution authority"
+            )
+        try:
+            ctx.execution_session.verify_derived_artifact(path, "graph_ablation")
+        except Exception as exc:
+            raise ProducerIntegrityError(
+                f"B11 graph evidence is not runner-owned: {exc}"
+            ) from exc
     caps = data.get("mesa_contract_capabilities")
     if (
         not isinstance(caps, dict)
@@ -905,7 +983,9 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
     manifest_entries = _load_and_verify_raw_manifest(ctx)
 
     state_proof_rel = data.get("state_proof_artifact")
-    if not isinstance(state_proof_rel, str) or not state_proof_rel.startswith("raw/state/"):
+    if not isinstance(state_proof_rel, str) or not state_proof_rel.startswith(
+        "raw/state/"
+    ):
         raise ProducerIntegrityError(
             "B11 lacks authoritative state_proof_artifact in raw/state/"
         )
@@ -922,7 +1002,9 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
     try:
         sealed_state_proof = json.loads(state_proof_file.read_text(encoding="utf-8"))
     except Exception as exc:
-        raise ProducerIntegrityError(f"cannot read state proof {state_proof_rel}: {exc}") from exc
+        raise ProducerIntegrityError(
+            f"cannot read state proof {state_proof_rel}: {exc}"
+        ) from exc
     if sealed_state_proof.get("run_id") != ctx.run_id:
         raise ProducerIntegrityError(
             f"B11 state proof run_id mismatch: {sealed_state_proof.get('run_id')} != {ctx.run_id}"
@@ -990,13 +1072,24 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         off_raw_sha = off.get("off_raw_sha256") or pair.get("off_raw_sha256")
 
         if not isinstance(on_raw_rel, str) or not on_raw_rel.startswith("raw/graph/"):
-            raise ProducerIntegrityError("B11 pair lacks authoritative on_raw_artifact in raw/graph/")
+            raise ProducerIntegrityError(
+                "B11 pair lacks authoritative on_raw_artifact in raw/graph/"
+            )
         if not isinstance(off_raw_rel, str) or not off_raw_rel.startswith("raw/graph/"):
-            raise ProducerIntegrityError("B11 pair lacks authoritative off_raw_artifact in raw/graph/")
+            raise ProducerIntegrityError(
+                "B11 pair lacks authoritative off_raw_artifact in raw/graph/"
+            )
         if on_raw_rel not in manifest_entries or off_raw_rel not in manifest_entries:
-            raise ProducerIntegrityError("B11 pair raw artifact is absent from sealed raw manifest")
-        if on_raw_sha != manifest_entries[on_raw_rel] or off_raw_sha != manifest_entries[off_raw_rel]:
-            raise ProducerIntegrityError("B11 pair raw sha does not match sealed raw manifest")
+            raise ProducerIntegrityError(
+                "B11 pair raw artifact is absent from sealed raw manifest"
+            )
+        if (
+            on_raw_sha != manifest_entries[on_raw_rel]
+            or off_raw_sha != manifest_entries[off_raw_rel]
+        ):
+            raise ProducerIntegrityError(
+                "B11 pair raw sha does not match sealed raw manifest"
+            )
 
         on_raw_file = ctx.run_dir / on_raw_rel
         off_raw_file = ctx.run_dir / off_raw_rel
@@ -1010,9 +1103,15 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         except Exception as exc:
             raise ProducerIntegrityError(f"cannot read raw graph pair: {exc}") from exc
 
-        if on_raw_payload.get("run_id") != ctx.run_id or off_raw_payload.get("run_id") != ctx.run_id:
+        if (
+            on_raw_payload.get("run_id") != ctx.run_id
+            or off_raw_payload.get("run_id") != ctx.run_id
+        ):
             raise ProducerIntegrityError("B11 pair raw artifact run_id mismatch")
-        if on_raw_payload.get("graph_enabled") is not True or off_raw_payload.get("graph_enabled") is not False:
+        if (
+            on_raw_payload.get("graph_enabled") is not True
+            or off_raw_payload.get("graph_enabled") is not False
+        ):
             raise ProducerIntegrityError("B11 pair raw artifact graph_enabled mismatch")
 
         identity_fields = (
@@ -1028,7 +1127,9 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         if on.get("contract_version") or off.get("contract_version"):
             matched &= on.get("contract_version") == off.get("contract_version")
         if on.get("retrieval_config_identity") or off.get("retrieval_config_identity"):
-            matched &= on.get("retrieval_config_identity") == off.get("retrieval_config_identity")
+            matched &= on.get("retrieval_config_identity") == off.get(
+                "retrieval_config_identity"
+            )
         if not matched:
             raise ProducerIntegrityError("unmatched graph ON/OFF pair")
         query_id = on.get("query_id")
@@ -1039,10 +1140,14 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
             raise ProducerIntegrityError(
                 f"B11 pair MESA SHA mismatch: {on.get('mesa_sha')} != {mesa_repo_sha}"
             )
-        if pair.get("pair_identity") and pair.get("pair_identity") != on.get("pair_identity"):
+        if pair.get("pair_identity") and pair.get("pair_identity") != on.get(
+            "pair_identity"
+        ):
             raise ProducerIntegrityError("B11 pair identity mismatch")
         scope_id = pair.get("scope_identity")
-        if scope_id is not None and (not isinstance(scope_id, dict) or not scope_id.get("tenant_id")):
+        if scope_id is not None and (
+            not isinstance(scope_id, dict) or not scope_id.get("tenant_id")
+        ):
             raise ProducerIntegrityError("B11 pair missing scope_identity")
 
         # Disallow graph paths or graph origins in OFF
