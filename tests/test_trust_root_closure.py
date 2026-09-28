@@ -21,14 +21,15 @@ from harness.metric_producers import ProducerContext, ProducerIntegrityError, _b
 from harness.qualification_runner import QualificationConfig
 from harness.scope_collector import collect_phase7_scope_isolation
 from harness.state_proof import (
-    RuntimeQuiescenceLease,
-    acquire_runtime_quiescence,
+    PairedStateStabilityGuard,
+    establish_paired_state_stability,
     verify_quiescence_evidence,
 )
 from tests.independent_support import placeholder_sources
 from tests.test_phase7_scope_collector import _mock_mesa_response
 from tests.test_phase8_9_graph_and_state_proof import (
     MESA_SHA,
+    _combined_runtime_writer,
     _mock_graph_executor,
     _mock_identity_map,
     _mock_rel_queries,
@@ -93,9 +94,10 @@ def test_fake_graph_raw_manifest_state_and_derived_chain_is_not_official(
     stores = tmp_path / "stores"
     stores.mkdir()
     sqlite_path, lancedb_dir, kuzu_dir = _setup_mock_stores(stores)
-    with acquire_runtime_quiescence(
-        run_id=run_dir.name, sqlite_path=sqlite_path
-    ) as lease:
+    with _combined_runtime_writer(stores):
+        guard = establish_paired_state_stability(
+            run_id=run_dir.name, sqlite_path=sqlite_path
+        )
         execute_paired_graph_ablation(
             run_id=run_dir.name,
             run_dir=run_dir,
@@ -106,7 +108,7 @@ def test_fake_graph_raw_manifest_state_and_derived_chain_is_not_official(
             lancedb_dir=lancedb_dir,
             kuzu_dir=kuzu_dir,
             mesa_executor=_mock_graph_executor,
-            quiescence_lease=lease,
+            state_stability_guard=guard,
         )
     manifest_hash = _seal_manual_manifest(run_dir)
     with pytest.raises(
@@ -259,25 +261,27 @@ def test_manual_state_proof_and_forged_lease_cannot_join_official_session(
             "schema_version": "1.0",
             "run_id": session.run_id,
             "execution_id": session.execution_id,
-            "quiescence_verified": True,
+            "proof_mode": "stable_state_pair",
+            "pair_state_stability_verified": True,
+            "runtime_quiescence_verified": False,
             "producer": "harness.state_proof.write_sealed_state_proof",
         },
     )
 
-    class ForgedLease(RuntimeQuiescenceLease):
+    class ForgedGuard(PairedStateStabilityGuard):
         def __init__(self) -> None:
             pass
 
-        def is_held_for(self, _run_id: str) -> bool:
+        def is_verified_for(self, _run_id: str) -> bool:
             return True
 
         def evidence(self) -> dict:
-            return {"result": "QUIESCENT"}
+            return {"pair_state_stability_verified": True}
 
-    with pytest.raises(ExecutionProvenanceError, match="live trusted quiescence"):
+    with pytest.raises(ExecutionProvenanceError, match="paired state stability"):
         session.register_state_artifact(
             state_path,
-            quiescence_lease=ForgedLease(),
+            state_stability_guard=ForgedGuard(),
             collector="harness.state_proof.write_sealed_state_proof",
         )
 

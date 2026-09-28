@@ -33,7 +33,7 @@ from harness.official_scoring import (
     load_frozen_scoring_authority,
 )
 from harness.scope_collector import ScopeTestCase, collect_phase7_scope_isolation
-from harness.state_proof import StateProofError, acquire_runtime_quiescence
+from harness.state_proof import StateProofError, establish_paired_state_stability
 from harness.transaction import CertificationTransaction, TransactionError
 
 
@@ -416,11 +416,11 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
             )
 
             storage_root = config.mesa_storage_root or config.sqlite_path.parent
-            with acquire_runtime_quiescence(
+            with establish_paired_state_stability(
                 run_id=config.run_id,
                 sqlite_path=config.sqlite_path,
                 storage_root=storage_root,
-            ) as quiescence_lease:
+            ) as state_stability_guard:
                 execute_paired_graph_ablation(
                     run_id=config.run_id,
                     run_dir=run_dir,
@@ -431,7 +431,7 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                     lancedb_dir=config.lancedb_dir,
                     kuzu_dir=config.kuzu_dir,
                     mesa_executor=lambda _mode, request: transport.search(request),
-                    quiescence_lease=quiescence_lease,
+                    state_stability_guard=state_stability_guard,
                     execution_session=execution_session,
                     api_version=config.api_version,
                 )

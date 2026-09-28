@@ -433,9 +433,22 @@ def _make_valid_graph_artifact(
     state_payload = {
         "schema_version": "1.0",
         "run_id": run_id,
-        "collector_version": "harness.state_proof.v1",
+        "collector_version": "harness.state_proof.v2",
         "retrieval_state_unchanged": True,
-        "quiescence_verified": True,
+        "proof_mode": "stable_state_pair",
+        "pair_state_stability_verified": True,
+        "runtime_quiescence_verified": False,
+        "quiescence_verified": False,
+        "state_stability_evidence": {
+            "proof_mode": "stable_state_pair",
+            "writer_lock_acquired_by_e2e": False,
+            "pair_state_stability_verified": True,
+            "runtime_quiescence_verified": False,
+            "pre_writer_observation": {"pid": 123, "process_start_ticks": 456},
+            "post_writer_observation": {"pid": 123, "process_start_ticks": 456},
+            "pre_mutation_marker_sha256": "a" * 64,
+            "post_mutation_marker_sha256": "a" * 64,
+        },
         "pre_composite_fingerprint": "sha256:" + "0" * 64,
         "post_composite_fingerprint": "sha256:" + "0" * 64,
     }
@@ -539,14 +552,17 @@ def _make_valid_graph_artifact(
         "state_proof_artifact": "raw/state/state-proof.json",
         "state_proof_sha256": state_sha,
         "frozen_state_proof": {
-            "state_proof_contract_version": "mesa.state-proof.v1",
+            "state_proof_contract_version": "mesa.state-proof.v2",
             "pre_composite_fingerprint": "sha256:" + "0" * 64,
             "post_composite_fingerprint": "sha256:" + "0" * 64,
             "sqlite_fingerprint": "sha256:" + "0" * 64,
             "lancedb_fingerprint": "sha256:" + "0" * 64,
             "kuzu_fingerprint": "sha256:" + "0" * 64,
             "retrieval_state_unchanged": True,
-            "quiescence_verified": True,
+            "proof_mode": "stable_state_pair",
+            "pair_state_stability_verified": True,
+            "runtime_quiescence_verified": False,
+            "quiescence_verified": False,
         },
         "pairs": pairs,
     }
@@ -905,13 +921,13 @@ def test_adversarial_phase7_endpoint_visibility_proof_passed_as_search_proof_rej
 
 
 def test_adversarial_b11_forged_quiescence_boolean_rejected(tmp_path) -> None:
-    """Gap 3: Caller-supplied quiescence_verified=True is rejected if sealed state proof does not verify it."""
+    """A graph artifact cannot upgrade stable-state evidence into quiescence."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
     p = run_dir / "graph-ablation.json"
     _make_valid_graph_artifact(p, run_id="RUN-ADV")
 
-    # Tamper with raw state proof to set quiescence_verified = False
+    # The sealed proof honestly says no native runtime freeze was verified.
     state_file = run_dir / "raw" / "state" / "state-proof.json"
     s_payload = json.loads(state_file.read_text(encoding="utf-8"))
     s_payload["quiescence_verified"] = False
@@ -933,13 +949,13 @@ def test_adversarial_b11_forged_quiescence_boolean_rejected(tmp_path) -> None:
     ctx = _adversarial_ctx(run_dir, run_id="RUN-ADV")
     with pytest.raises(
         ProducerIntegrityError,
-        match="claimed quiescence_verified=True but sealed state proof does not verify quiescence",
+        match="falsely claims runtime quiescence",
     ):
         _b11(ctx)
 
 
-def test_adversarial_b11_unquiescent_state_blocks_b11(tmp_path) -> None:
-    """Gap 3: If quiescence is not verified, B11 fails closed with BLOCKED_BY_RUNTIME_STATE_PROOF."""
+def test_adversarial_b11_unstable_pair_blocks_b11(tmp_path) -> None:
+    """B11 fails closed when paired state stability is not verified."""
     run_dir = tmp_path / "RUN-ADV"
     run_dir.mkdir()
     p = run_dir / "graph-ablation.json"
@@ -947,7 +963,9 @@ def test_adversarial_b11_unquiescent_state_blocks_b11(tmp_path) -> None:
 
     state_file = run_dir / "raw" / "state" / "state-proof.json"
     s_payload = json.loads(state_file.read_text(encoding="utf-8"))
-    s_payload["quiescence_verified"] = False
+    s_payload["proof_mode"] = "unverified"
+    s_payload["pair_state_stability_verified"] = False
+    s_payload["state_stability_evidence"] = {}
     s_bytes = (json.dumps(s_payload, sort_keys=True) + "\n").encode("utf-8")
     state_file.write_bytes(s_bytes)
     import hashlib
@@ -957,7 +975,8 @@ def test_adversarial_b11_unquiescent_state_blocks_b11(tmp_path) -> None:
 
     payload = json.loads(p.read_text(encoding="utf-8"))
     payload["state_proof_sha256"] = s_sha
-    payload["frozen_state_proof"]["quiescence_verified"] = False
+    payload["frozen_state_proof"]["proof_mode"] = "unverified"
+    payload["frozen_state_proof"]["pair_state_stability_verified"] = False
     p.unlink()
     p.with_suffix(".json.SHA256").unlink()
     write_sealed_measurement(p, payload)

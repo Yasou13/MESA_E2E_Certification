@@ -1,12 +1,16 @@
-"""E2E-controlled frozen multi-store state proof.
+"""E2E-controlled paired multi-store state-stability proof.
 
 Verifies that paired Graph ON and Graph OFF executions ran against an unchanged,
-quiescent retrieval-visible storage state covering:
+retrieval-visible storage state covering:
 - SQLite canonical store
 - LanceDB vector state
 - Kùzu graph state
 
-Fails closed if any store changes between PRE and POST execution.
+The live MESA ``combined`` runtime owns its single-writer lock for its entire
+lifetime.  E2E therefore observes that ownership; it never tries to acquire the
+same lock.  This module does not claim runtime quiescence.  It proves the
+narrower property needed by B11: the same runtime served both sides of a pair,
+durable mutation markers did not advance, and all three stores were unchanged.
 """
 
 from __future__ import annotations
@@ -18,16 +22,15 @@ import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, TextIO
-
-import fcntl
+from typing import Any
 
 from harness.artifacts import canonical_json_bytes
 
-STATE_PROOF_CONTRACT_VERSION = "mesa.state-proof.v1"
-QUIESCENCE_CONTRACT_VERSION = "mesa.runtime-quiescence.v1"
+STATE_PROOF_CONTRACT_VERSION = "mesa.state-proof.v2"
+STATE_STABILITY_CONTRACT_VERSION = "mesa.paired-state-stability.v1"
 _WRITER_LOCK_NAME = ".mesa-single-writer.lock"
-_QUIESCENCE_QUERIES = {
+_STATE_GUARD_TOKEN = object()
+_DURABLE_BACKLOG_QUERIES = {
     "projection": "SELECT COUNT(*) FROM projection_outbox WHERE state != 'COMPLETED'",
     "cleanup": "SELECT COUNT(*) FROM artifact_cleanup_outbox WHERE state != 'COMPLETED'",
     "dispatch": "SELECT COUNT(*) FROM dispatch_queue WHERE state != 'FINALIZED'",
@@ -41,6 +44,15 @@ _QUIESCENCE_QUERIES = {
     ),
 }
 
+_MUTATION_MARKER_TABLES = (
+    "memory_mutations",
+    "pipeline_run_events",
+    "projection_attempts",
+    "dispatch_receipts",
+    "dispatch_completion_receipts",
+    "v4_idempotency_receipts",
+)
+
 
 class StateProofError(RuntimeError):
     """Raised when storage state cannot be resolved or verified."""
@@ -53,153 +65,301 @@ class StoreFingerprint:
     manifest_details: dict[str, Any]
 
 
-class RuntimeQuiescenceLease:
-    """Live, runner-owned proof that the MESA storage writer is fenced.
+@dataclass(frozen=True)
+class RuntimeWriterObservation:
+    """Identity of the live process holding MESA's lifetime writer lock."""
 
-    The lease uses MESA's real single-writer lock and the same durable-backlog
-    queries used by MESA rebuild preflight.  It is intentionally not
-    serializable as an authority capability.
-    """
+    owner: str
+    pid: int
+    process_start_ticks: int
+    lock_device: int
+    lock_inode: int
 
-    def __init__(
-        self,
-        *,
-        run_id: str,
-        storage_root: Path,
-        sqlite_path: Path,
-        handle: TextIO,
-        lock_device: int,
-        lock_inode: int,
-        backlog_counts: dict[str, int],
-    ) -> None:
-        self.run_id = run_id
-        self.storage_root = storage_root
-        self.sqlite_path = sqlite_path
-        self._handle = handle
-        self._lock_device = lock_device
-        self._lock_inode = lock_inode
-        self._backlog_counts = dict(backlog_counts)
-        self.acquired_at_utc = datetime.now(timezone.utc).isoformat()
-
-    def __enter__(self) -> "RuntimeQuiescenceLease":
-        return self
-
-    def __exit__(self, *_exc: object) -> None:
-        self.release()
-
-    def release(self) -> None:
-        if self._handle.closed:
-            return
-        fcntl.flock(self._handle.fileno(), fcntl.LOCK_UN)
-        self._handle.close()
-
-    def _current_backlogs(self) -> dict[str, int]:
-        uri = f"file:{self.sqlite_path.resolve().as_posix()}?mode=ro"
-        connection = sqlite3.connect(uri, uri=True, timeout=5.0)
-        try:
-            return {
-                name: int(connection.execute(statement).fetchone()[0])
-                for name, statement in _QUIESCENCE_QUERIES.items()
-            }
-        except (sqlite3.Error, TypeError, IndexError) as exc:
-            raise StateProofError(
-                f"MESA durable backlog verification failed: {exc}"
-            ) from exc
-        finally:
-            connection.close()
-
-    def is_held_for(self, run_id: str) -> bool:
-        if run_id != self.run_id or self._handle.closed:
-            return False
-        try:
-            expected = os.stat(
-                self.storage_root / _WRITER_LOCK_NAME, follow_symlinks=False
-            )
-            actual = os.fstat(self._handle.fileno())
-            if (expected.st_dev, expected.st_ino) != (
-                self._lock_device,
-                self._lock_inode,
-            ) or (actual.st_dev, actual.st_ino) != (
-                self._lock_device,
-                self._lock_inode,
-            ):
-                return False
-            fcntl.flock(self._handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-            current = self._current_backlogs()
-        except (OSError, StateProofError):
-            return False
-        return not any(current.values())
-
-    def evidence(self) -> dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
-            "contract_version": QUIESCENCE_CONTRACT_VERSION,
-            "run_id": self.run_id,
-            "collector": "harness.state_proof.acquire_runtime_quiescence",
+            "owner": self.owner,
+            "pid": self.pid,
+            "process_start_ticks": self.process_start_ticks,
             "writer_lock_name": _WRITER_LOCK_NAME,
-            "writer_lock_device": self._lock_device,
-            "writer_lock_inode": self._lock_inode,
-            "durable_backlog_counts": dict(sorted(self._backlog_counts.items())),
-            "acquired_at_utc": self.acquired_at_utc,
-            "result": "QUIESCENT",
+            "writer_lock_device": self.lock_device,
+            "writer_lock_inode": self.lock_inode,
+            "lock_observation": "PROC_LOCK_HELD_BY_RUNTIME",
         }
 
 
-def acquire_runtime_quiescence(
-    *,
-    run_id: str,
-    sqlite_path: Path | str,
-    storage_root: Path | str | None = None,
-) -> RuntimeQuiescenceLease:
-    """Acquire MESA's real writer fence and verify all durable work is drained."""
+def _proc_start_ticks(pid: int) -> int:
+    try:
+        stat_text = Path(f"/proc/{pid}/stat").read_text(encoding="utf-8")
+        fields_after_name = stat_text[stat_text.rfind(")") + 2 :].split()
+        return int(fields_after_name[19])
+    except (OSError, UnicodeError, ValueError, IndexError) as exc:
+        raise StateProofError(
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA writer process identity is unavailable"
+        ) from exc
 
-    database = Path(sqlite_path).resolve(strict=True)
-    root = Path(storage_root).resolve(strict=True) if storage_root else database.parent
-    lock_path = root / _WRITER_LOCK_NAME
+
+def _proc_has_lock(*, pid: int, lock_device: int, lock_inode: int) -> bool:
+    expected_major = os.major(lock_device)
+    expected_minor = os.minor(lock_device)
+    try:
+        lines = Path("/proc/locks").read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeError) as exc:
+        raise StateProofError(
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: host lock observations are unavailable"
+        ) from exc
+    for line in lines:
+        fields = line.split()
+        if len(fields) < 6 or fields[1] != "FLOCK" or fields[3] != "WRITE":
+            continue
+        try:
+            lock_pid = int(fields[4])
+            major_hex, minor_hex, inode_text = fields[5].split(":", 2)
+            identity = (
+                lock_pid,
+                int(major_hex, 16),
+                int(minor_hex, 16),
+                int(inode_text),
+            )
+        except (ValueError, IndexError):
+            continue
+        if identity == (pid, expected_major, expected_minor, lock_inode):
+            return True
+    return False
+
+
+def _proc_has_lock_fd(*, pid: int, lock_device: int, lock_inode: int) -> bool:
+    try:
+        descriptors = list(Path(f"/proc/{pid}/fd").iterdir())
+    except OSError as exc:
+        raise StateProofError(
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA writer descriptors are unavailable"
+        ) from exc
+    for descriptor in descriptors:
+        try:
+            current = descriptor.stat()
+        except OSError:
+            continue
+        if (current.st_dev, current.st_ino) == (lock_device, lock_inode):
+            return True
+    return False
+
+
+def _observe_runtime_writer(storage_root: Path) -> RuntimeWriterObservation:
+    """Observe MESA's existing FLOCK without attempting to acquire it."""
+
+    lock_path = storage_root / _WRITER_LOCK_NAME
     if not lock_path.is_file() or lock_path.is_symlink():
         raise StateProofError(
             "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA writer lock file is unavailable"
         )
-    flags = os.O_RDWR
+    flags = os.O_RDONLY
     if hasattr(os, "O_CLOEXEC"):
         flags |= os.O_CLOEXEC
     if hasattr(os, "O_NOFOLLOW"):
         flags |= os.O_NOFOLLOW
     try:
         descriptor = os.open(lock_path, flags)
-        handle = os.fdopen(descriptor, "r+", encoding="utf-8")
-    except OSError as exc:
+        with os.fdopen(descriptor, "r", encoding="utf-8") as handle:
+            metadata_text = handle.read()
+            lock_stat = os.fstat(handle.fileno())
+        metadata = {}
+        for line in metadata_text.splitlines():
+            key, separator, value = line.partition("=")
+            if separator:
+                metadata[key] = value
+        owner = metadata.get("owner", "")
+        pid = int(metadata.get("pid", ""))
+    except (OSError, UnicodeError, ValueError) as exc:
         raise StateProofError(
-            "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA writer lock could not be opened"
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA writer lock metadata is invalid"
         ) from exc
+    if owner != "combined-runtime" or pid <= 0:
+        raise StateProofError(
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: expected combined runtime does not own writer lock"
+        )
+    if not _proc_has_lock(
+        pid=pid, lock_device=lock_stat.st_dev, lock_inode=lock_stat.st_ino
+    ) or not _proc_has_lock_fd(
+        pid=pid, lock_device=lock_stat.st_dev, lock_inode=lock_stat.st_ino
+    ):
+        raise StateProofError(
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: writer lock is not held by expected runtime process"
+        )
+    return RuntimeWriterObservation(
+        owner=owner,
+        pid=pid,
+        process_start_ticks=_proc_start_ticks(pid),
+        lock_device=lock_stat.st_dev,
+        lock_inode=lock_stat.st_ino,
+    )
+
+
+def _read_sqlite_observations(
+    sqlite_path: Path,
+) -> tuple[dict[str, int], dict[str, dict[str, int]], str]:
+    uri = f"file:{sqlite_path.resolve().as_posix()}?mode=ro"
+    connection = sqlite3.connect(uri, uri=True, timeout=5.0)
     try:
-        fcntl.flock(handle.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
-    except (BlockingIOError, OSError) as exc:
-        handle.close()
+        backlogs = {
+            name: int(connection.execute(statement).fetchone()[0])
+            for name, statement in _DURABLE_BACKLOG_QUERIES.items()
+        }
+        markers: dict[str, dict[str, int]] = {}
+        for table_name in _MUTATION_MARKER_TABLES:
+            row = connection.execute(
+                f"SELECT COUNT(*), COALESCE(MAX(rowid), 0) FROM {table_name}"
+            ).fetchone()
+            if row is None:
+                raise StateProofError(
+                    f"mutation marker table {table_name!r} returned no result"
+                )
+            markers[table_name] = {"row_count": int(row[0]), "max_rowid": int(row[1])}
+    except (sqlite3.Error, TypeError, ValueError, IndexError) as exc:
         raise StateProofError(
-            "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA storage has an active writer"
+            f"BLOCKED_BY_RUNTIME_STATE_PROOF: MESA runtime observation failed: {exc}"
         ) from exc
-    stat = os.fstat(handle.fileno())
-    lease = RuntimeQuiescenceLease(
+    finally:
+        connection.close()
+    marker_sha256 = hashlib.sha256(canonical_json_bytes(markers)).hexdigest()
+    return backlogs, markers, marker_sha256
+
+
+class PairedStateStabilityGuard:
+    """Runner-owned capability for a live-runtime paired state proof.
+
+    The guard owns no MESA lock.  It binds PRE observations to POST observations
+    and is intentionally not constructible as a caller-authored boolean claim.
+    """
+
+    def __init__(
+        self,
+        *,
+        _token: object,
+        run_id: str,
+        storage_root: Path,
+        sqlite_path: Path,
+        writer_observation: RuntimeWriterObservation,
+        backlog_counts: dict[str, int],
+        mutation_marker: dict[str, dict[str, int]],
+        mutation_marker_sha256: str,
+    ) -> None:
+        if _token is not _STATE_GUARD_TOKEN:
+            raise TypeError("PairedStateStabilityGuard is runner-owned")
+        self.run_id = run_id
+        self.storage_root = storage_root
+        self.sqlite_path = sqlite_path
+        self._pre_writer = writer_observation
+        self._pre_backlogs = dict(backlog_counts)
+        self._pre_marker = mutation_marker
+        self._pre_marker_sha256 = mutation_marker_sha256
+        self._post_writer: RuntimeWriterObservation | None = None
+        self._post_backlogs: dict[str, int] | None = None
+        self._post_marker: dict[str, dict[str, int]] | None = None
+        self._post_marker_sha256: str | None = None
+        self._verified = False
+        self.started_at_utc = datetime.now(timezone.utc).isoformat()
+        self.completed_at_utc: str | None = None
+
+    def __enter__(self) -> "PairedStateStabilityGuard":
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        return None
+
+    def finalize(self, run_id: str) -> bool:
+        if run_id != self.run_id:
+            return False
+        try:
+            post_writer = _observe_runtime_writer(self.storage_root)
+            post_backlogs, post_marker, post_marker_sha256 = _read_sqlite_observations(
+                self.sqlite_path
+            )
+        except (OSError, StateProofError):
+            return False
+        self._post_writer = post_writer
+        self._post_backlogs = post_backlogs
+        self._post_marker = post_marker
+        self._post_marker_sha256 = post_marker_sha256
+        self.completed_at_utc = datetime.now(timezone.utc).isoformat()
+        self._verified = (
+            post_writer == self._pre_writer
+            and not any(self._pre_backlogs.values())
+            and not any(post_backlogs.values())
+            and post_marker_sha256 == self._pre_marker_sha256
+        )
+        return self._verified
+
+    def is_verified_for(self, run_id: str) -> bool:
+        if run_id != self.run_id or not self._verified:
+            return False
+        try:
+            writer = _observe_runtime_writer(self.storage_root)
+            backlogs, _marker, marker_sha256 = _read_sqlite_observations(
+                self.sqlite_path
+            )
+        except StateProofError:
+            return False
+        return (
+            writer == self._pre_writer
+            and not any(backlogs.values())
+            and marker_sha256 == self._pre_marker_sha256
+        )
+
+    def evidence(self) -> dict[str, Any]:
+        if not self._verified or self._post_writer is None:
+            raise StateProofError(
+                "BLOCKED_BY_RUNTIME_STATE_PROOF: paired state guard is not verified"
+            )
+        return {
+            "contract_version": STATE_STABILITY_CONTRACT_VERSION,
+            "run_id": self.run_id,
+            "collector": "harness.state_proof.establish_paired_state_stability",
+            "proof_mode": "stable_state_pair",
+            "writer_lock_acquired_by_e2e": False,
+            "pre_writer_observation": self._pre_writer.to_dict(),
+            "post_writer_observation": self._post_writer.to_dict(),
+            "pre_durable_backlog_counts": dict(sorted(self._pre_backlogs.items())),
+            "post_durable_backlog_counts": dict(
+                sorted((self._post_backlogs or {}).items())
+            ),
+            "pre_mutation_marker": self._pre_marker,
+            "post_mutation_marker": self._post_marker,
+            "pre_mutation_marker_sha256": self._pre_marker_sha256,
+            "post_mutation_marker_sha256": self._post_marker_sha256,
+            "runtime_quiescence_verified": False,
+            "pair_state_stability_verified": True,
+            "started_at_utc": self.started_at_utc,
+            "completed_at_utc": self.completed_at_utc,
+        }
+
+
+def establish_paired_state_stability(
+    *,
+    run_id: str,
+    sqlite_path: Path | str,
+    storage_root: Path | str | None = None,
+) -> PairedStateStabilityGuard:
+    """Begin a live-runtime state proof without acquiring MESA's writer lock."""
+
+    database = Path(sqlite_path).resolve(strict=True)
+    root = Path(storage_root).resolve(strict=True) if storage_root else database.parent
+    writer = _observe_runtime_writer(root)
+    backlogs, marker, marker_sha256 = _read_sqlite_observations(database)
+    if any(backlogs.values()):
+        raise StateProofError(
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA durable worker backlog has not drained: "
+            + repr(dict(sorted(backlogs.items())))
+        )
+    return PairedStateStabilityGuard(
+        _token=_STATE_GUARD_TOKEN,
         run_id=run_id,
         storage_root=root,
         sqlite_path=database,
-        handle=handle,
-        lock_device=stat.st_dev,
-        lock_inode=stat.st_ino,
-        backlog_counts={},
+        writer_observation=writer,
+        backlog_counts=backlogs,
+        mutation_marker=marker,
+        mutation_marker_sha256=marker_sha256,
     )
-    try:
-        counts = lease._current_backlogs()
-        if any(counts.values()):
-            raise StateProofError(
-                "BLOCKED_BY_RUNTIME_STATE_PROOF: MESA durable worker backlog has not drained: "
-                + repr(dict(sorted(counts.items())))
-            )
-        lease._backlog_counts = counts
-        return lease
-    except Exception:
-        lease.release()
-        raise
 
 
 @dataclass(frozen=True)
@@ -383,23 +543,23 @@ def verify_quiescence_evidence(
     """Reject caller-authored quiescence claims.
 
     Kept as a compatibility diagnostic for callers which previously supplied
-    dictionaries.  Official authority is available only through
-    :func:`acquire_runtime_quiescence`.
+    dictionaries.  This compatibility diagnostic never promotes a caller
+    assertion into either quiescence or paired state-stability authority.
     """
 
     if isinstance(quiescence_evidence, dict) and quiescence_evidence:
         return False, "caller-supplied quiescence assertions are non-authoritative"
-    return False, "trusted runtime quiescence lease absent"
+    return False, "native runtime freeze evidence absent"
 
 
-def verify_store_quiescence(
+def verify_store_stability(
     pre_proof: FrozenStateProof,
     post_proof: FrozenStateProof,
-    quiescence_lease: RuntimeQuiescenceLease | None = None,
+    state_guard: PairedStateStabilityGuard | None = None,
 ) -> tuple[bool, str, bool]:
-    """Verify that PRE and POST state proofs are unchanged and evaluate quiescence.
+    """Verify PRE/POST stores and the runner-owned live-runtime observations.
 
-    Returns (state_unchanged, reason, quiescence_verified).
+    Returns (state_unchanged, reason, pair_state_stability_verified).
     """
 
     if pre_proof.sqlite_fingerprint != post_proof.sqlite_fingerprint:
@@ -430,10 +590,17 @@ def verify_store_quiescence(
             False,
         )
 
-    quiescent = type(
-        quiescence_lease
-    ) is RuntimeQuiescenceLease and quiescence_lease.is_held_for(pre_proof.run_id)
-    return True, "RETRIEVAL_STATE_UNCHANGED", quiescent
+    pair_stable = type(
+        state_guard
+    ) is PairedStateStabilityGuard and state_guard.finalize(pre_proof.run_id)
+    if state_guard is not None and not pair_stable:
+        return (
+            False,
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: runtime identity, durable backlog, "
+            "or mutation marker changed during paired execution",
+            False,
+        )
+    return True, "RETRIEVAL_STATE_UNCHANGED", pair_stable
 
 
 def write_sealed_state_proof(
@@ -445,7 +612,7 @@ def write_sealed_state_proof(
     store_locations: dict[str, str],
     dataset_identity: str = "dataset-legal-1",
     freeze_identity: str = "freeze-v1",
-    quiescence_lease: RuntimeQuiescenceLease | None = None,
+    state_guard: PairedStateStabilityGuard | None = None,
     execution_id: str | None = None,
 ) -> tuple[Path, str]:
     """Write authoritative sealed state proof artifact into raw/state lane."""
@@ -453,9 +620,12 @@ def write_sealed_state_proof(
     raw_state_dir.mkdir(parents=True, exist_ok=True)
     target_path = raw_state_dir / "state-proof.json"
 
-    unchanged, reason, quiescent = verify_store_quiescence(
-        pre_proof, post_proof, quiescence_lease=quiescence_lease
+    unchanged, reason, pair_stable = verify_store_stability(
+        pre_proof, post_proof, state_guard=state_guard
     )
+    if not unchanged:
+        raise StateProofError(reason)
+    stability_evidence = state_guard.evidence() if pair_stable else {}
 
     payload = {
         "schema_version": "1.0",
@@ -472,11 +642,12 @@ def write_sealed_state_proof(
         "lancedb_fingerprint": pre_proof.lancedb_fingerprint,
         "kuzu_fingerprint": pre_proof.kuzu_fingerprint,
         "retrieval_state_unchanged": unchanged,
-        "quiescence_evidence": (
-            quiescence_lease.evidence() if quiescence_lease is not None else {}
-        ),
-        "quiescence_verified": quiescent,
-        "collector_version": "harness.state_proof.v1",
+        "proof_mode": "stable_state_pair" if pair_stable else "unverified",
+        "state_stability_evidence": stability_evidence,
+        "pair_state_stability_verified": pair_stable,
+        "runtime_quiescence_verified": False,
+        "quiescence_verified": False,
+        "collector_version": "harness.state_proof.v2",
         "captured_at_utc": datetime.now(timezone.utc).isoformat(),
         "pre_state": pre_proof.to_dict(),
         "post_state": post_proof.to_dict(),

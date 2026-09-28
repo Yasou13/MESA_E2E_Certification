@@ -1,7 +1,7 @@
 """Authoritative paired Graph ON/OFF execution and ablation collector.
 
 Executes matched Graph ON and Graph OFF queries against MESA V4 under verified
-frozen multi-store quiescence. Derives complete_evidence_at_5 and first_relevant_rank
+paired multi-store state stability. Derives complete_evidence_at_5 and first_relevant_rank
 strictly via the official retrieval scorer, enforcing stable graph path identity
 and fail-closed behavior on store mutation or pair mismatch.
 """
@@ -26,9 +26,9 @@ from harness.mesa_transport import TrustedMESAResponse
 from harness.models import GroundTruthItem
 from harness.retrieval_scorer import score_retrieval
 from harness.state_proof import (
-    RuntimeQuiescenceLease,
+    PairedStateStabilityGuard,
     capture_frozen_state_proof,
-    verify_store_quiescence,
+    verify_store_stability,
     write_sealed_state_proof,
 )
 
@@ -57,10 +57,10 @@ def execute_paired_graph_ablation(
     api_version: str = "v4",
     session_id: str = "session-graph-ablation",
     dataset_ids: list[str] | None = None,
-    quiescence_lease: RuntimeQuiescenceLease | None = None,
+    state_stability_guard: PairedStateStabilityGuard | None = None,
     execution_session: "OfficialExecutionSession | None" = None,
 ) -> Path:
-    """Execute matched Graph ON/OFF queries under frozen multi-store state proof."""
+    """Execute matched Graph ON/OFF queries under paired multi-store state proof."""
 
     run_path = Path(run_dir)
     if len(rel_queries) != 10:
@@ -394,8 +394,8 @@ def execute_paired_graph_ablation(
         kuzu_dir=kuzu_dir,
     )
 
-    unchanged, reason, quiescent_verified = verify_store_quiescence(
-        pre_proof, post_proof, quiescence_lease=quiescence_lease
+    unchanged, reason, pair_stability_verified = verify_store_stability(
+        pre_proof, post_proof, state_guard=state_stability_guard
     )
     if not unchanged:
         raise RuntimeError(reason)
@@ -411,19 +411,19 @@ def execute_paired_graph_ablation(
             "kuzu": str(kuzu_dir),
         },
         dataset_identity=datasets[0],
-        quiescence_lease=quiescence_lease,
+        state_guard=state_stability_guard,
         execution_id=(
             execution_session.execution_id if execution_session is not None else None
         ),
     )
     if execution_session is not None:
-        if quiescence_lease is None:
+        if state_stability_guard is None:
             raise RuntimeError(
-                "official Graph execution requires runner-owned quiescence"
+                "official Graph execution requires runner-owned paired state stability"
             )
         execution_session.register_state_artifact(
             state_proof_path,
-            quiescence_lease=quiescence_lease,
+            state_stability_guard=state_stability_guard,
             collector="harness.state_proof.write_sealed_state_proof",
         )
 
@@ -448,7 +448,12 @@ def execute_paired_graph_ablation(
             "lancedb_fingerprint": pre_proof.lancedb_fingerprint,
             "kuzu_fingerprint": pre_proof.kuzu_fingerprint,
             "retrieval_state_unchanged": unchanged,
-            "quiescence_verified": quiescent_verified,
+            "proof_mode": (
+                "stable_state_pair" if pair_stability_verified else "unverified"
+            ),
+            "pair_state_stability_verified": pair_stability_verified,
+            "runtime_quiescence_verified": False,
+            "quiescence_verified": False,
         },
         "pairs": pairs_evidence,
     }

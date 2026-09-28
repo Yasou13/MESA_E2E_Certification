@@ -41,11 +41,13 @@ def _ctx(tmp_path: Path) -> ProducerContext:
     if raw_dir.is_dir():
         for file in sorted(raw_dir.rglob("*.json")):
             rel_path = file.relative_to(tmp_path).as_posix()
-            entries.append({
-                "path": rel_path,
-                "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
-                "size_bytes": file.stat().st_size,
-            })
+            entries.append(
+                {
+                    "path": rel_path,
+                    "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
+                    "size_bytes": file.stat().st_size,
+                }
+            )
     manifest_bytes = (json.dumps(entries, sort_keys=True) + "\n").encode("utf-8")
     manifest_hash = hashlib.sha256(manifest_bytes).hexdigest()
     manifest_payload = {
@@ -55,19 +57,27 @@ def _ctx(tmp_path: Path) -> ProducerContext:
         "entries": entries,
     }
     p = tmp_path / "raw-manifest.json"
-    p_bytes = (json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+    p_bytes = (json.dumps(manifest_payload, indent=2, sort_keys=True) + "\n").encode(
+        "utf-8"
+    )
     p.write_bytes(p_bytes)
     p_sha = hashlib.sha256(p_bytes).hexdigest()
-    p.with_suffix(p.suffix + ".SHA256").write_text(f"{p_sha}  {p.name}\n", encoding="utf-8")
+    p.with_suffix(p.suffix + ".SHA256").write_text(
+        f"{p_sha}  {p.name}\n", encoding="utf-8"
+    )
 
     summary_path = tmp_path / "scoring-summary.json"
     if summary_path.is_file():
         s_payload = json.loads(summary_path.read_text(encoding="utf-8"))
         s_payload["raw_manifest_hash"] = manifest_hash
-        s_bytes = (json.dumps(s_payload, indent=2, sort_keys=True) + "\n").encode("utf-8")
+        s_bytes = (json.dumps(s_payload, indent=2, sort_keys=True) + "\n").encode(
+            "utf-8"
+        )
         summary_path.write_bytes(s_bytes)
         s_sha = hashlib.sha256(s_bytes).hexdigest()
-        summary_path.with_suffix(summary_path.suffix + ".SHA256").write_text(f"{s_sha}  {summary_path.name}\n", encoding="utf-8")
+        summary_path.with_suffix(summary_path.suffix + ".SHA256").write_text(
+            f"{s_sha}  {summary_path.name}\n", encoding="utf-8"
+        )
 
     return ProducerContext(
         run_dir=tmp_path,
@@ -93,23 +103,43 @@ def _sealed(tmp_path: Path, name: str, payload: dict) -> Path:
         state_payload = {
             "schema_version": "1.0",
             "run_id": RUN_ID,
-            "collector_version": "harness.state_proof.v1",
+            "collector_version": "harness.state_proof.v2",
             "retrieval_state_unchanged": True,
-            "quiescence_verified": True,
+            "proof_mode": "stable_state_pair",
+            "pair_state_stability_verified": True,
+            "runtime_quiescence_verified": False,
+            "quiescence_verified": False,
+            "state_stability_evidence": {
+                "proof_mode": "stable_state_pair",
+                "writer_lock_acquired_by_e2e": False,
+                "pair_state_stability_verified": True,
+                "runtime_quiescence_verified": False,
+                "pre_writer_observation": {"pid": 123, "process_start_ticks": 456},
+                "post_writer_observation": {"pid": 123, "process_start_ticks": 456},
+                "pre_mutation_marker_sha256": "a" * 64,
+                "post_mutation_marker_sha256": "a" * 64,
+            },
             "pre_composite_fingerprint": "sha256:" + "0" * 64,
             "post_composite_fingerprint": "sha256:" + "0" * 64,
         }
         state_bytes = (json.dumps(state_payload, sort_keys=True) + "\n").encode("utf-8")
         state_file.write_bytes(state_bytes)
         state_sha = hashlib.sha256(state_bytes).hexdigest()
-        state_file.with_suffix(state_file.suffix + ".SHA256").write_text(f"{state_sha}  {state_file.name}\n")
+        state_file.with_suffix(state_file.suffix + ".SHA256").write_text(
+            f"{state_sha}  {state_file.name}\n"
+        )
 
         payload["state_proof_artifact"] = "raw/state/state-proof.json"
         payload["state_proof_sha256"] = state_sha
-        payload.setdefault("frozen_state_proof", {})["state_proof_artifact"] = "raw/state/state-proof.json"
+        payload.setdefault("frozen_state_proof", {})[
+            "state_proof_artifact"
+        ] = "raw/state/state-proof.json"
         payload["frozen_state_proof"]["state_proof_sha256"] = state_sha
         payload["frozen_state_proof"]["retrieval_state_unchanged"] = True
-        payload["frozen_state_proof"]["quiescence_verified"] = True
+        payload["frozen_state_proof"]["proof_mode"] = "stable_state_pair"
+        payload["frozen_state_proof"]["pair_state_stability_verified"] = True
+        payload["frozen_state_proof"]["runtime_quiescence_verified"] = False
+        payload["frozen_state_proof"]["quiescence_verified"] = False
 
         raw_graph_dir = tmp_path / "raw" / "graph"
         raw_graph_dir.mkdir(parents=True, exist_ok=True)
@@ -132,7 +162,9 @@ def _sealed(tmp_path: Path, name: str, payload: dict) -> Path:
             on_bytes = (json.dumps(on_payload, sort_keys=True) + "\n").encode("utf-8")
             on_file.write_bytes(on_bytes)
             on_sha = hashlib.sha256(on_bytes).hexdigest()
-            on_file.with_suffix(on_file.suffix + ".SHA256").write_text(f"{on_sha}  {on_file.name}\n")
+            on_file.with_suffix(on_file.suffix + ".SHA256").write_text(
+                f"{on_sha}  {on_file.name}\n"
+            )
             pair["on_raw_artifact"] = f"raw/graph/{qid}_on.json"
             pair["on_raw_sha256"] = on_sha
             on_side["on_raw_artifact"] = f"raw/graph/{qid}_on.json"
@@ -152,7 +184,9 @@ def _sealed(tmp_path: Path, name: str, payload: dict) -> Path:
             off_bytes = (json.dumps(off_payload, sort_keys=True) + "\n").encode("utf-8")
             off_file.write_bytes(off_bytes)
             off_sha = hashlib.sha256(off_bytes).hexdigest()
-            off_file.with_suffix(off_file.suffix + ".SHA256").write_text(f"{off_sha}  {off_file.name}\n")
+            off_file.with_suffix(off_file.suffix + ".SHA256").write_text(
+                f"{off_sha}  {off_file.name}\n"
+            )
             pair["off_raw_artifact"] = f"raw/graph/{qid}_off.json"
             pair["off_raw_sha256"] = off_sha
             off_side["off_raw_artifact"] = f"raw/graph/{qid}_off.json"
@@ -220,23 +254,33 @@ def _scope(tmp_path: Path, *, capabilities: bool, forbidden: list[str]) -> None:
         raw_bytes = (json.dumps(raw_payload, sort_keys=True) + "\n").encode("utf-8")
         raw_file.write_bytes(raw_bytes)
         raw_sha = hashlib.sha256(raw_bytes).hexdigest()
-        raw_file.with_suffix(raw_file.suffix + ".SHA256").write_text(f"{raw_sha}  {raw_file.name}\n")
+        raw_file.with_suffix(raw_file.suffix + ".SHA256").write_text(
+            f"{raw_sha}  {raw_file.name}\n"
+        )
 
-        cases.append({
-            "case_id": case_id,
-            "proof_type": "search_pre_rank_scope" if is_search else "endpoint_visibility",
-            "source_raw_artifact": f"raw/scope/{case_id}.json",
-            "source_raw_sha256": raw_sha,
-            "returned_forbidden_evidence_ids": (
-                forbidden if index == 0 else []
-            ),
-            "pre_rank_audit_verified": True if (is_search and capabilities) else False,
-            "endpoint_visibility_verified": True if not is_search else False,
-            "exclusion_audit_hash": f"sha256:{'0' * 64}" if (is_search and capabilities) else None,
-            "evaluated_candidate_count": 10 if (is_search and capabilities) else None,
-            "excluded_candidate_count": 5 if (is_search and capabilities) else None,
-            "eligible_candidate_count": 5 if (is_search and capabilities) else None,
-        })
+        cases.append(
+            {
+                "case_id": case_id,
+                "proof_type": "search_pre_rank_scope"
+                if is_search
+                else "endpoint_visibility",
+                "source_raw_artifact": f"raw/scope/{case_id}.json",
+                "source_raw_sha256": raw_sha,
+                "returned_forbidden_evidence_ids": (forbidden if index == 0 else []),
+                "pre_rank_audit_verified": True
+                if (is_search and capabilities)
+                else False,
+                "endpoint_visibility_verified": True if not is_search else False,
+                "exclusion_audit_hash": f"sha256:{'0' * 64}"
+                if (is_search and capabilities)
+                else None,
+                "evaluated_candidate_count": 10
+                if (is_search and capabilities)
+                else None,
+                "excluded_candidate_count": 5 if (is_search and capabilities) else None,
+                "eligible_candidate_count": 5 if (is_search and capabilities) else None,
+            }
+        )
 
     _sealed(
         tmp_path,
@@ -425,10 +469,12 @@ def test_b11_distinguishes_positive_neutral_and_harm(tmp_path: Path) -> None:
                 "native_graph_on_off_switch": True,
             },
             "frozen_state_proof": {
-                "state_proof_contract_version": "mesa.state-proof.v1",
+                "state_proof_contract_version": "mesa.state-proof.v2",
                 "pre_composite_fingerprint": "sha256:" + "0" * 64,
                 "post_composite_fingerprint": "sha256:" + "0" * 64,
-                "quiescence_verified": True,
+                "proof_mode": "stable_state_pair",
+                "pair_state_stability_verified": True,
+                "runtime_quiescence_verified": False,
             },
             "graph_capability_operational": True,
             "pairs": pairs,
@@ -466,10 +512,12 @@ def test_b11_rejects_unmatched_on_off_pair(tmp_path: Path, mutation: str) -> Non
                 "native_graph_on_off_switch": True,
             },
             "frozen_state_proof": {
-                "state_proof_contract_version": "mesa.state-proof.v1",
+                "state_proof_contract_version": "mesa.state-proof.v2",
                 "pre_composite_fingerprint": "sha256:" + "0" * 64,
                 "post_composite_fingerprint": "sha256:" + "0" * 64,
-                "quiescence_verified": True,
+                "proof_mode": "stable_state_pair",
+                "pair_state_stability_verified": True,
+                "runtime_quiescence_verified": False,
             },
             "graph_capability_operational": True,
             "pairs": [
@@ -510,10 +558,12 @@ def test_b11_logging_only_claim_cannot_prove_graph(tmp_path: Path) -> None:
                 "native_graph_on_off_switch": True,
             },
             "frozen_state_proof": {
-                "state_proof_contract_version": "mesa.state-proof.v1",
+                "state_proof_contract_version": "mesa.state-proof.v2",
                 "pre_composite_fingerprint": "sha256:" + "0" * 64,
                 "post_composite_fingerprint": "sha256:" + "0" * 64,
-                "quiescence_verified": True,
+                "proof_mode": "stable_state_pair",
+                "pair_state_stability_verified": True,
+                "runtime_quiescence_verified": False,
             },
             "graph_capability_operational": True,
             "pairs": [

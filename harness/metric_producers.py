@@ -1009,7 +1009,7 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
         raise ProducerIntegrityError(
             f"B11 state proof run_id mismatch: {sealed_state_proof.get('run_id')} != {ctx.run_id}"
         )
-    if sealed_state_proof.get("collector_version") != "harness.state_proof.v1":
+    if sealed_state_proof.get("collector_version") != "harness.state_proof.v2":
         raise ProducerIntegrityError(
             "B11 state proof lacks authoritative collector lineage"
         )
@@ -1032,19 +1032,51 @@ def _b11(ctx: ProducerContext) -> ProducerObservation:
             "BLOCKED_BY_RUNTIME_STATE_PROOF: retrieval state not proven unchanged",
         )
 
-    # Check quiescence truthfulness
-    quiescence_verified = sealed_state_proof.get("quiescence_verified") is True
-    if proof.get("quiescence_verified") is True and not quiescence_verified:
+    # B11 needs same effective retrieval state, not an unsupported claim that
+    # all activity inside the live runtime was frozen.
+    if (
+        proof.get("quiescence_verified") is True
+        or proof.get("runtime_quiescence_verified") is True
+    ):
         raise ProducerIntegrityError(
-            "B11 caller claimed quiescence_verified=True but sealed state proof does not verify quiescence"
+            "B11 graph artifact falsely claims runtime quiescence"
         )
-
-    if not quiescence_verified:
+    pair_stable = (
+        sealed_state_proof.get("proof_mode") == "stable_state_pair"
+        and sealed_state_proof.get("pair_state_stability_verified") is True
+        and sealed_state_proof.get("runtime_quiescence_verified") is False
+    )
+    graph_claims_pair_stability = (
+        proof.get("proof_mode") == "stable_state_pair"
+        and proof.get("pair_state_stability_verified") is True
+    )
+    if graph_claims_pair_stability and not pair_stable:
+        raise ProducerIntegrityError(
+            "B11 graph artifact falsely claims paired state stability"
+        )
+    if not pair_stable:
         return _blocked(
             "B11",
-            "BLOCKED_BY_RUNTIME_STATE_PROOF: runtime quiescence not established",
+            "BLOCKED_BY_RUNTIME_STATE_PROOF: paired retrieval state stability not established",
         )
-
+    if not graph_claims_pair_stability:
+        raise ProducerIntegrityError(
+            "B11 graph artifact does not mirror sealed paired state proof"
+        )
+    stability_evidence = sealed_state_proof.get("state_stability_evidence")
+    if not isinstance(stability_evidence, dict):
+        raise ProducerIntegrityError("B11 paired state-stability evidence is missing")
+    if (
+        stability_evidence.get("proof_mode") != "stable_state_pair"
+        or stability_evidence.get("writer_lock_acquired_by_e2e") is not False
+        or stability_evidence.get("pair_state_stability_verified") is not True
+        or stability_evidence.get("runtime_quiescence_verified") is not False
+        or stability_evidence.get("pre_writer_observation")
+        != stability_evidence.get("post_writer_observation")
+        or stability_evidence.get("pre_mutation_marker_sha256")
+        != stability_evidence.get("post_mutation_marker_sha256")
+    ):
+        raise ProducerIntegrityError("B11 paired state-stability evidence is invalid")
     pairs = data.get("pairs")
     if not isinstance(pairs, list) or len(pairs) != 10:
         raise ProducerIntegrityError("B11 requires exactly 10 REL graph pairs")
