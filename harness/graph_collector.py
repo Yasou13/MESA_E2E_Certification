@@ -11,12 +11,10 @@ from __future__ import annotations
 import hashlib
 import json
 import math
-from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
-from harness.artifacts import canonical_json_bytes
 from harness.identity import IdentityMap
 from harness.mesa_adapters import (
     MESAContractIntegrityError,
@@ -24,14 +22,18 @@ from harness.mesa_adapters import (
     require_phase8_9_graph_contract,
 )
 from harness.metric_producers import write_sealed_measurement
+from harness.mesa_transport import TrustedMESAResponse
 from harness.models import GroundTruthItem
 from harness.retrieval_scorer import score_retrieval
 from harness.state_proof import (
-    FrozenStateProof,
+    RuntimeQuiescenceLease,
     capture_frozen_state_proof,
     verify_store_quiescence,
     write_sealed_state_proof,
 )
+
+if TYPE_CHECKING:
+    from harness.execution_provenance import OfficialExecutionSession
 
 
 GRAPH_ABLATION_PRODUCER = "harness.graph_collector.execute_paired_graph_ablation"
@@ -48,12 +50,15 @@ def execute_paired_graph_ablation(
     sqlite_path: Path | str,
     lancedb_dir: Path | str,
     kuzu_dir: Path | str,
-    mesa_executor: Callable[[str, dict[str, Any]], dict[str, Any]],
+    mesa_executor: Callable[
+        [str, dict[str, Any]], dict[str, Any] | TrustedMESAResponse
+    ],
     settings_sha256: str = "b" * 64,
     api_version: str = "v4",
     session_id: str = "session-graph-ablation",
     dataset_ids: list[str] | None = None,
-    quiescence_evidence: dict[str, Any] | None = None,
+    quiescence_lease: RuntimeQuiescenceLease | None = None,
+    execution_session: "OfficialExecutionSession | None" = None,
 ) -> Path:
     """Execute matched Graph ON/OFF queries under frozen multi-store state proof."""
 
@@ -81,8 +86,6 @@ def execute_paired_graph_ablation(
     neutral_count = 0
     harm_count = 0
     contribution_count = 0
-    all_paths_valid = True
-
     for q_idx, gt_item in enumerate(rel_queries, start=1):
         q_id = gt_item.query_id
 
@@ -94,9 +97,21 @@ def execute_paired_graph_ablation(
             "limit": 5,
             "graph_mode": "enabled",
         }
-        raw_resp_on = mesa_executor("enabled", req_on)
+        exchange_on = mesa_executor("enabled", req_on)
+        receipt_on: TrustedMESAResponse | None = None
+        if isinstance(exchange_on, TrustedMESAResponse):
+            receipt_on = exchange_on
+            raw_resp_on = exchange_on.payload
+        else:
+            raw_resp_on = exchange_on
+        if execution_session is not None and receipt_on is None:
+            raise RuntimeError(
+                "official Graph ON execution requires a trusted MESA transport receipt"
+            )
         if not isinstance(raw_resp_on, dict):
-            raise MESAContractIntegrityError(f"ON response for {q_id} must be an object")
+            raise MESAContractIntegrityError(
+                f"ON response for {q_id} must be an object"
+            )
 
         # Persist sealed raw ON artifact
         on_raw_file = raw_graph_dir / f"{q_id}_on.json"
@@ -111,6 +126,8 @@ def execute_paired_graph_ablation(
             "response": raw_resp_on,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         }
+        if execution_session is not None:
+            on_raw_payload["execution_id"] = execution_session.execution_id
         on_bytes = (
             json.dumps(
                 on_raw_payload,
@@ -127,6 +144,14 @@ def execute_paired_graph_ablation(
             f"{on_file_sha}  {on_raw_file.name}\n", encoding="utf-8", newline="\n"
         )
         on_rel_path = f"raw/graph/{q_id}_on.json"
+        if execution_session is not None and receipt_on is not None:
+            execution_session.register_transport_artifact(
+                on_raw_file,
+                receipt=receipt_on,
+                request=req_on,
+                response=raw_resp_on,
+                collector=GRAPH_ABLATION_PRODUCER,
+            )
 
         cap_on = normalize_search_response(
             run_id=run_id,
@@ -151,9 +176,21 @@ def execute_paired_graph_ablation(
             "limit": 5,
             "graph_mode": "disabled",
         }
-        raw_resp_off = mesa_executor("disabled", req_off)
+        exchange_off = mesa_executor("disabled", req_off)
+        receipt_off: TrustedMESAResponse | None = None
+        if isinstance(exchange_off, TrustedMESAResponse):
+            receipt_off = exchange_off
+            raw_resp_off = exchange_off.payload
+        else:
+            raw_resp_off = exchange_off
+        if execution_session is not None and receipt_off is None:
+            raise RuntimeError(
+                "official Graph OFF execution requires a trusted MESA transport receipt"
+            )
         if not isinstance(raw_resp_off, dict):
-            raise MESAContractIntegrityError(f"OFF response for {q_id} must be an object")
+            raise MESAContractIntegrityError(
+                f"OFF response for {q_id} must be an object"
+            )
 
         # Persist sealed raw OFF artifact
         off_raw_file = raw_graph_dir / f"{q_id}_off.json"
@@ -168,6 +205,8 @@ def execute_paired_graph_ablation(
             "response": raw_resp_off,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         }
+        if execution_session is not None:
+            off_raw_payload["execution_id"] = execution_session.execution_id
         off_bytes = (
             json.dumps(
                 off_raw_payload,
@@ -184,6 +223,14 @@ def execute_paired_graph_ablation(
             f"{off_file_sha}  {off_raw_file.name}\n", encoding="utf-8", newline="\n"
         )
         off_rel_path = f"raw/graph/{q_id}_off.json"
+        if execution_session is not None and receipt_off is not None:
+            execution_session.register_transport_artifact(
+                off_raw_file,
+                receipt=receipt_off,
+                request=req_off,
+                response=raw_resp_off,
+                collector=GRAPH_ABLATION_PRODUCER,
+            )
 
         cap_off = normalize_search_response(
             run_id=run_id,
@@ -288,8 +335,16 @@ def execute_paired_graph_ablation(
                 "dataset_id": datasets[0],
                 "pair_identity": cap_on.graph_ablation.pair_identity,
                 "scope_identity": {
-                    "tenant_id": cap_on.results[0].scope.tenant_id if cap_on.results else "default",
-                    "agent_id": cap_on.results[0].scope.agent_id if cap_on.results else "default",
+                    "tenant_id": (
+                        cap_on.results[0].scope.tenant_id
+                        if cap_on.results
+                        else "default"
+                    ),
+                    "agent_id": (
+                        cap_on.results[0].scope.agent_id
+                        if cap_on.results
+                        else "default"
+                    ),
                 },
                 "on": {
                     "query_id": q_id,
@@ -340,7 +395,7 @@ def execute_paired_graph_ablation(
     )
 
     unchanged, reason, quiescent_verified = verify_store_quiescence(
-        pre_proof, post_proof, quiescence_evidence=quiescence_evidence
+        pre_proof, post_proof, quiescence_lease=quiescence_lease
     )
     if not unchanged:
         raise RuntimeError(reason)
@@ -356,8 +411,21 @@ def execute_paired_graph_ablation(
             "kuzu": str(kuzu_dir),
         },
         dataset_identity=datasets[0],
-        quiescence_evidence=quiescence_evidence,
+        quiescence_lease=quiescence_lease,
+        execution_id=(
+            execution_session.execution_id if execution_session is not None else None
+        ),
     )
+    if execution_session is not None:
+        if quiescence_lease is None:
+            raise RuntimeError(
+                "official Graph execution requires runner-owned quiescence"
+            )
+        execution_session.register_state_artifact(
+            state_proof_path,
+            quiescence_lease=quiescence_lease,
+            collector="harness.state_proof.write_sealed_state_proof",
+        )
 
     payload = {
         "schema_version": "2.0",
@@ -384,7 +452,25 @@ def execute_paired_graph_ablation(
         },
         "pairs": pairs_evidence,
     }
+    if execution_session is not None:
+        payload.update(execution_session.public_binding())
 
     target_path = run_path / "graph-ablation.json"
     write_sealed_measurement(target_path, payload)
+    if execution_session is not None:
+        execution_session.register_derived_artifact(
+            target_path,
+            artifact_type="graph_ablation",
+            source_raw_paths=[
+                "raw/state/state-proof.json",
+                *[
+                    side[key]
+                    for pair in pairs_evidence
+                    for side, key in (
+                        (pair["on"], "on_raw_artifact"),
+                        (pair["off"], "off_raw_artifact"),
+                    )
+                ],
+            ],
+        )
     return target_path

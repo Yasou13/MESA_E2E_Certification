@@ -10,21 +10,23 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import TYPE_CHECKING, Any, Callable
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from harness.artifacts import canonical_json_bytes
 from harness.mesa_adapters import (
     MESAContractIntegrityError,
-    normalize_context_response,
     normalize_search_response,
     require_phase7_scope_contract,
 )
 from harness.metric_producers import write_sealed_measurement
+from harness.mesa_transport import TrustedMESAResponse
+
+if TYPE_CHECKING:
+    from harness.execution_provenance import OfficialExecutionSession
 
 
 REQUIRED_SCOPE_CASE_IDS = (
@@ -65,8 +67,10 @@ def build_canonical_scope_test_matrix(
     *,
     authorized_tenant: str = "tenant-auth",
     forbidden_tenant: str = "tenant-forbidden",
+    authorized_workspace: str = "workspace-auth",
     authorized_dataset: str = "dataset-auth",
     forbidden_dataset: str = "dataset-forbidden",
+    authorized_document: str = "document-auth",
     authorized_agent: str = "agent-auth",
     forbidden_agent: str = "agent-forbidden",
     authorized_principal: str = "principal-user-1",
@@ -164,7 +168,7 @@ def build_canonical_scope_test_matrix(
         ),
         ScopeTestCase(
             case_id="catalog_visibility",
-            endpoint="GET /v4/catalog",
+            endpoint="GET /v4/catalog/workspaces",
             request_payload={"tenant_id": authorized_tenant},
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
@@ -173,8 +177,12 @@ def build_canonical_scope_test_matrix(
         ),
         ScopeTestCase(
             case_id="document_visibility",
-            endpoint="GET /v4/documents",
-            request_payload={"tenant_id": authorized_tenant},
+            endpoint="GET /v4/catalog/documents",
+            request_payload={
+                "tenant_id": authorized_tenant,
+                "workspace_id": authorized_workspace,
+                "dataset_id": authorized_dataset,
+            },
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
@@ -182,8 +190,13 @@ def build_canonical_scope_test_matrix(
         ),
         ScopeTestCase(
             case_id="revision_visibility",
-            endpoint="GET /v4/revisions",
-            request_payload={"tenant_id": authorized_tenant},
+            endpoint="GET /v4/catalog/revisions",
+            request_payload={
+                "tenant_id": authorized_tenant,
+                "workspace_id": authorized_workspace,
+                "dataset_id": authorized_dataset,
+                "document_id": authorized_document,
+            },
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
@@ -191,8 +204,12 @@ def build_canonical_scope_test_matrix(
         ),
         ScopeTestCase(
             case_id="chunk_visibility",
-            endpoint="GET /v4/chunks",
-            request_payload={"tenant_id": authorized_tenant},
+            endpoint="GET /v4/sessions/{session_id}/context",
+            request_payload={
+                "session_id": session_id,
+                "query": "source chunk visibility probe",
+                "token_budget": 2048,
+            },
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
@@ -208,8 +225,11 @@ def collect_phase7_scope_isolation(
     run_dir: Path | str,
     mesa_sha: str,
     test_cases: list[ScopeTestCase] | None = None,
-    mesa_executor: Callable[[ScopeTestCase], dict[str, Any]] | None = None,
+    mesa_executor: (
+        Callable[[ScopeTestCase], dict[str, Any] | TrustedMESAResponse] | None
+    ) = None,
     api_version: str = "v4",
+    execution_session: "OfficialExecutionSession | None" = None,
 ) -> Path:
     """Execute Phase 7 scope evaluation, verify pre-rank audit, and seal artifact."""
 
@@ -236,9 +256,21 @@ def collect_phase7_scope_isolation(
     raw_scope_dir.mkdir(parents=True, exist_ok=True)
 
     for case in cases:
-        raw_response = mesa_executor(case)
+        exchange = mesa_executor(case)
+        receipt: TrustedMESAResponse | None = None
+        if isinstance(exchange, TrustedMESAResponse):
+            receipt = exchange
+            raw_response = exchange.payload
+        else:
+            raw_response = exchange
+        if execution_session is not None and receipt is None:
+            raise RuntimeError(
+                "official Phase 7 execution requires trusted MESA transport receipts"
+            )
         if not isinstance(raw_response, dict):
-            raise MESAContractIntegrityError(f"case {case.case_id} response must be a dict")
+            raise MESAContractIntegrityError(
+                f"case {case.case_id} response must be a dict"
+            )
 
         resp_bytes = canonical_json_bytes(raw_response)
         resp_hash = hashlib.sha256(resp_bytes).hexdigest()
@@ -256,6 +288,8 @@ def collect_phase7_scope_isolation(
             "response_sha256": resp_hash,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
         }
+        if execution_session is not None:
+            raw_scope_record["execution_id"] = execution_session.execution_id
         serialized_raw = (
             json.dumps(
                 raw_scope_record,
@@ -272,6 +306,14 @@ def collect_phase7_scope_isolation(
             f"{raw_file_sha}  {raw_scope_path.name}\n", encoding="utf-8", newline="\n"
         )
         source_rel_path = f"raw/scope/{case.case_id}.json"
+        if execution_session is not None and receipt is not None:
+            execution_session.register_transport_artifact(
+                raw_scope_path,
+                receipt=receipt,
+                request=case.request_payload,
+                response=raw_response,
+                collector=PHASE7_PRODUCER_IDENTITY,
+            )
 
         if case.endpoint.startswith("POST /v4/memory/search"):
             capture = normalize_search_response(
@@ -403,7 +445,15 @@ def collect_phase7_scope_isolation(
         "total_forbidden_leakage": total_leaks,
         "negative_cases": negative_cases_evidence,
     }
+    if execution_session is not None:
+        payload.update(execution_session.public_binding())
 
     target_path = run_path / "scope-isolation.json"
     write_sealed_measurement(target_path, payload)
+    if execution_session is not None:
+        execution_session.register_derived_artifact(
+            target_path,
+            artifact_type="scope_isolation",
+            source_raw_paths=[f"raw/scope/{case.case_id}.json" for case in cases],
+        )
     return target_path
