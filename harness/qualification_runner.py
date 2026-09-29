@@ -13,12 +13,12 @@ from harness.answer_execution import (
     OpenAICompatibleHTTPTransport,
     execute_answer_and_persist,
 )
-from harness.artifacts import RunArtifactStore
+from harness.artifacts import RunArtifactStore, canonical_json_bytes
 from harness.execution_provenance import _begin_official_execution
 from harness.freeze import FreezeStatus, verify_contract_freeze
 from harness.graph_collector import execute_paired_graph_ablation
 from harness.gt_governance import load_ground_truth, validate_ground_truth
-from harness.identity import IdentityMap
+from harness.identity import IdentityMap, UnknownIdentityError
 from harness.mesa_transport import (
     MESATransportConfig,
     MESATransportError,
@@ -33,6 +33,7 @@ from harness.official_scoring import (
     load_frozen_scoring_authority,
 )
 from harness.scope_collector import (
+    REQUIRED_SCOPE_CASE_IDS,
     ScopeTestCase,
     build_canonical_scope_test_matrix,
     collect_phase7_scope_isolation,
@@ -68,8 +69,31 @@ class ScopeTestAuthority:
     forbidden_tenant: str
     forbidden_dataset: str
     forbidden_agent: str
-    authorized_document: str = "document-auth"
-    case_evidence_fixtures: dict[str, list[str]] = field(default_factory=dict)
+    authorized_document: str
+    case_evidence_fixtures: dict[str, list[str]]
+    fixture_authority_hash: str
+
+
+def _scope_fixture_error(message: str) -> QualificationRunnerError:
+    return QualificationRunnerError(
+        f"BLOCKED_BY_QUALIFICATION_SCOPE_FIXTURE: {message}"
+    )
+
+
+_CASE_FIXTURE_TYPES = {
+    "cross_tenant_search": "evidence",
+    "cross_dataset_search": "evidence",
+    "cross_agent_search": "evidence",
+    "inactive_status_search": "evidence",
+    "wrong_jurisdiction_search": "evidence",
+    "stale_version_search": "evidence",
+    "effective_date_boundary_search": "evidence",
+    "context_visibility": "chunk",
+    "catalog_visibility": "catalog",
+    "document_visibility": "document",
+    "revision_visibility": "revision",
+    "chunk_visibility": "chunk",
+}
 
 
 @dataclass(frozen=True)
@@ -283,15 +307,14 @@ def _trusted_answer_transport(
 
 def _load_frozen_scope_authority(
     freeze: dict[str, Any],
+    identity_map: IdentityMap,
 ) -> tuple[QualificationScope, ScopeTestAuthority]:
     runtime = freeze.get("runtime_identities")
     if not isinstance(runtime, dict):
-        raise QualificationRunnerError(
-            "contract freeze runtime_identities is missing"
-        )
+        raise _scope_fixture_error("contract freeze runtime_identities is missing")
     scope_dict = runtime.get("qualification_scope")
     if not isinstance(scope_dict, dict):
-        raise QualificationRunnerError(
+        raise _scope_fixture_error(
             "frozen qualification scope authority (runtime_identities.qualification_scope) is missing"
         )
     required_scope = {
@@ -303,7 +326,7 @@ def _load_frozen_scope_authority(
     }
     missing_scope = sorted(required_scope - scope_dict.keys())
     if missing_scope:
-        raise QualificationRunnerError(
+        raise _scope_fixture_error(
             f"frozen qualification scope authority is missing fields: {missing_scope}"
         )
     tenant_id = scope_dict["tenant_id"]
@@ -312,48 +335,242 @@ def _load_frozen_scope_authority(
     agent_id = scope_dict["agent_id"]
     expected_principal = scope_dict["expected_principal"]
     if not isinstance(tenant_id, str) or not tenant_id.strip():
-        raise QualificationRunnerError("qualification scope tenant_id must be non-empty")
+        raise _scope_fixture_error("qualification scope tenant_id must be non-empty")
     if not isinstance(workspace_id, str) or not workspace_id.strip():
-        raise QualificationRunnerError("qualification scope workspace_id must be non-empty")
+        raise _scope_fixture_error("qualification scope workspace_id must be non-empty")
     if not isinstance(agent_id, str) or not agent_id.strip():
-        raise QualificationRunnerError("qualification scope agent_id must be non-empty")
+        raise _scope_fixture_error("qualification scope agent_id must be non-empty")
     if not isinstance(expected_principal, str) or not expected_principal.strip():
-        raise QualificationRunnerError("qualification scope expected_principal must be non-empty")
+        raise _scope_fixture_error(
+            "qualification scope expected_principal must be non-empty"
+        )
     if (
         not isinstance(dataset_ids, list)
         or not dataset_ids
         or any(not isinstance(d, str) or not d.strip() for d in dataset_ids)
     ):
-        raise QualificationRunnerError(
+        raise _scope_fixture_error(
             "qualification scope dataset_ids must be a non-empty list of strings"
         )
+    if len(dataset_ids) != len(set(dataset_ids)):
+        raise _scope_fixture_error("qualification scope dataset_ids contain duplicates")
 
-    fixtures_dict = (
-        runtime.get("scope_test_authority")
-        or scope_dict.get("scope_test_fixtures")
-        or scope_dict.get("scope_test_authority")
-    )
+    fixtures_dict = runtime.get("scope_test_authority")
     if not isinstance(fixtures_dict, dict):
-        raise QualificationRunnerError(
+        raise _scope_fixture_error(
             "frozen scope test authority (runtime_identities.scope_test_authority) is missing"
         )
-    required_fixtures = {"forbidden_tenant", "forbidden_dataset", "forbidden_agent"}
+    required_fixtures = {
+        "forbidden_tenant",
+        "forbidden_dataset",
+        "forbidden_agent",
+        "authorized_document",
+        "case_evidence_fixtures",
+        "corpus_fixtures",
+    }
     missing_fixtures = sorted(required_fixtures - fixtures_dict.keys())
     if missing_fixtures:
-        raise QualificationRunnerError(
+        raise _scope_fixture_error(
             f"frozen scope test authority is missing fields: {missing_fixtures}"
         )
     forbidden_tenant = fixtures_dict["forbidden_tenant"]
     forbidden_dataset = fixtures_dict["forbidden_dataset"]
     forbidden_agent = fixtures_dict["forbidden_agent"]
-    authorized_document = fixtures_dict.get("authorized_document", "document-auth")
-    case_evidence_fixtures = fixtures_dict.get("case_evidence_fixtures", {})
+    authorized_document = fixtures_dict["authorized_document"]
+    case_evidence_fixtures = fixtures_dict["case_evidence_fixtures"]
+    corpus_fixtures = fixtures_dict["corpus_fixtures"]
     if not isinstance(forbidden_tenant, str) or not forbidden_tenant.strip():
-        raise QualificationRunnerError("scope test authority forbidden_tenant must be non-empty")
+        raise _scope_fixture_error(
+            "scope test authority forbidden_tenant must be non-empty"
+        )
     if not isinstance(forbidden_dataset, str) or not forbidden_dataset.strip():
-        raise QualificationRunnerError("scope test authority forbidden_dataset must be non-empty")
+        raise _scope_fixture_error(
+            "scope test authority forbidden_dataset must be non-empty"
+        )
     if not isinstance(forbidden_agent, str) or not forbidden_agent.strip():
-        raise QualificationRunnerError("scope test authority forbidden_agent must be non-empty")
+        raise _scope_fixture_error(
+            "scope test authority forbidden_agent must be non-empty"
+        )
+    if not isinstance(authorized_document, str) or not authorized_document.strip():
+        raise _scope_fixture_error(
+            "scope test authority authorized_document must be non-empty"
+        )
+    if forbidden_tenant == tenant_id:
+        raise _scope_fixture_error("forbidden tenant belongs to the allowed tenant")
+    if forbidden_dataset in dataset_ids:
+        raise _scope_fixture_error(
+            "forbidden dataset belongs to the allowed dataset scope"
+        )
+    if forbidden_agent == agent_id:
+        raise _scope_fixture_error("forbidden agent belongs to the allowed agent")
+    if not identity_map.contains_document_id(authorized_document):
+        raise _scope_fixture_error(
+            f"authorized_document {authorized_document!r} is absent from the frozen identity map"
+        )
+    if not isinstance(case_evidence_fixtures, dict):
+        raise _scope_fixture_error("case_evidence_fixtures must be an object")
+    fixture_case_ids = set(case_evidence_fixtures)
+    required_case_ids = set(REQUIRED_SCOPE_CASE_IDS)
+    if fixture_case_ids != required_case_ids:
+        missing = sorted(required_case_ids - fixture_case_ids)
+        unknown = sorted(fixture_case_ids - required_case_ids)
+        raise _scope_fixture_error(
+            f"case_evidence_fixtures must cover exactly the supported cases; missing={missing}, unknown={unknown}"
+        )
+    normalized_case_fixtures: dict[str, list[str]] = {}
+    all_fixture_ids: list[str] = []
+    for case_id in REQUIRED_SCOPE_CASE_IDS:
+        values = case_evidence_fixtures[case_id]
+        if (
+            not isinstance(values, list)
+            or not values
+            or any(not isinstance(value, str) or not value.strip() for value in values)
+        ):
+            raise _scope_fixture_error(
+                f"case {case_id} requires at least one non-empty frozen fixture ID"
+            )
+        if len(values) != len(set(values)):
+            raise _scope_fixture_error(f"case {case_id} contains duplicate fixture IDs")
+        normalized_case_fixtures[case_id] = list(values)
+        all_fixture_ids.extend(values)
+    if len(all_fixture_ids) != len(set(all_fixture_ids)):
+        raise _scope_fixture_error("fixture IDs must be unique across Phase 7 cases")
+    if not isinstance(corpus_fixtures, dict):
+        raise _scope_fixture_error("corpus_fixtures must be an object")
+    if set(corpus_fixtures) != set(all_fixture_ids):
+        missing = sorted(set(all_fixture_ids) - set(corpus_fixtures))
+        unknown = sorted(set(corpus_fixtures) - set(all_fixture_ids))
+        raise _scope_fixture_error(
+            f"corpus fixture registry mismatch; missing={missing}, unreferenced={unknown}"
+        )
+
+    probe_time = datetime.fromisoformat("2026-06-01T00:00:00+00:00")
+    for case_id, fixture_ids in normalized_case_fixtures.items():
+        expected_type = _CASE_FIXTURE_TYPES[case_id]
+        for fixture_id in fixture_ids:
+            record = corpus_fixtures[fixture_id]
+            if not isinstance(record, dict):
+                raise _scope_fixture_error(
+                    f"corpus fixture {fixture_id!r} must be an object"
+                )
+            identity_type = record.get("identity_type")
+            source_chunk_id = record.get("source_chunk_id")
+            if identity_type != expected_type:
+                raise _scope_fixture_error(
+                    f"fixture {fixture_id!r} has identity_type {identity_type!r}; case {case_id} requires {expected_type!r}"
+                )
+            if not isinstance(source_chunk_id, str) or not source_chunk_id:
+                raise _scope_fixture_error(
+                    f"fixture {fixture_id!r} lacks source_chunk_id corpus binding"
+                )
+            try:
+                rows = identity_map.rows_for_identity(source_chunk_id)
+            except UnknownIdentityError as exc:
+                raise _scope_fixture_error(
+                    f"fixture {fixture_id!r} references unknown frozen corpus identity {source_chunk_id!r}"
+                ) from exc
+            identity_fields = {
+                "evidence": "evidence_id",
+                "catalog": "catalog_id",
+                "document": "document_id",
+                "revision": "version_id",
+            }
+            if identity_type == "chunk":
+                bound_rows = [
+                    row
+                    for row in rows
+                    if fixture_id in {row.mesa_chunk_id, row.source_chunk_id}
+                ]
+            else:
+                identity_field = identity_fields[identity_type]
+                bound_rows = [
+                    row for row in rows if getattr(row, identity_field) == fixture_id
+                ]
+            if not bound_rows:
+                raise _scope_fixture_error(
+                    f"{identity_type} fixture {fixture_id!r} is absent from the frozen identity authority"
+                )
+            semantic_fields = {
+                "tenant_id",
+                "dataset_id",
+                "agent_id",
+                "status",
+                "jurisdiction",
+                "is_current",
+                "valid_from",
+                "valid_to",
+            }
+            for field_name in semantic_fields.intersection(record):
+                if not any(
+                    getattr(row, field_name) == record[field_name] for row in bound_rows
+                ):
+                    raise _scope_fixture_error(
+                        f"fixture {fixture_id!r} {field_name} metadata differs from the frozen identity authority"
+                    )
+
+            if (
+                case_id == "cross_tenant_search"
+                and record.get("tenant_id") != forbidden_tenant
+            ):
+                raise _scope_fixture_error(
+                    f"cross-tenant fixture {fixture_id!r} does not belong to forbidden tenant"
+                )
+            if (
+                case_id == "cross_dataset_search"
+                and record.get("dataset_id") != forbidden_dataset
+            ):
+                raise _scope_fixture_error(
+                    f"cross-dataset fixture {fixture_id!r} does not belong to forbidden dataset"
+                )
+            if (
+                case_id == "cross_agent_search"
+                and record.get("agent_id") != forbidden_agent
+            ):
+                raise _scope_fixture_error(
+                    f"cross-agent fixture {fixture_id!r} does not belong to forbidden agent"
+                )
+            if case_id == "inactive_status_search" and str(
+                record.get("status", "")
+            ).upper() not in {"INACTIVE", "TOMBSTONED", "DELETED"}:
+                raise _scope_fixture_error(
+                    f"inactive fixture {fixture_id!r} is not inactive/tombstoned"
+                )
+            if case_id == "wrong_jurisdiction_search" and record.get(
+                "jurisdiction"
+            ) in {None, "TR"}:
+                raise _scope_fixture_error(
+                    f"wrong-jurisdiction fixture {fixture_id!r} is not outside TR"
+                )
+            if (
+                case_id == "stale_version_search"
+                and record.get("is_current") is not False
+            ):
+                raise _scope_fixture_error(
+                    f"stale fixture {fixture_id!r} is not marked non-current"
+                )
+            if case_id == "effective_date_boundary_search":
+                try:
+                    valid_from = datetime.fromisoformat(
+                        str(record["valid_from"]).replace("Z", "+00:00")
+                    )
+                    valid_to = datetime.fromisoformat(
+                        str(record["valid_to"]).replace("Z", "+00:00")
+                    )
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise _scope_fixture_error(
+                        f"temporal fixture {fixture_id!r} lacks valid frozen effective dates"
+                    ) from exc
+                if valid_from <= probe_time <= valid_to:
+                    raise _scope_fixture_error(
+                        f"temporal fixture {fixture_id!r} is valid at the Phase 7 boundary"
+                    )
+            if (
+                case_id.endswith("_visibility")
+                and record.get("tenant_id") != forbidden_tenant
+            ):
+                raise _scope_fixture_error(
+                    f"visibility fixture {fixture_id!r} does not belong to forbidden tenant"
+                )
 
     scope = QualificationScope(
         tenant_id=tenant_id,
@@ -367,9 +584,10 @@ def _load_frozen_scope_authority(
         forbidden_dataset=forbidden_dataset,
         forbidden_agent=forbidden_agent,
         authorized_document=authorized_document,
-        case_evidence_fixtures=(
-            case_evidence_fixtures if isinstance(case_evidence_fixtures, dict) else {}
-        ),
+        case_evidence_fixtures=normalized_case_fixtures,
+        fixture_authority_hash=hashlib.sha256(
+            canonical_json_bytes(fixtures_dict)
+        ).hexdigest(),
     )
     return scope, test_authority
 
@@ -424,7 +642,7 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
         relational,
         identity_map,
     ) = _load_required_scoring_authority(config)
-    scope, test_scope_authority = _load_frozen_scope_authority(freeze)
+    scope, test_scope_authority = _load_frozen_scope_authority(freeze, identity_map)
     if config.qualification_scope is not None and config.qualification_scope != scope:
         raise QualificationRunnerError(
             "caller-provided qualification_scope contradicts frozen qualification authority"
@@ -492,7 +710,9 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                 raise QualificationRunnerError(
                     f"session bootstrap workspace mismatch: {session_payload.get('workspace_id')} != {scope.workspace_id}"
                 )
-            if sorted(session_payload.get("dataset_ids", [])) != sorted(scope.dataset_ids):
+            if sorted(session_payload.get("dataset_ids", [])) != sorted(
+                scope.dataset_ids
+            ):
                 raise QualificationRunnerError(
                     f"session bootstrap datasets mismatch: {session_payload.get('dataset_ids')} != {scope.dataset_ids}"
                 )
@@ -615,6 +835,7 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                     forbidden_agent=test_scope_authority.forbidden_agent,
                     authorized_document=test_scope_authority.authorized_document,
                     case_evidence_fixtures=test_scope_authority.case_evidence_fixtures,
+                    fixture_authority_hash=test_scope_authority.fixture_authority_hash,
                 )
                 collect_phase7_scope_isolation(
                     run_id=config.run_id,
@@ -625,6 +846,7 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                     api_version=config.api_version,
                     execution_session=execution_session,
                     session_id=native_session_id,
+                    fixture_authority_hash=test_scope_authority.fixture_authority_hash,
                 )
 
                 storage_root = config.mesa_storage_root or config.sqlite_path.parent

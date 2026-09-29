@@ -27,6 +27,7 @@ from harness.state_proof import (
 )
 from tests.independent_support import placeholder_sources
 from tests.test_phase7_scope_collector import _mock_mesa_response
+from tests.scope_fixture_support import build_synthetic_scope_test_matrix
 from tests.test_phase8_9_graph_and_state_proof import (
     MESA_SHA,
     _combined_runtime_writer,
@@ -70,6 +71,7 @@ def test_fake_scope_raw_manifest_and_derived_chain_is_not_official(
         run_id=run_dir.name,
         run_dir=run_dir,
         mesa_sha=MESA_SHA,
+        test_cases=build_synthetic_scope_test_matrix(),
         mesa_executor=lambda case: _mock_mesa_response(case, leak=False),
     )
     forged_scope = json.loads(

@@ -57,6 +57,7 @@ class ScopeTestCase(BaseModel):
     expected_tenant_id: str
     expected_agent_id: str
     expected_principal_id: str
+    fixture_authority_hash: str | None = None
     forbidden_evidence_ids: list[str] = Field(default_factory=list)
     forbidden_tenant_ids: list[str] = Field(default_factory=list)
     forbidden_agent_ids: list[str] = Field(default_factory=list)
@@ -65,21 +66,31 @@ class ScopeTestCase(BaseModel):
 
 def build_canonical_scope_test_matrix(
     *,
-    authorized_tenant: str = "tenant-auth",
-    forbidden_tenant: str = "tenant-forbidden",
-    authorized_workspace: str = "workspace-auth",
-    authorized_dataset: str = "dataset-auth",
-    forbidden_dataset: str = "dataset-forbidden",
-    authorized_document: str = "document-auth",
-    authorized_agent: str = "agent-auth",
-    forbidden_agent: str = "agent-forbidden",
-    authorized_principal: str = "principal-user-1",
-    session_id: str = "session-scope-test",
-    case_evidence_fixtures: dict[str, list[str]] | None = None,
+    authorized_tenant: str,
+    forbidden_tenant: str,
+    authorized_workspace: str,
+    authorized_dataset: str,
+    forbidden_dataset: str,
+    authorized_document: str,
+    authorized_agent: str,
+    forbidden_agent: str,
+    authorized_principal: str,
+    session_id: str,
+    case_evidence_fixtures: dict[str, list[str]],
+    fixture_authority_hash: str,
 ) -> list[ScopeTestCase]:
-    """Construct the canonical 12-case negative scope audit matrix."""
+    """Construct the official matrix solely from validated frozen fixtures."""
 
-    fixtures = case_evidence_fixtures or {}
+    if set(case_evidence_fixtures) != set(REQUIRED_SCOPE_CASE_IDS):
+        raise ValueError(
+            "official scope fixtures must match the required 12-case matrix"
+        )
+    if any(not values for values in case_evidence_fixtures.values()):
+        raise ValueError("official scope fixture lists must not be empty")
+    if len(fixture_authority_hash) != 64:
+        raise ValueError("fixture_authority_hash must be a SHA-256 digest")
+
+    fixtures = case_evidence_fixtures
 
     base_search = {
         "session_id": session_id,
@@ -96,9 +107,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "cross_tenant_search", [f"ev-{forbidden_tenant}-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["cross_tenant_search"],
             forbidden_tenant_ids=[forbidden_tenant],
         ),
         ScopeTestCase(
@@ -108,9 +118,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "cross_dataset_search", [f"ev-{forbidden_dataset}-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["cross_dataset_search"],
             forbidden_dataset_ids=[forbidden_dataset],
         ),
         ScopeTestCase(
@@ -120,9 +129,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "cross_agent_search", [f"ev-{forbidden_agent}-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["cross_agent_search"],
             forbidden_agent_ids=[forbidden_agent],
         ),
         ScopeTestCase(
@@ -132,9 +140,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "inactive_status_search", ["ev-inactive-tombstoned-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["inactive_status_search"],
         ),
         ScopeTestCase(
             case_id="wrong_jurisdiction_search",
@@ -143,9 +150,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "wrong_jurisdiction_search", ["ev-jurisdiction-us-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["wrong_jurisdiction_search"],
         ),
         ScopeTestCase(
             case_id="stale_version_search",
@@ -154,9 +160,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "stale_version_search", ["ev-stale-rev0-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["stale_version_search"],
         ),
         ScopeTestCase(
             case_id="effective_date_boundary_search",
@@ -170,9 +175,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "effective_date_boundary_search", ["ev-expired-2025-001"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["effective_date_boundary_search"],
         ),
         ScopeTestCase(
             case_id="context_visibility",
@@ -181,9 +185,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "context_visibility", [f"chunk-{forbidden_tenant}-ctx"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["context_visibility"],
         ),
         ScopeTestCase(
             case_id="catalog_visibility",
@@ -192,9 +195,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "catalog_visibility", [f"catalog-{forbidden_tenant}"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["catalog_visibility"],
         ),
         ScopeTestCase(
             case_id="document_visibility",
@@ -207,9 +209,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "document_visibility", [f"doc-{forbidden_tenant}"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["document_visibility"],
         ),
         ScopeTestCase(
             case_id="revision_visibility",
@@ -223,9 +224,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "revision_visibility", [f"rev-{forbidden_tenant}"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["revision_visibility"],
         ),
         ScopeTestCase(
             case_id="chunk_visibility",
@@ -238,9 +238,8 @@ def build_canonical_scope_test_matrix(
             expected_tenant_id=authorized_tenant,
             expected_agent_id=authorized_agent,
             expected_principal_id=authorized_principal,
-            forbidden_evidence_ids=fixtures.get(
-                "chunk_visibility", [f"chunk-{forbidden_tenant}"]
-            ),
+            fixture_authority_hash=fixture_authority_hash,
+            forbidden_evidence_ids=fixtures["chunk_visibility"],
         ),
     ]
     return cases
@@ -258,6 +257,7 @@ def collect_phase7_scope_isolation(
     api_version: str = "v4",
     execution_session: "OfficialExecutionSession | None" = None,
     session_id: str | None = None,
+    fixture_authority_hash: str | None = None,
 ) -> Path:
     """Execute Phase 7 scope evaluation, verify pre-rank audit, and seal artifact."""
 
@@ -267,7 +267,10 @@ def collect_phase7_scope_isolation(
             raise RuntimeError(
                 "official Phase 7 execution requires explicit frozen test_cases"
             )
-        if not session_id or session_id in {"session-scope-test", "session-graph-ablation"}:
+        if not session_id or session_id in {
+            "session-scope-test",
+            "session-graph-ablation",
+        }:
             raise RuntimeError(
                 f"official Phase 7 execution requires native MESA session; got prohibited session_id {session_id!r}"
             )
@@ -277,7 +280,23 @@ def collect_phase7_scope_isolation(
                 raise RuntimeError(
                     f"scope test case {case.case_id} uses session {case_session!r} differing from native session {session_id!r}"
                 )
-    cases = test_cases or build_canonical_scope_test_matrix()
+        if (
+            not fixture_authority_hash
+            or len(fixture_authority_hash) != 64
+            or fixture_authority_hash == "0" * 64
+        ):
+            raise RuntimeError(
+                "BLOCKED_BY_QUALIFICATION_SCOPE_FIXTURE: official Phase 7 execution requires frozen fixture authority hash"
+            )
+        if any(
+            case.fixture_authority_hash != fixture_authority_hash for case in test_cases
+        ):
+            raise RuntimeError(
+                "BLOCKED_BY_QUALIFICATION_SCOPE_FIXTURE: scope case fixture authority differs from frozen authority"
+            )
+    if test_cases is None:
+        raise RuntimeError("Phase 7 execution requires explicit test cases")
+    cases = test_cases
     case_ids = {c.case_id for c in cases}
     if case_ids != set(REQUIRED_SCOPE_CASE_IDS):
         raise ValueError(
@@ -327,6 +346,8 @@ def collect_phase7_scope_isolation(
             "case_id": case.case_id,
             "endpoint": case.endpoint,
             "request": case.request_payload,
+            "fixture_authority_hash": case.fixture_authority_hash,
+            "fixture_ids": list(case.forbidden_evidence_ids),
             "response": raw_response,
             "response_sha256": resp_hash,
             "timestamp_utc": datetime.now(timezone.utc).isoformat(),
@@ -425,6 +446,8 @@ def collect_phase7_scope_isolation(
                     "endpoint": case.endpoint,
                     "requested_scope": req_scope,
                     "requested_principal_id": case.expected_principal_id,
+                    "fixture_authority_hash": case.fixture_authority_hash,
+                    "fixture_ids": list(case.forbidden_evidence_ids),
                     "evaluated_candidate_count": audit.evaluated_candidate_count,
                     "excluded_candidate_count": audit.excluded_candidate_count,
                     "eligible_candidate_count": audit.eligible_candidate_count,
@@ -457,6 +480,8 @@ def collect_phase7_scope_isolation(
                         "principal_id": case.expected_principal_id,
                     },
                     "requested_principal_id": case.expected_principal_id,
+                    "fixture_authority_hash": case.fixture_authority_hash,
+                    "fixture_ids": list(case.forbidden_evidence_ids),
                     "evaluated_candidate_count": None,
                     "excluded_candidate_count": None,
                     "eligible_candidate_count": None,
@@ -491,6 +516,8 @@ def collect_phase7_scope_isolation(
         "total_forbidden_leakage": total_leaks,
         "negative_cases": negative_cases_evidence,
     }
+    if fixture_authority_hash:
+        payload["fixture_authority_hash"] = fixture_authority_hash
     if effective_session_id:
         payload["session_id"] = str(effective_session_id)
     if execution_session is not None:

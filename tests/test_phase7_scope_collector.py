@@ -17,9 +17,9 @@ from harness.metric_producers import (
 )
 from harness.scope_collector import (
     ScopeTestCase,
-    build_canonical_scope_test_matrix,
     collect_phase7_scope_isolation,
 )
+from tests.scope_fixture_support import build_synthetic_scope_test_matrix
 
 
 RUN_ID = "RUN-phase7-test"
@@ -148,7 +148,7 @@ def _dummy_ctx(run_dir: Path) -> ProducerContext:
 
 
 def test_canonical_visibility_cases_use_real_mesa_v4_read_contracts() -> None:
-    cases = {case.case_id: case for case in build_canonical_scope_test_matrix()}
+    cases = {case.case_id: case for case in build_synthetic_scope_test_matrix()}
 
     assert cases["context_visibility"].endpoint == (
         "GET /v4/sessions/{session_id}/context"
@@ -180,6 +180,7 @@ def test_phase7_collector_end_to_end(tmp_path: Path) -> None:
         run_id=RUN_ID,
         run_dir=run_dir,
         mesa_sha=MESA_SHA,
+        test_cases=build_synthetic_scope_test_matrix(),
         mesa_executor=executor,
     )
     assert artifact_path.is_file()
@@ -212,6 +213,7 @@ def test_phase7_collector_detects_forbidden_leak(tmp_path: Path) -> None:
         run_id=RUN_ID,
         run_dir=run_dir,
         mesa_sha=MESA_SHA,
+        test_cases=build_synthetic_scope_test_matrix(),
         mesa_executor=executor,
     )
     payload = json.loads(artifact_path.read_text(encoding="utf-8"))
@@ -236,6 +238,7 @@ def test_phase7_collector_rejects_incoherent_audit_counts(tmp_path: Path) -> Non
             run_id=RUN_ID,
             run_dir=run_dir,
             mesa_sha=MESA_SHA,
+            test_cases=build_synthetic_scope_test_matrix(),
             mesa_executor=executor,
         )
 
@@ -252,6 +255,7 @@ def test_phase7_collector_rejects_invalid_audit_hash(tmp_path: Path) -> None:
             run_id=RUN_ID,
             run_dir=run_dir,
             mesa_sha=MESA_SHA,
+            test_cases=build_synthetic_scope_test_matrix(),
             mesa_executor=executor,
         )
 
@@ -267,6 +271,7 @@ def test_b9_rejects_caller_forged_producer(tmp_path: Path) -> None:
         run_id=RUN_ID,
         run_dir=run_dir,
         mesa_sha=MESA_SHA,
+        test_cases=build_synthetic_scope_test_matrix(),
         mesa_executor=executor,
     )
 
@@ -293,6 +298,7 @@ def test_b9_rejects_unsupported_contract_version(tmp_path: Path) -> None:
         run_id=RUN_ID,
         run_dir=run_dir,
         mesa_sha=MESA_SHA,
+        test_cases=build_synthetic_scope_test_matrix(),
         mesa_executor=executor,
     )
 
