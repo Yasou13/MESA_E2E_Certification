@@ -15,6 +15,7 @@ from harness.qualification_runner import (
     run_profile_b_qualification,
 )
 from harness.scope_collector import ScopeTestCase
+from tests.scope_fixture_support import frozen_scope_fixture_authority
 from tests.test_phase7_scope_collector import _mock_mesa_response
 from tests.test_phase8_9_graph_and_state_proof import (
     _mock_graph_executor,
@@ -99,19 +100,23 @@ def _setup_test_repo(
     materials["qrels"] = [qrels]
 
     identity = repo / "ground-truth" / "identity-map.jsonl"
+    scope_authority, scope_identity_rows = frozen_scope_fixture_authority(
+        authorized_document="document-1"
+    )
+    identity_rows = [
+        {
+            "mesa_chunk_id": "mesa-chunk-1",
+            "source_chunk_id": "source-chunk-1",
+            "content_hash": "1" * 64,
+            "delivery_state": "COMMITTED",
+            "document_id": "document-1",
+            "remote_mutation_id": "mutation-1",
+            "version_id": "revision-1",
+        },
+        *scope_identity_rows,
+    ]
     identity.write_text(
-        json.dumps(
-            {
-                "mesa_chunk_id": "mesa-chunk-1",
-                "source_chunk_id": "source-chunk-1",
-                "content_hash": "1" * 64,
-                "delivery_state": "COMMITTED",
-                "document_id": "document-1",
-                "remote_mutation_id": "mutation-1",
-                "version_id": "revision-1",
-            }
-        )
-        + "\n",
+        "\n".join(json.dumps(row) for row in identity_rows) + "\n",
         encoding="utf-8",
     )
     materials["identity_map"] = [identity]
@@ -217,12 +222,7 @@ def _setup_test_repo(
                 "agent_id": "agent-auth",
                 "expected_principal": "principal-user-1",
             },
-            "scope_test_authority": {
-                "forbidden_tenant": "tenant-forbidden",
-                "forbidden_dataset": "dataset-forbidden",
-                "forbidden_agent": "agent-forbidden",
-                "authorized_document": "document-auth",
-            },
+            "scope_test_authority": scope_authority,
         },
     )
 

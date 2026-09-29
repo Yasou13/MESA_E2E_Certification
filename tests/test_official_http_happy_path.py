@@ -40,6 +40,7 @@ from harness.scope_collector import (
     collect_phase7_scope_isolation,
 )
 from harness.state_proof import establish_paired_state_stability
+from tests.scope_fixture_support import frozen_scope_fixture_authority
 
 MESA_SHA = "a" * 40
 DATA_SHA = "b" * 40
@@ -147,7 +148,9 @@ class RealisticMESAHandler(http.server.BaseHTTPRequestHandler):
 
         # Catalog endpoints for Phase 7 visibility checks
         if path.startswith("/v4/catalog/"):
-            self._send_json(200, {"items": [], "workspaces": [], "documents": [], "revisions": []})
+            self._send_json(
+                200, {"items": [], "workspaces": [], "documents": [], "revisions": []}
+            )
             return
 
         self._send_json(404, {"detail": "Not found"})
@@ -225,7 +228,9 @@ class RealisticMESAHandler(http.server.BaseHTTPRequestHandler):
                     break
 
             ev_id = f"ev-rel-{num}"
-            chunk_id = f"chunk-rel-{num}" if (enabled or num > 2) else f"chunk-unrelated-{num}"
+            chunk_id = (
+                f"chunk-rel-{num}" if (enabled or num > 2) else f"chunk-unrelated-{num}"
+            )
 
             matched = {
                 "assertion_id": ev_id,
@@ -498,6 +503,8 @@ def _setup_happy_path_repo(
     qrels.write_text("\n".join(qrel_lines) + "\n", encoding="utf-8")
     materials["qrels"] = [qrels]
 
+    scope_authority, scope_identity_rows = frozen_scope_fixture_authority()
+    id_lines.extend(json.dumps(row) for row in scope_identity_rows)
     identity.write_text("\n".join(id_lines) + "\n", encoding="utf-8")
     materials["identity_map"] = [identity]
 
@@ -570,8 +577,12 @@ def _setup_happy_path_repo(
             "answer_authority": {
                 "provider": "openai_compatible",
                 "model": "openai/gpt-oss-20b",
-                "system_prompt_sha256": hashlib.sha256(SYSTEM_PROMPT.encode("utf-8")).hexdigest(),
-                "answer_instruction_sha256": hashlib.sha256(ANSWER_INSTRUCTION.encode("utf-8")).hexdigest(),
+                "system_prompt_sha256": hashlib.sha256(
+                    SYSTEM_PROMPT.encode("utf-8")
+                ).hexdigest(),
+                "answer_instruction_sha256": hashlib.sha256(
+                    ANSWER_INSTRUCTION.encode("utf-8")
+                ).hexdigest(),
                 "request_parameters_sha256": hashlib.sha256(b"{}").hexdigest(),
                 "context_contract_version": "mesa-e2e.context.v1",
                 "source_context_contract": "GET /v4/sessions/{session_id}/context",
@@ -602,12 +613,7 @@ def _setup_happy_path_repo(
                 "agent_id": "agent-auth",
                 "expected_principal": "principal-user-1",
             },
-            "scope_test_authority": {
-                "forbidden_tenant": "tenant-forbidden",
-                "forbidden_dataset": "dataset-forbidden",
-                "forbidden_agent": "agent-forbidden",
-                "authorized_document": "document-auth",
-            },
+            "scope_test_authority": scope_authority,
         },
     )
 
@@ -652,7 +658,9 @@ class _MockAnswerResponse:
 
 
 def test_official_runner_http_happy_path(
-    tmp_path: Path, live_mesa_server: tuple[str, RealisticMESAServer], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    live_mesa_server: tuple[str, RealisticMESAServer],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Mandatory verification: complete official qualification HTTP flow over real sockets."""
     base_url, server = live_mesa_server
@@ -887,7 +895,9 @@ def test_runner_fails_closed_when_caller_attempts_to_override_frozen_scope(
 
 
 def test_runner_fails_closed_when_session_created_under_wrong_tenant(
-    tmp_path: Path, live_mesa_server: tuple[str, RealisticMESAServer], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    live_mesa_server: tuple[str, RealisticMESAServer],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Proves runner validates session response scope against requested frozen scope."""
     base_url, server = live_mesa_server
@@ -956,7 +966,9 @@ def test_graph_ablation_fails_closed_on_session_mismatch(
             query_id=f"Q-REL-{i}",
             question=f"Q {i}",
             expected_source_chunk_ids=[f"src-{i}"],
-            evidence_groups=[EvidenceGroup(group_id="G1", acceptable_source_chunk_ids=[f"src-{i}"])],
+            evidence_groups=[
+                EvidenceGroup(group_id="G1", acceptable_source_chunk_ids=[f"src-{i}"])
+            ],
             required_facts=[RequiredFact(fact_id="F1", claim="c")],
             query_class="RELATIONAL",
             is_answerable=True,
@@ -983,9 +995,7 @@ def test_graph_ablation_fails_closed_on_session_mismatch(
             },
         }
 
-    with pytest.raises(
-        MESAContractIntegrityError, match="session_id mismatch"
-    ):
+    with pytest.raises(MESAContractIntegrityError, match="session_id mismatch"):
         execute_paired_graph_ablation(
             run_id=run_id,
             run_dir=run_dir,
@@ -1001,7 +1011,9 @@ def test_graph_ablation_fails_closed_on_session_mismatch(
 
 
 def test_runner_fails_closed_when_session_created_under_wrong_dataset(
-    tmp_path: Path, live_mesa_server: tuple[str, RealisticMESAServer], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    live_mesa_server: tuple[str, RealisticMESAServer],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Proves runner fails closed if session response contains wrong dataset_ids."""
     base_url, _ = live_mesa_server
@@ -1055,7 +1067,9 @@ def test_runner_fails_closed_when_session_created_under_wrong_dataset(
 
 
 def test_runner_fails_closed_when_session_created_under_wrong_agent(
-    tmp_path: Path, live_mesa_server: tuple[str, RealisticMESAServer], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    live_mesa_server: tuple[str, RealisticMESAServer],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Proves runner fails closed if session response contains wrong agent_id."""
     base_url, _ = live_mesa_server
@@ -1109,7 +1123,9 @@ def test_runner_fails_closed_when_session_created_under_wrong_agent(
 
 
 def test_runner_fails_closed_when_session_response_missing_session_id(
-    tmp_path: Path, live_mesa_server: tuple[str, RealisticMESAServer], monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    live_mesa_server: tuple[str, RealisticMESAServer],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Proves runner fails closed if session response does not contain session_id."""
     base_url, _ = live_mesa_server
@@ -1309,4 +1325,3 @@ def test_fake_session_bootstrap_fails_manifest_validation(tmp_path: Path) -> Non
     # compute_raw_manifest with an official session that didn't register this fake file must fail closed
     with pytest.raises(Exception, match="unregistered"):
         store.compute_raw_manifest(execution_session=session)
-

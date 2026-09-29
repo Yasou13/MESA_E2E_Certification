@@ -1018,10 +1018,10 @@ def test_adversarial_phase7_mesa_sha_mismatch_rejected(tmp_path) -> None:
 
 
 def test_adversarial_phase7_principal_mismatch_rejected(tmp_path) -> None:
-    from harness.scope_collector import build_canonical_scope_test_matrix
+    from tests.scope_fixture_support import build_synthetic_scope_test_matrix
     from tests.test_phase7_scope_collector import _mock_mesa_response
 
-    cases = build_canonical_scope_test_matrix()
+    cases = build_synthetic_scope_test_matrix()
 
     def evil_executor(case):
         resp = _mock_mesa_response(case)
