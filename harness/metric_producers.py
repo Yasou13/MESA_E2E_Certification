@@ -407,7 +407,7 @@ def _b1(ctx: ProducerContext) -> ProducerObservation:
             "docker_state_isolated": True,
         }.items()
     )
-    gib = 1024 ** 3
+    gib = 1024**3
     return _completed(
         "B1",
         {
@@ -680,6 +680,8 @@ def _b8(ctx: ProducerContext) -> ProducerObservation:
 def _validate_scope_cases(
     scope: dict[str, Any], scope_path: Path, ctx: ProducerContext, gate_name: str
 ) -> tuple[int, list[Path]]:
+    frozen_case_fixtures: dict[str, Any] | None = None
+    frozen_fixture_hash: str | None = None
     if ctx.execution_mode == "official":
         if ctx.execution_session is None:
             raise ProducerIntegrityError(
@@ -691,6 +693,28 @@ def _validate_scope_cases(
             raise ProducerIntegrityError(
                 f"{gate_name} scope evidence is not runner-owned: {exc}"
             ) from exc
+        try:
+            freeze = json.loads(ctx.freeze_path.read_text(encoding="utf-8"))
+            runtime = freeze["runtime_identities"]
+            fixture_authority = runtime["scope_test_authority"]
+            frozen_case_fixtures = fixture_authority["case_evidence_fixtures"]
+            frozen_fixture_hash = hashlib.sha256(
+                canonical_json_bytes(fixture_authority)
+            ).hexdigest()
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+        ) as exc:
+            raise ProducerIntegrityError(
+                f"{gate_name} frozen Phase 7 fixture authority is unavailable"
+            ) from exc
+        if scope.get("fixture_authority_hash") != frozen_fixture_hash:
+            raise ProducerIntegrityError(
+                f"{gate_name} scope fixture authority differs from contract freeze"
+            )
     if scope.get("run_id") != ctx.run_id:
         raise ProducerIntegrityError(
             f"{gate_name} scope artifact run_id mismatch: {scope.get('run_id')} != {ctx.run_id}"
@@ -762,6 +786,16 @@ def _validate_scope_cases(
     raw_paths: list[Path] = [scope_path]
     for case in cases:
         cid = case.get("case_id")
+        if ctx.execution_mode == "official":
+            fixture_ids = case.get("fixture_ids")
+            if (
+                case.get("fixture_authority_hash") != frozen_fixture_hash
+                or not isinstance(fixture_ids, list)
+                or fixture_ids != frozen_case_fixtures.get(cid)
+            ):
+                raise ProducerIntegrityError(
+                    f"{gate_name} case {cid} is not bound to its frozen fixtures"
+                )
         raw_rel = case.get("source_raw_artifact")
         if not isinstance(raw_rel, str) or not raw_rel.startswith("raw/scope/"):
             raise ProducerIntegrityError(
@@ -790,6 +824,13 @@ def _validate_scope_cases(
         if raw_payload.get("case_id") != cid:
             raise ProducerIntegrityError(
                 f"{gate_name} raw artifact {raw_rel} case_id mismatch: {raw_payload.get('case_id')} != {cid}"
+            )
+        if ctx.execution_mode == "official" and (
+            raw_payload.get("fixture_authority_hash") != frozen_fixture_hash
+            or raw_payload.get("fixture_ids") != frozen_case_fixtures.get(cid)
+        ):
+            raise ProducerIntegrityError(
+                f"{gate_name} raw artifact {raw_rel} is not bound to frozen fixtures"
             )
 
         raw_hash = case.get("raw_response_sha256")

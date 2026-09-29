@@ -41,15 +41,26 @@ class IdentityMapRow(BaseModel):
     source_chunk_id: str = Field(min_length=1)
     content_hash: Optional[str] = Field(default=None, pattern=r"^[0-9a-f]{64}$")
     delivery_state: Optional[str] = None
+    evidence_id: Optional[str] = None
+    catalog_id: Optional[str] = None
     document_id: Optional[str] = None
     remote_mutation_id: Optional[str] = None
     version_id: Optional[str] = None
+    tenant_id: Optional[str] = None
+    dataset_id: Optional[str] = None
+    agent_id: Optional[str] = None
+    status: Optional[str] = None
+    jurisdiction: Optional[str] = None
+    is_current: Optional[bool] = None
+    valid_from: Optional[str] = None
+    valid_to: Optional[str] = None
 
 
 class IdentityMap:
     def __init__(self) -> None:
         self._mesa_to_source: dict[str, str] = {}
         self._source_to_mesa: dict[str, set[str]] = {}
+        self._rows_by_source: dict[str, list[IdentityMapRow]] = {}
         self.map_sha256: Optional[str] = None
 
     @property
@@ -63,7 +74,9 @@ class IdentityMap:
         try:
             raw_bytes = path.read_bytes()
         except OSError as exc:
-            raise IdentityMapValidationError(f"cannot read identity map: {path}") from exc
+            raise IdentityMapValidationError(
+                f"cannot read identity map: {path}"
+            ) from exc
 
         observed_sha256 = hashlib.sha256(raw_bytes).hexdigest()
         if expected_sha256 is not None and observed_sha256 != expected_sha256:
@@ -74,6 +87,7 @@ class IdentityMap:
 
         mesa_to_source: dict[str, str] = {}
         source_to_mesa: dict[str, set[str]] = {}
+        rows_by_source: dict[str, list[IdentityMapRow]] = {}
         seen_pairs: set[tuple[str, str]] = set()
         try:
             text = raw_bytes.decode("utf-8")
@@ -103,15 +117,15 @@ class IdentityMap:
                 )
             seen_pairs.add(pair)
             mesa_to_source[row.mesa_chunk_id] = row.source_chunk_id
-            source_to_mesa.setdefault(row.source_chunk_id, set()).add(
-                row.mesa_chunk_id
-            )
+            source_to_mesa.setdefault(row.source_chunk_id, set()).add(row.mesa_chunk_id)
+            rows_by_source.setdefault(row.source_chunk_id, []).append(row)
 
         if not mesa_to_source:
             raise IdentityMapValidationError("identity map contains no mappings")
 
         self._mesa_to_source = mesa_to_source
         self._source_to_mesa = source_to_mesa
+        self._rows_by_source = rows_by_source
         self.map_sha256 = observed_sha256
 
     def add_mapping(self, mesa_chunk_id: str, source_chunk_id: str) -> None:
@@ -129,6 +143,12 @@ class IdentityMap:
             )
         self._mesa_to_source[mesa_chunk_id] = source_chunk_id
         self._source_to_mesa.setdefault(source_chunk_id, set()).add(mesa_chunk_id)
+        self._rows_by_source.setdefault(source_chunk_id, []).append(
+            IdentityMapRow(
+                mesa_chunk_id=mesa_chunk_id,
+                source_chunk_id=source_chunk_id,
+            )
+        )
 
     def resolve_source_chunk_id(self, chunk_id: str) -> str:
         """Resolve a known MESA or authoritative source chunk ID."""
@@ -144,6 +164,26 @@ class IdentityMap:
                 f"unknown authoritative source chunk ID: {source_chunk_id!r}"
             )
         return set(self._source_to_mesa[source_chunk_id])
+
+    def rows_for_identity(self, chunk_id: str) -> tuple[IdentityMapRow, ...]:
+        """Return frozen identity rows for a known MESA or source chunk ID."""
+
+        source_chunk_id = self.resolve_source_chunk_id(chunk_id)
+        return tuple(self._rows_by_source[source_chunk_id])
+
+    def contains_document_id(self, document_id: str) -> bool:
+        return any(
+            row.document_id == document_id
+            for rows in self._rows_by_source.values()
+            for row in rows
+        )
+
+    def contains_version_id(self, version_id: str) -> bool:
+        return any(
+            row.version_id == version_id
+            for rows in self._rows_by_source.values()
+            for row in rows
+        )
 
     def validation_report(self, source_path: str) -> dict[str, object]:
         if self.map_sha256 is None:
@@ -165,7 +205,7 @@ class IdentityMap:
         self, output_path: str | Path, source_path: str
     ) -> None:
         payload = self.validation_report(source_path)
-        serialized = json.dumps(
-            payload, ensure_ascii=False, indent=2, sort_keys=True
-        ) + "\n"
+        serialized = (
+            json.dumps(payload, ensure_ascii=False, indent=2, sort_keys=True) + "\n"
+        )
         Path(output_path).write_text(serialized, encoding="utf-8", newline="\n")
