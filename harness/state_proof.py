@@ -29,6 +29,8 @@ from harness.artifacts import canonical_json_bytes
 
 STATE_PROOF_CONTRACT_VERSION = "mesa.state-proof.v2"
 STATE_STABILITY_CONTRACT_VERSION = "mesa.paired-state-stability.v1"
+SQLITE_FINGERPRINT_ALGORITHM_VERSION = "mesa.sqlite-state-fingerprint.v2"
+_SQLITE_FETCH_BATCH_SIZE = 1_000
 _WRITER_LOCK_NAME = ".mesa-single-writer.lock"
 _STATE_GUARD_TOKEN = object()
 _DURABLE_BACKLOG_QUERIES = {
@@ -429,8 +431,8 @@ def _canonical_sqlite_val(val: Any) -> Any:
 def _table_order_columns(cursor: sqlite3.Cursor, tbl: str) -> list[str]:
     """Determine deterministic ordering columns for a table.
 
-    1. If explicit PRIMARY KEY columns exist, return them in PK ordinal order.
-    2. Otherwise, return all declared columns in declaration order.
+    1. Put explicit PRIMARY KEY columns first, in PK ordinal order.
+    2. Use every remaining declared column as a deterministic tie-breaker.
     3. If no columns are declared, fallback to 'rowid' if table supports rowid.
     """
     cursor.execute(f"PRAGMA table_info({_quote_ident(tbl)})")
@@ -441,10 +443,11 @@ def _table_order_columns(cursor: sqlite3.Cursor, tbl: str) -> list[str]:
         col[1]
         for col in sorted([c for c in cols_info if c[5] > 0], key=lambda c: c[5])
     ]
-    if pk_cols:
-        return pk_cols
-
     all_cols = [col[1] for col in cols_info]
+    if pk_cols:
+        pk_set = set(pk_cols)
+        return pk_cols + [col for col in all_cols if col not in pk_set]
+
     if all_cols:
         return all_cols
 
@@ -468,7 +471,45 @@ def _table_order_columns(cursor: sqlite3.Cursor, tbl: str) -> list[str]:
 
     if not is_without_rowid:
         return ["rowid"]
-    return []
+    raise StateProofError(
+        f"SQLite table {tbl!r} has neither declared columns nor a usable rowid"
+    )
+
+
+def _hash_ordered_sqlite_rows(
+    cursor: sqlite3.Cursor,
+    *,
+    tbl: str,
+    order_cols: list[str],
+) -> tuple[int, str]:
+    """Stream a canonical JSON row array in deterministic order.
+
+    Streaming preserves the historical canonical JSON representation while
+    avoiding an unbounded in-memory materialization for tables above the old
+    10,000-row threshold.
+    """
+    order_clause = ", ".join(_quote_ident(col) for col in order_cols)
+    cursor.execute(
+        f"SELECT * FROM {_quote_ident(tbl)} ORDER BY {order_clause}"
+    )
+
+    hasher = hashlib.sha256()
+    hasher.update(b"[")
+    row_count = 0
+    first = True
+    while True:
+        batch = cursor.fetchmany(_SQLITE_FETCH_BATCH_SIZE)
+        if not batch:
+            break
+        for raw_row in batch:
+            canonical_row = [_canonical_sqlite_val(val) for val in raw_row]
+            if not first:
+                hasher.update(b",")
+            hasher.update(canonical_json_bytes(canonical_row))
+            first = False
+            row_count += 1
+    hasher.update(b"]")
+    return row_count, hasher.hexdigest()
 
 
 def fingerprint_sqlite(sqlite_path: Path | str) -> StoreFingerprint:
@@ -520,27 +561,22 @@ def fingerprint_sqlite(sqlite_path: Path | str) -> StoreFingerprint:
                     f"SQLite read-only fingerprinting failed on table {tbl!r} (count): {exc}"
                 ) from exc
 
-            row_hash = None
-            if count <= 10000:
-                try:
-                    order_cols = _table_order_columns(cursor, tbl)
-                    if order_cols:
-                        order_clause = ", ".join(_quote_ident(col) for col in order_cols)
-                        cursor.execute(
-                            f"SELECT * FROM {_quote_ident(tbl)} ORDER BY {order_clause}"
-                        )
-                    else:
-                        cursor.execute(f"SELECT * FROM {_quote_ident(tbl)}")
-                    raw_rows = cursor.fetchall()
-                    canonical_rows = [
-                        [_canonical_sqlite_val(val) for val in row]
-                        for row in raw_rows
-                    ]
-                    row_hash = hashlib.sha256(canonical_json_bytes(canonical_rows)).hexdigest()
-                except Exception as exc:
+            try:
+                order_cols = _table_order_columns(cursor, tbl)
+                hashed_count, row_hash = _hash_ordered_sqlite_rows(
+                    cursor,
+                    tbl=tbl,
+                    order_cols=order_cols,
+                )
+                if hashed_count != count:
                     raise StateProofError(
-                        f"SQLite read-only fingerprinting failed on table {tbl!r} (query_content): {exc}"
-                    ) from exc
+                        f"row count changed inside the read snapshot "
+                        f"({count} != {hashed_count})"
+                    )
+            except Exception as exc:
+                raise StateProofError(
+                    f"SQLite read-only fingerprinting failed on table {tbl!r} (query_content): {exc}"
+                ) from exc
 
             table_rows[tbl] = {"count": count, "content_hash": row_hash}
 
@@ -564,6 +600,7 @@ def fingerprint_sqlite(sqlite_path: Path | str) -> StoreFingerprint:
 
     schema_hash = hashlib.sha256(canonical_json_bytes(schema_rows)).hexdigest()
     logical_manifest = {
+        "fingerprint_algorithm": SQLITE_FINGERPRINT_ALGORITHM_VERSION,
         "schema_version": schema_version,
         "data_version": data_version,
         "schema_items": len(schema_rows),

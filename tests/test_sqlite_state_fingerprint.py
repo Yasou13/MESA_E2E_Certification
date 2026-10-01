@@ -14,6 +14,7 @@ import pytest
 
 from harness.artifacts import canonical_json_bytes
 from harness.state_proof import (
+    SQLITE_FINGERPRINT_ALGORITHM_VERSION,
     STATE_PROOF_CONTRACT_VERSION,
     StateProofError,
     capture_frozen_state_proof,
@@ -52,12 +53,19 @@ def test_fingerprint_rowid_table(tmp_path: Path) -> None:
     fp = fingerprint_sqlite(db_path)
     assert fp.store_name == "sqlite"
     assert fp.fingerprint.startswith("sha256:")
+    assert (
+        fp.manifest_details["fingerprint_algorithm"]
+        == SQLITE_FINGERPRINT_ALGORITHM_VERSION
+    )
     tables = fp.manifest_details["tables"]
     assert "t_int_pk" in tables and tables["t_int_pk"]["count"] == 2
     assert "t_text_pk" in tables and tables["t_text_pk"]["count"] == 2
     assert "t_no_pk" in tables and tables["t_no_pk"]["count"] == 2
     for tbl in ("t_int_pk", "t_text_pk", "t_no_pk"):
         assert tables[tbl]["content_hash"] is not None
+    assert tables["t_int_pk"]["content_hash"] == hashlib.sha256(
+        canonical_json_bytes([[1, "alice"], [2, "bob"]])
+    ).hexdigest()
 
 
 def test_fingerprint_without_rowid_single_pk(tmp_path: Path) -> None:
@@ -198,6 +206,23 @@ def test_physical_insertion_order_determinism(tmp_path: Path) -> None:
     assert fp1.fingerprint == fp2.fingerprint, (
         f"fingerprint drifted due to physical insertion order: {fp1.fingerprint} != {fp2.fingerprint}"
     )
+
+
+def test_nullable_primary_key_ties_do_not_depend_on_rowid_order(
+    tmp_path: Path,
+) -> None:
+    db1 = tmp_path / "nullable_pk_1.db"
+    db2 = tmp_path / "nullable_pk_2.db"
+    rows = [(None, "alpha"), (None, "beta"), ("key", "gamma")]
+
+    for path, insertion_order in ((db1, rows), (db2, list(reversed(rows)))):
+        conn = sqlite3.connect(path)
+        conn.execute("CREATE TABLE items (item_key TEXT PRIMARY KEY, payload TEXT)")
+        conn.executemany("INSERT INTO items VALUES (?, ?)", insertion_order)
+        conn.commit()
+        conn.close()
+
+    assert fingerprint_sqlite(db1).fingerprint == fingerprint_sqlite(db2).fingerprint
 
 
 def test_blob_determinism_and_unambiguous_types(tmp_path: Path) -> None:
@@ -351,6 +376,113 @@ def test_adversarial_false_pass_checks(tmp_path: Path) -> None:
     conn.close()
     fp_schema = fingerprint_sqlite(db_path)
     assert fp_deleted.fingerprint != fp_schema.fingerprint
+
+
+def test_large_table_content_is_hashed_and_same_count_mutation_is_visible(
+    tmp_path: Path,
+) -> None:
+    db_path = tmp_path / "large.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("CREATE TABLE large_items (id INTEGER PRIMARY KEY, payload TEXT)")
+    conn.executemany(
+        "INSERT INTO large_items VALUES (?, ?)",
+        ((idx, f"value-{idx}") for idx in range(10_001)),
+    )
+    conn.commit()
+    conn.close()
+
+    before = fingerprint_sqlite(db_path)
+    table = before.manifest_details["tables"]["large_items"]
+    assert table["count"] == 10_001
+    assert table["content_hash"] is not None
+
+    conn = sqlite3.connect(db_path)
+    conn.execute(
+        "UPDATE large_items SET payload = 'mutated' WHERE id = ?",
+        (10_000,),
+    )
+    conn.commit()
+    conn.close()
+
+    after = fingerprint_sqlite(db_path)
+    assert before.fingerprint != after.fingerprint
+
+
+def test_one_invocation_uses_a_consistent_wal_read_snapshot(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    db_path = tmp_path / "snapshot.db"
+    conn = sqlite3.connect(db_path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("CREATE TABLE items (id INTEGER PRIMARY KEY, payload TEXT)")
+    conn.execute("INSERT INTO items VALUES (1, 'before')")
+    conn.commit()
+    conn.close()
+
+    before = fingerprint_sqlite(db_path)
+    real_connect = sqlite3.connect
+    mutation_done = False
+
+    class SnapshotCursor:
+        def __init__(self, cursor: sqlite3.Cursor) -> None:
+            self._cursor = cursor
+
+        def execute(self, sql: str, *args: Any, **kwargs: Any) -> Any:
+            nonlocal mutation_done
+            result = self._cursor.execute(sql, *args, **kwargs)
+            if not mutation_done and sql.startswith("SELECT COUNT(*) FROM \"items\""):
+                mutation_done = True
+                writer = real_connect(db_path)
+                writer.execute("UPDATE items SET payload = 'after' WHERE id = 1")
+                writer.commit()
+                writer.close()
+            return result
+
+        def fetchall(self) -> Any:
+            return self._cursor.fetchall()
+
+        def fetchmany(self, size: int) -> Any:
+            return self._cursor.fetchmany(size)
+
+        def fetchone(self) -> Any:
+            return self._cursor.fetchone()
+
+    class SnapshotConnection:
+        def __init__(self, connection: sqlite3.Connection) -> None:
+            self._connection = connection
+
+        @property
+        def isolation_level(self) -> str | None:
+            return self._connection.isolation_level
+
+        @isolation_level.setter
+        def isolation_level(self, value: str | None) -> None:
+            self._connection.isolation_level = value
+
+        def execute(self, *args: Any, **kwargs: Any) -> Any:
+            return self._connection.execute(*args, **kwargs)
+
+        def cursor(self) -> SnapshotCursor:
+            return SnapshotCursor(self._connection.cursor())
+
+        def rollback(self) -> None:
+            self._connection.rollback()
+
+        def close(self) -> None:
+            self._connection.close()
+
+    monkeypatch.setattr(
+        sqlite3,
+        "connect",
+        lambda *args, **kwargs: SnapshotConnection(real_connect(*args, **kwargs)),
+    )
+
+    during = fingerprint_sqlite(db_path)
+    after = fingerprint_sqlite(db_path)
+
+    assert mutation_done is True
+    assert during.fingerprint == before.fingerprint
+    assert after.fingerprint != before.fingerprint
 
 
 def test_explicit_error_context_on_failure(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
