@@ -471,6 +471,28 @@ class RunArtifactStore:
         path = self.raw_sessions_dir / f"{purpose}.json"
         return self._write_immutable_json(path, payload)
 
+    def persist_raw_provider_attempt(
+        self,
+        *,
+        query_id: str,
+        attempt_number: int,
+        timestamp_utc: datetime,
+        attempt_payload: dict[str, Any],
+    ) -> tuple[Path, str]:
+        """Seal safe provider attempt metadata before retry or authoritative completion."""
+
+        if QUERY_ID.fullmatch(query_id) is None:
+            raise ArtifactStoreError(f"unsafe query_id for artifact path: {query_id!r}")
+        if attempt_number < 1:
+            raise ArtifactStoreError(f"attempt_number must be positive: {attempt_number}")
+        if timestamp_utc.tzinfo is None or timestamp_utc.utcoffset() is None:
+            raise ArtifactStoreError(
+                "provider attempt timestamp must be timezone-aware"
+            )
+        path = self.raw_provider_dir / f"{query_id}.attempt_{attempt_number}.json"
+        self._write_immutable_json(path, attempt_payload)
+        return path, self._verify_seal(path)
+
     def persist_raw_provider_exchange(
         self,
         *,
@@ -479,6 +501,11 @@ class RunArtifactStore:
         provider: str,
         request: dict[str, Any],
         response: dict[str, Any],
+        authoritative_attempt_number: int | None = None,
+        total_attempts: int | None = None,
+        attempts: list[dict[str, Any]] | None = None,
+        cumulative_token_usage: dict[str, Any] | None = None,
+        logical_answer_request_id: str | None = None,
     ) -> tuple[Path, str]:
         """Seal the exact provider exchange before response parsing."""
 
@@ -491,7 +518,7 @@ class RunArtifactStore:
             raise ArtifactStoreError(
                 "provider exchange timestamp must be timezone-aware"
             )
-        payload = {
+        payload: dict[str, Any] = {
             "schema_version": "1.0",
             "run_id": self.run_id,
             "lane": "provider_exchange",
@@ -503,6 +530,17 @@ class RunArtifactStore:
             "response": response,
             "response_sha256": _sha256_bytes(response_bytes),
         }
+        if logical_answer_request_id is not None:
+            payload["logical_answer_request_id"] = logical_answer_request_id
+        if authoritative_attempt_number is not None:
+            payload["authoritative_attempt_number"] = authoritative_attempt_number
+        if total_attempts is not None:
+            payload["total_attempts"] = total_attempts
+        if attempts is not None:
+            payload["attempts"] = attempts
+        if cumulative_token_usage is not None:
+            payload["cumulative_token_usage"] = cumulative_token_usage
+
         path = self._write_immutable_json(
             self._query_path(self.raw_provider_dir, query_id), payload
         )
