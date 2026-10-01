@@ -11,6 +11,8 @@ from typing import Any
 
 from harness.answer_execution import (
     OpenAICompatibleHTTPTransport,
+    ProviderReliabilityTelemetry,
+    ProviderRetryPolicy,
     execute_answer_and_persist,
 )
 from harness.artifacts import RunArtifactStore, canonical_json_bytes
@@ -119,9 +121,52 @@ class QualificationConfig:
     answer_provider_base_url: str = ""
     answer_provider_api_key: str = ""
     answer_provider_timeout_seconds: float = 60.0
+    answer_provider_transport_max_attempts: int = 2
+    answer_provider_incomplete_completion_max_attempts: int = 2
+    answer_provider_retry_backoff_seconds: float = 1.0
+    answer_provider_max_retry_after_seconds: float = 30.0
     answer_system_prompt: str = ""
     answer_instruction: str = ""
     answer_request_parameters: dict[str, Any] = field(default_factory=dict)
+    answer_transport_max_attempts: int | None = None
+    answer_incomplete_completion_max_attempts: int | None = None
+    answer_retry_backoff_seconds: float | None = None
+    answer_max_retry_after_seconds: float | None = None
+
+    def __post_init__(self) -> None:
+        if self.answer_transport_max_attempts is not None:
+            object.__setattr__(
+                self,
+                "answer_provider_transport_max_attempts",
+                self.answer_transport_max_attempts,
+            )
+        if self.answer_incomplete_completion_max_attempts is not None:
+            object.__setattr__(
+                self,
+                "answer_provider_incomplete_completion_max_attempts",
+                self.answer_incomplete_completion_max_attempts,
+            )
+        if self.answer_retry_backoff_seconds is not None:
+            object.__setattr__(
+                self,
+                "answer_provider_retry_backoff_seconds",
+                self.answer_retry_backoff_seconds,
+            )
+        if self.answer_max_retry_after_seconds is not None:
+            object.__setattr__(
+                self,
+                "answer_provider_max_retry_after_seconds",
+                self.answer_max_retry_after_seconds,
+            )
+
+    def get_answer_retry_policy(self) -> ProviderRetryPolicy:
+        return ProviderRetryPolicy(
+            timeout_seconds=self.answer_provider_timeout_seconds,
+            transport_max_attempts=self.answer_provider_transport_max_attempts,
+            incomplete_completion_max_attempts=self.answer_provider_incomplete_completion_max_attempts,
+            retry_backoff_seconds=self.answer_provider_retry_backoff_seconds,
+            max_retry_after_seconds=self.answer_provider_max_retry_after_seconds,
+        )
 
 
 @dataclass(frozen=True)
@@ -271,6 +316,47 @@ def _trusted_answer_transport(
             raise QualificationRunnerError(
                 f"answer transport {field_name} differs from frozen authority"
             )
+    policy = config.get_answer_retry_policy()
+    policy_checks = {
+        "timeout_seconds": policy.timeout_seconds,
+        "transport_max_attempts": policy.transport_max_attempts,
+        "incomplete_completion_max_attempts": policy.incomplete_completion_max_attempts,
+        "retry_backoff_seconds": policy.retry_backoff_seconds,
+    }
+    for field_name, expected_val in policy_checks.items():
+        if field_name in transport_authority:
+            actual_val = type(expected_val)(transport_authority[field_name])
+            if actual_val != expected_val:
+                raise QualificationRunnerError(
+                    f"answer transport retry policy {field_name} differs from frozen authority: "
+                    f"frozen={actual_val}, configured={expected_val}"
+                )
+    if "retry_policy" in transport_authority and isinstance(
+        transport_authority["retry_policy"], dict
+    ):
+        nested = transport_authority["retry_policy"]
+        for field_name, expected_val in policy_checks.items():
+            if field_name in nested:
+                actual_val = type(expected_val)(nested[field_name])
+                if actual_val != expected_val:
+                    raise QualificationRunnerError(
+                        f"answer transport retry policy {field_name} differs from frozen authority: "
+                        f"frozen={actual_val}, configured={expected_val}"
+                    )
+    if (
+        isinstance(runtime, dict)
+        and "answer_retry_policy" in runtime
+        and isinstance(runtime["answer_retry_policy"], dict)
+    ):
+        top_retry = runtime["answer_retry_policy"]
+        for field_name, expected_val in policy_checks.items():
+            if field_name in top_retry:
+                actual_val = type(expected_val)(top_retry[field_name])
+                if actual_val != expected_val:
+                    raise QualificationRunnerError(
+                        f"answer transport retry policy {field_name} differs from frozen authority: "
+                        f"frozen={actual_val}, configured={expected_val}"
+                    )
     expected_hashes = {
         "system_prompt_sha256": hashlib.sha256(
             config.answer_system_prompt.encode("utf-8")
@@ -298,6 +384,7 @@ def _trusted_answer_transport(
             base_url=config.answer_provider_base_url,
             api_key=config.answer_provider_api_key,
             timeout_seconds=config.answer_provider_timeout_seconds,
+            retry_policy=policy,
         )
     except ValueError as exc:
         raise QualificationRunnerError(
@@ -615,6 +702,16 @@ def _validate_static_preconditions(config: QualificationConfig) -> None:
         )
     if not config.kuzu_dir.is_dir():
         raise QualificationRunnerError(f"Kùzu directory not found: {config.kuzu_dir}")
+    if config.answer_provider_timeout_seconds <= 0:
+        raise QualificationRunnerError("answer_provider_timeout_seconds must be positive")
+    if config.answer_provider_transport_max_attempts < 1:
+        raise QualificationRunnerError("answer_provider_transport_max_attempts must be at least 1")
+    if config.answer_provider_incomplete_completion_max_attempts < 1:
+        raise QualificationRunnerError("answer_provider_incomplete_completion_max_attempts must be at least 1")
+    if config.answer_provider_retry_backoff_seconds < 0:
+        raise QualificationRunnerError("answer_provider_retry_backoff_seconds cannot be negative")
+    if config.answer_provider_max_retry_after_seconds < 0:
+        raise QualificationRunnerError("answer_provider_max_retry_after_seconds cannot be negative")
 
 
 def run_profile_b_qualification(config: QualificationConfig) -> QualificationResult:
@@ -750,6 +847,8 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
             )
 
             primary_dataset = scope.dataset_ids[0]
+            provider_telemetry = ProviderReliabilityTelemetry()
+            retry_policy = config.get_answer_retry_policy()
             try:
                 for item in ground_truth:
                     request = {
@@ -818,6 +917,8 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                         transport=answer_transport,
                         execution_session=execution_session,
                         context_raw_path=context_path,
+                        retry_policy=retry_policy,
+                        accounting=provider_telemetry,
                     )
 
                 def _scope_executor(case: ScopeTestCase):

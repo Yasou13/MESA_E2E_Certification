@@ -338,6 +338,42 @@ class OfficialExecutionSession:
         record["capture_attestation"] = self._sign(record)
         self._raw_records[relative] = record
 
+    def register_provider_attempt_artifact(
+        self,
+        path: Path,
+        *,
+        attempt_record: dict[str, Any],
+        collector: str,
+    ) -> None:
+        if not self._capture_started or self._sealed:
+            raise ExecutionProvenanceError(
+                "provider attempt capture is outside the official capture window"
+            )
+        relative = self._relative_raw_path(path)
+        digest = _verify_sidecar(path)
+        record = {
+            "path": relative,
+            "sha256": digest,
+            "capture_id": hashlib.sha256(
+                _canonical_bytes(
+                    {
+                        "path": relative,
+                        "sha256": digest,
+                        "execution_id": self.execution_id,
+                    }
+                )
+            ).hexdigest(),
+            "collector": collector,
+            "source": "trusted_answer_provider_attempt",
+            "endpoint": "POST /chat/completions",
+            "transport_status": attempt_record.get("http_status") or 0,
+            "request_sha256": attempt_record.get("request_hash", ""),
+            "response_sha256": digest,
+            **self.public_binding(),
+        }
+        record["capture_attestation"] = self._sign(record)
+        self._raw_records[relative] = record
+
     def register_answer_artifact(
         self,
         path: Path,
