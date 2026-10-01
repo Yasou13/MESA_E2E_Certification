@@ -18,6 +18,7 @@ from __future__ import annotations
 import hashlib
 import json
 import os
+import re
 import sqlite3
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -411,50 +412,149 @@ def _directory_manifest(dir_path: Path) -> tuple[str, list[dict[str, Any]]]:
     return f"sha256:{manifest_hash}", entries
 
 
+def _quote_ident(ident: str) -> str:
+    """Safely quote a SQLite identifier (table or column name)."""
+    return '"' + ident.replace('"', '""') + '"'
+
+
+def _canonical_sqlite_val(val: Any) -> Any:
+    """Canonicalize a SQLite cell value for deterministic JSON serialization."""
+    if isinstance(val, bytes):
+        return {"$blob": val.hex()}
+    if val is None or isinstance(val, (int, float, str)):
+        return val
+    raise StateProofError(f"unsupported SQLite value type: {type(val).__name__}")
+
+
+def _table_order_columns(cursor: sqlite3.Cursor, tbl: str) -> list[str]:
+    """Determine deterministic ordering columns for a table.
+
+    1. If explicit PRIMARY KEY columns exist, return them in PK ordinal order.
+    2. Otherwise, return all declared columns in declaration order.
+    3. If no columns are declared, fallback to 'rowid' if table supports rowid.
+    """
+    cursor.execute(f"PRAGMA table_info({_quote_ident(tbl)})")
+    cols_info = cursor.fetchall()
+    # cols_info items: (cid, name, type, notnull, dflt_value, pk)
+    # pk > 0 indicates PK column, and its value is the 1-based PK order
+    pk_cols = [
+        col[1]
+        for col in sorted([c for c in cols_info if c[5] > 0], key=lambda c: c[5])
+    ]
+    if pk_cols:
+        return pk_cols
+
+    all_cols = [col[1] for col in cols_info]
+    if all_cols:
+        return all_cols
+
+    is_without_rowid = False
+    try:
+        cursor.execute(f"PRAGMA table_list({_quote_ident(tbl)})")
+        for row in cursor.fetchall():
+            if len(row) >= 5 and row[1] == tbl:
+                is_without_rowid = bool(row[4])
+                break
+    except sqlite3.OperationalError:
+        cursor.execute(
+            "SELECT sql FROM sqlite_master WHERE type='table' AND name=?",
+            (tbl,),
+        )
+        sql_row = cursor.fetchone()
+        if sql_row and sql_row[0]:
+            is_without_rowid = bool(
+                re.search(r"\bWITHOUT\s+ROWID\b", sql_row[0], re.IGNORECASE)
+            )
+
+    if not is_without_rowid:
+        return ["rowid"]
+    return []
+
+
 def fingerprint_sqlite(sqlite_path: Path | str) -> StoreFingerprint:
-    """Compute deterministic SQLite table-level and file-level fingerprint."""
+    """Compute deterministic SQLite table-level and logical state fingerprint."""
     path = Path(sqlite_path)
     if not path.is_file():
         raise StateProofError(f"SQLite database file not found: {path}")
 
-    # Read-only connect
+    # Read-only connect with explicit snapshot isolation
     uri = f"file:{path.resolve().as_posix()}?mode=ro"
+    conn: sqlite3.Connection | None = None
     try:
         conn = sqlite3.connect(uri, uri=True, timeout=5.0)
+        conn.isolation_level = None
+        conn.execute("BEGIN DEFERRED")
         cursor = conn.cursor()
-        cursor.execute(
-            "SELECT name, sql FROM sqlite_master "
-            "WHERE type IN ('table', 'view', 'trigger', 'index') "
-            "AND name NOT LIKE 'sqlite_%' "
-            "ORDER BY name"
-        )
-        schema_rows = cursor.fetchall()
 
-        cursor.execute("PRAGMA schema_version")
-        schema_version = cursor.fetchone()[0]
+        try:
+            cursor.execute(
+                "SELECT name, sql FROM sqlite_master "
+                "WHERE type IN ('table', 'view', 'trigger', 'index') "
+                "AND name NOT LIKE 'sqlite_%' "
+                "ORDER BY name"
+            )
+            schema_rows = cursor.fetchall()
 
-        cursor.execute("PRAGMA data_version")
-        data_version = cursor.fetchone()[0]
+            cursor.execute("PRAGMA schema_version")
+            schema_version = cursor.fetchone()[0]
 
-        table_rows = {}
-        cursor.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
-        )
-        table_names = [r[0] for r in cursor.fetchall()]
+            cursor.execute("PRAGMA data_version")
+            data_version = cursor.fetchone()[0]
+
+            cursor.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' ORDER BY name"
+            )
+            table_names = [r[0] for r in cursor.fetchall()]
+        except Exception as exc:
+            raise StateProofError(
+                f"SQLite read-only fingerprinting failed (schema_metadata): {exc}"
+            ) from exc
+
+        table_rows: dict[str, dict[str, Any]] = {}
         for tbl in table_names:
-            cursor.execute(f"SELECT COUNT(*) FROM {tbl}")
-            count = cursor.fetchone()[0]
-            # Sample row content summary for tables under 10,000 rows
+            try:
+                cursor.execute(f"SELECT COUNT(*) FROM {_quote_ident(tbl)}")
+                count = cursor.fetchone()[0]
+            except Exception as exc:
+                raise StateProofError(
+                    f"SQLite read-only fingerprinting failed on table {tbl!r} (count): {exc}"
+                ) from exc
+
             row_hash = None
             if count <= 10000:
-                cursor.execute(f"SELECT * FROM {tbl} ORDER BY rowid")
-                rows_data = cursor.fetchall()
-                row_hash = hashlib.sha256(canonical_json_bytes(rows_data)).hexdigest()
+                try:
+                    order_cols = _table_order_columns(cursor, tbl)
+                    if order_cols:
+                        order_clause = ", ".join(_quote_ident(col) for col in order_cols)
+                        cursor.execute(
+                            f"SELECT * FROM {_quote_ident(tbl)} ORDER BY {order_clause}"
+                        )
+                    else:
+                        cursor.execute(f"SELECT * FROM {_quote_ident(tbl)}")
+                    raw_rows = cursor.fetchall()
+                    canonical_rows = [
+                        [_canonical_sqlite_val(val) for val in row]
+                        for row in raw_rows
+                    ]
+                    row_hash = hashlib.sha256(canonical_json_bytes(canonical_rows)).hexdigest()
+                except Exception as exc:
+                    raise StateProofError(
+                        f"SQLite read-only fingerprinting failed on table {tbl!r} (query_content): {exc}"
+                    ) from exc
+
             table_rows[tbl] = {"count": count, "content_hash": row_hash}
 
-        conn.close()
+    except StateProofError:
+        raise
     except Exception as exc:
         raise StateProofError(f"SQLite read-only fingerprinting failed: {exc}") from exc
+    finally:
+        if conn is not None:
+            try:
+                conn.rollback()
+            except Exception:
+                pass
+            conn.close()
 
     # File-level hashes for db and wal
     file_hashes = {"db": _file_sha256(path)}
@@ -462,18 +562,23 @@ def fingerprint_sqlite(sqlite_path: Path | str) -> StoreFingerprint:
     if wal_path.is_file() and wal_path.stat().st_size > 0:
         file_hashes["wal"] = _file_sha256(wal_path)
 
-    manifest = {
+    schema_hash = hashlib.sha256(canonical_json_bytes(schema_rows)).hexdigest()
+    logical_manifest = {
         "schema_version": schema_version,
         "data_version": data_version,
         "schema_items": len(schema_rows),
+        "schema_hash": schema_hash,
         "tables": table_rows,
+    }
+    digest = hashlib.sha256(canonical_json_bytes(logical_manifest)).hexdigest()
+    manifest_details = {
+        **logical_manifest,
         "files": file_hashes,
     }
-    digest = hashlib.sha256(canonical_json_bytes(manifest)).hexdigest()
     return StoreFingerprint(
         store_name="sqlite",
         fingerprint=f"sha256:{digest}",
-        manifest_details=manifest,
+        manifest_details=manifest_details,
     )
 
 
