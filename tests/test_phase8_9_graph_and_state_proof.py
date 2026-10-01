@@ -55,6 +55,12 @@ def _setup_mock_stores(tmp_path: Path) -> tuple[Path, Path, Path]:
         "CREATE TABLE dispatch_completion_receipts (receipt_id TEXT PRIMARY KEY)"
     )
     conn.execute("CREATE TABLE v4_idempotency_receipts (receipt_id TEXT PRIMARY KEY)")
+    conn.execute("CREATE TABLE nodes (id TEXT PRIMARY KEY, entity_name TEXT)")
+    conn.execute("INSERT INTO nodes VALUES ('n1', 'entity1')")
+    conn.execute(
+        "CREATE VIRTUAL TABLE nodes_fts USING fts5(entity_name, content='nodes', content_rowid='rowid')"
+    )
+    conn.execute("INSERT INTO nodes_fts(rowid, entity_name) VALUES (1, 'entity1')")
     conn.commit()
     conn.close()
     (tmp_path / ".mesa-single-writer.lock").write_text("owner=stopped\n")
