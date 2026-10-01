@@ -397,7 +397,10 @@ def test_large_table_content_is_hashed_and_same_count_mutation_is_visible(
     assert table["content_hash"] is not None
 
     conn = sqlite3.connect(db_path)
-    conn.execute("UPDATE large_items SET payload = 'mutated' WHERE id = 10_000")
+    conn.execute(
+        "UPDATE large_items SET payload = 'mutated' WHERE id = ?",
+        (10_000,),
+    )
     conn.commit()
     conn.close()
 
