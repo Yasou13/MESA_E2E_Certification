@@ -14,12 +14,16 @@ from harness.models import ExecutionStatus, GateResult, GateStatus
 
 REPOSITORY = Path(__file__).resolve().parents[1]
 GATE_CONFIG_PATH = REPOSITORY / "config" / "profile-b-gates.json"
+OFFICIAL_CONTRACT = json.loads(GATE_CONFIG_PATH.read_text(encoding="utf-8"))[
+    "official_contract"
+]
 
 
 def test_mandatory_gate_missing_definition_fails_validation() -> None:
     # A config where mandatory_gate_ids has B0, but gates only has B10
     raw = {
         "schema_version": "1.0",
+        "official_contract": OFFICIAL_CONTRACT,
         "mandatory_gate_ids": ["B0", "B10"],
         "gates": {
             "B10": {
@@ -39,6 +43,7 @@ def test_mandatory_gate_missing_definition_fails_validation() -> None:
 def test_extra_diagnostic_gate_is_allowed() -> None:
     raw = {
         "schema_version": "1.0",
+        "official_contract": OFFICIAL_CONTRACT,
         "mandatory_gate_ids": ["B10"],
         "gates": {
             "B10": {
@@ -66,6 +71,7 @@ def test_extra_diagnostic_gate_is_allowed() -> None:
 def test_duplicate_gate_id_fails_validation() -> None:
     raw = {
         "schema_version": "1.0",
+        "official_contract": OFFICIAL_CONTRACT,
         "mandatory_gate_ids": ["B10", "B10"],
         "gates": {
             "B10": {

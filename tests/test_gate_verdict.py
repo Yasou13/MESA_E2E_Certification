@@ -31,6 +31,56 @@ def _gate(
     )
 
 
+def test_b1_uses_canonical_resource_contract_at_exact_boundary() -> None:
+    config = load_gate_config(REPOSITORY / "config" / "profile-b-gates.json")
+    resources = config.official_contract.resources
+    result = evaluate_threshold_gate(
+        config.gates["B1"],
+        {
+            "ram_min_gb": resources.ram_min_gib,
+            "disk_min_gb": resources.disk_min_gib,
+            "isolated_storage_verified": True,
+        },
+        ExecutionStatus.COMPLETED,
+        ["environment-baseline.json#sha256=" + "a" * 64],
+    )
+
+    assert result.status is GateStatus.PASS
+    assert resources.ram_recommended_gib == 12
+    assert config.gates["B1"].requirements["ram_min_gb"].value == 8
+
+
+def test_b1_fails_just_below_canonical_ram_minimum() -> None:
+    config = load_gate_config(REPOSITORY / "config" / "profile-b-gates.json")
+    resources = config.official_contract.resources
+    result = evaluate_threshold_gate(
+        config.gates["B1"],
+        {
+            "ram_min_gb": resources.ram_min_gib - 0.001,
+            "disk_min_gb": resources.disk_min_gib,
+            "isolated_storage_verified": True,
+        },
+        ExecutionStatus.COMPLETED,
+        ["environment-baseline.json#sha256=" + "a" * 64],
+    )
+
+    assert result.status is GateStatus.FAIL
+    assert "ram_min_gb" in result.reason
+
+
+def test_b1_missing_ram_evidence_fails_closed() -> None:
+    config = load_gate_config(REPOSITORY / "config" / "profile-b-gates.json")
+    result = evaluate_threshold_gate(
+        config.gates["B1"],
+        {"disk_min_gb": 30, "isolated_storage_verified": True},
+        ExecutionStatus.COMPLETED,
+        ["environment-baseline.json#sha256=" + "a" * 64],
+    )
+
+    assert result.status is GateStatus.FAIL
+    assert result.reason == "missing_observed_metrics:ram_min_gb"
+
+
 @pytest.mark.parametrize(
     ("metric", "observed"),
     [

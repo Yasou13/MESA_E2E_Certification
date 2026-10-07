@@ -10,6 +10,7 @@ from harness.artifacts import CertifiedAnswerExecutionCapture, RunArtifactStore
 from harness.mesa_adapters import (
     MESAContractBlocker,
     MESAContractIntegrityError,
+    build_sealed_retrieval_context,
     normalize_context_response,
     normalize_search_response,
     require_phase7_scope_contract,
@@ -141,6 +142,63 @@ def test_phase1_empty_result_and_serialization_are_deterministic() -> None:
     second = _capture([])
     assert first.model_dump_json() == second.model_dump_json()
     assert first.results == []
+
+
+def test_sealed_top5_context_preserves_rank_and_candidate_identity() -> None:
+    rows = [
+        _result(assertion_id=f"assertion-{rank}", chunk_id=f"chunk-{rank}")
+        for rank in range(1, 6)
+    ]
+    context = build_sealed_retrieval_context(_capture(rows), token_budget=2048)
+
+    assert context.allowed_retrieval_evidence_ids == [
+        "chunk-1",
+        "chunk-2",
+        "chunk-3",
+        "chunk-4",
+        "chunk-5",
+    ]
+    assert context.context_evidence_ids == context.allowed_retrieval_evidence_ids
+    assert [row["rank"] for row in context.candidate_bindings] == [1, 2, 3, 4, 5]
+    assert context.candidate_bindings[4]["candidate_id"] == "assertion-5"
+
+
+def test_search_response_cannot_smuggle_rank_six_past_top5_contract() -> None:
+    rows = [
+        _result(assertion_id=f"assertion-{rank}", chunk_id=f"chunk-{rank}")
+        for rank in range(1, 7)
+    ]
+
+    with pytest.raises(MESAContractIntegrityError, match="retrieval limit"):
+        _capture(rows)
+
+
+def test_context_budget_rejection_is_explicit_and_cannot_expand_allowed_set() -> None:
+    capture = _capture([_result(assertion_id="assertion-1", chunk_id="chunk-1")])
+    context = build_sealed_retrieval_context(capture, token_budget=1)
+
+    assert context.allowed_retrieval_evidence_ids == ["chunk-1"]
+    assert context.context_evidence_ids == []
+    assert context.candidate_bindings[0]["included"] is False
+    assert context.candidate_bindings[0]["rejection_reason"] == "token_budget"
+
+
+def test_empty_retrieval_context_requires_and_preserves_frozen_scope() -> None:
+    capture = _capture([])
+
+    with pytest.raises(MESAContractIntegrityError, match="tenant scope"):
+        build_sealed_retrieval_context(capture, token_budget=2048)
+
+    context = build_sealed_retrieval_context(
+        capture,
+        token_budget=2048,
+        tenant_id="tenant-a",
+        agent_id="agent-a",
+    )
+    assert context.tenant_id == "tenant-a"
+    assert context.agent_id == "agent-a"
+    assert context.context_evidence_ids == []
+    assert context.candidate_bindings == []
 
 
 def test_phase1_rejects_source_version_and_sha_mismatch() -> None:

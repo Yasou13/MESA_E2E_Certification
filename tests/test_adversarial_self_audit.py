@@ -633,8 +633,14 @@ def test_a14_one_wrong_jsonl_row_among_valid_rows(tmp_path: Path) -> None:
 # A15: Missing mandatory gate definition
 # =========================================================================
 def test_a15_missing_mandatory_gate_definition() -> None:
+    canonical = json.loads(
+        (Path(__file__).resolve().parents[1] / "config" / "profile-b-gates.json").read_text(
+            encoding="utf-8"
+        )
+    )
     raw = {
         "schema_version": "1.0",
+        "official_contract": canonical["official_contract"],
         "mandatory_gate_ids": ["B0", "B10", "B99_UNREGISTERED"],
         "gates": {
             "B0": {"gate_id": "B0", "hard": True, "requirements": {"m": {"operator": "eq", "value": True}}},

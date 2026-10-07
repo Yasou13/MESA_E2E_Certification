@@ -13,7 +13,9 @@ from harness.qualification_runner import (
     QualificationConfig,
     QualificationRunnerError,
     run_profile_b_qualification,
+    _validate_official_provider_contract,
 )
+from harness.official_scoring import load_frozen_scoring_authority
 from harness.scope_collector import ScopeTestCase
 from tests.scope_fixture_support import frozen_scope_fixture_authority
 from tests.test_phase7_scope_collector import _mock_mesa_response
@@ -187,14 +189,28 @@ def _setup_test_repo(
         material_paths=materials,
         runtime_identities={
             "python": "3.13.12",
+            "embedding_authority": {
+                "provider": "openai_compatible",
+                "endpoint": "https://integrate.api.nvidia.com/v1",
+                "model": "nvidia/nemotron-3-embed-1b",
+                "dimension": 2048,
+                "document_input_type": "passage",
+                "query_input_type": "query",
+            },
+            "extraction_authority": {
+                "provider": "openai_compatible",
+                "model": "openai/gpt-oss-20b",
+                "language": "tr",
+                "minimum_max_tokens": 4096,
+            },
             "answer_authority": {
                 "provider": "openai_compatible",
                 "model": "openai/gpt-oss-20b",
                 "system_prompt_sha256": "0" * 64,
                 "answer_instruction_sha256": "0" * 64,
                 "request_parameters_sha256": "0" * 64,
-                "context_contract_version": "mesa-e2e.context.v1",
-                "source_context_contract": "GET /v4/sessions/{session_id}/context",
+                "context_contract_version": "mesa-e2e.context.v2",
+                "source_context_contract": "mesa-e2e.sealed-retrieval-context.v1",
             },
             "scoring_authority": {
                 "ground_truth_path": gt.relative_to(repo).as_posix(),
@@ -484,6 +500,82 @@ def _runner_config(
         mesa_base_url="http://127.0.0.1:9",
         mesa_api_key="test-only-key",
     )
+
+
+def test_official_provider_contract_matches_canonical_config(tmp_path: Path) -> None:
+    run_id = "RUN-PROVIDER-CONTRACT-PASS"
+    repo, fp, _cp, _sql, _lance, _kuzu = _setup_test_repo(
+        tmp_path, run_id=run_id
+    )
+    freeze = json.loads(fp.read_text(encoding="utf-8"))
+    authority = load_frozen_scoring_authority(
+        freeze_path=fp, repository_root=repo, run_id=run_id
+    )
+
+    _validate_official_provider_contract(freeze, authority)
+
+
+@pytest.mark.parametrize(
+    ("field", "bad_value"),
+    [
+        ("provider", "wrong-provider"),
+        ("model", "wrong-embedding"),
+        ("dimension", 1024),
+        ("document_input_type", "query"),
+        ("query_input_type", "passage"),
+        ("endpoint", "https://wrong-provider.invalid/v1"),
+    ],
+)
+def test_official_embedding_contract_drift_fails_closed(
+    tmp_path: Path, field: str, bad_value: object
+) -> None:
+    run_id = f"RUN-EMBED-DRIFT-{field}"
+    repo, fp, cp, _sql, _lance, _kuzu = _setup_test_repo(
+        tmp_path, run_id=run_id
+    )
+    freeze = json.loads(fp.read_text(encoding="utf-8"))
+    freeze["runtime_identities"]["embedding_authority"][field] = bad_value
+    _reseal_freeze(fp, cp, freeze)
+    authority = load_frozen_scoring_authority(
+        freeze_path=fp, repository_root=repo, run_id=run_id
+    )
+
+    with pytest.raises(QualificationRunnerError, match="embedding provider/model"):
+        _validate_official_provider_contract(freeze, authority)
+
+
+def test_official_answer_model_drift_fails_closed(tmp_path: Path) -> None:
+    run_id = "RUN-ANSWER-MODEL-DRIFT"
+    repo, fp, cp, _sql, _lance, _kuzu = _setup_test_repo(
+        tmp_path, run_id=run_id
+    )
+    freeze = json.loads(fp.read_text(encoding="utf-8"))
+    freeze["runtime_identities"]["answer_authority"]["model"] = "wrong-answer-model"
+    _reseal_freeze(fp, cp, freeze)
+    authority = load_frozen_scoring_authority(
+        freeze_path=fp, repository_root=repo, run_id=run_id
+    )
+
+    with pytest.raises(QualificationRunnerError, match="answer provider/model"):
+        _validate_official_provider_contract(freeze, authority)
+
+
+def test_official_extraction_contract_drift_fails_closed(tmp_path: Path) -> None:
+    run_id = "RUN-EXTRACTION-MODEL-DRIFT"
+    repo, fp, cp, _sql, _lance, _kuzu = _setup_test_repo(
+        tmp_path, run_id=run_id
+    )
+    freeze = json.loads(fp.read_text(encoding="utf-8"))
+    freeze["runtime_identities"]["extraction_authority"]["model"] = (
+        "wrong-extraction-model"
+    )
+    _reseal_freeze(fp, cp, freeze)
+    authority = load_frozen_scoring_authority(
+        freeze_path=fp, repository_root=repo, run_id=run_id
+    )
+
+    with pytest.raises(QualificationRunnerError, match="extraction provider/model"):
+        _validate_official_provider_contract(freeze, authority)
 
 
 def test_qualification_runner_missing_ground_truth_fails_closed(tmp_path: Path) -> None:

@@ -574,6 +574,20 @@ def _setup_happy_path_repo(
         material_paths=materials,
         runtime_identities={
             "python": "3.13.12",
+            "embedding_authority": {
+                "provider": "openai_compatible",
+                "endpoint": "https://integrate.api.nvidia.com/v1",
+                "model": "nvidia/nemotron-3-embed-1b",
+                "dimension": 2048,
+                "document_input_type": "passage",
+                "query_input_type": "query",
+            },
+            "extraction_authority": {
+                "provider": "openai_compatible",
+                "model": "openai/gpt-oss-20b",
+                "language": "tr",
+                "minimum_max_tokens": 4096,
+            },
             "answer_authority": {
                 "provider": "openai_compatible",
                 "model": "openai/gpt-oss-20b",
@@ -584,8 +598,8 @@ def _setup_happy_path_repo(
                     ANSWER_INSTRUCTION.encode("utf-8")
                 ).hexdigest(),
                 "request_parameters_sha256": hashlib.sha256(b"{}").hexdigest(),
-                "context_contract_version": "mesa-e2e.context.v1",
-                "source_context_contract": "GET /v4/sessions/{session_id}/context",
+                "context_contract_version": "mesa-e2e.context.v2",
+                "source_context_contract": "mesa-e2e.sealed-retrieval-context.v1",
             },
             "scoring_authority": {
                 "ground_truth_path": gt.relative_to(repo).as_posix(),
@@ -725,10 +739,10 @@ def test_official_runner_http_happy_path(
         assert req["session_id"] == native_session_id
         assert not req["session_id"].startswith("session-")
 
-    # 4. Context requests must have used the native session ID
-    assert len(server.context_requests) > 0
-    for req in server.context_requests:
-        assert req["session_id"] == native_session_id
+    # 4. Official answer context is derived locally from each sealed top-5.
+    # Only the two Phase-7 isolation probes may touch the independent context
+    # endpoint; the ten answer queries must not add a second retrieval chain.
+    assert len(server.context_requests) == 2
 
     # 5. Session was properly cleaned up via end_session
     assert native_session_id in server.ended_sessions

@@ -325,8 +325,8 @@ def test_freeze_drift_rejects_differing_retry_policy(tmp_path: Path):
         system_prompt_sha256=hashlib.sha256(b"sys").hexdigest(),
         answer_instruction_sha256=hashlib.sha256(b"inst").hexdigest(),
         request_parameters_sha256=hashlib.sha256(b"{}").hexdigest(),
-        context_contract_version="mesa-e2e.context.v1",
-        source_context_contract="GET /v4/sessions/{session_id}/context",
+        context_contract_version="mesa-e2e.context.v2",
+        source_context_contract="mesa-e2e.sealed-retrieval-context.v1",
     )
 
     # Freeze has transport_max_attempts = 2

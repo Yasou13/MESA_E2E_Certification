@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import datetime, timezone
 import json
 from pathlib import Path
@@ -394,6 +395,72 @@ def test_b6_missing_retry_counts_cannot_pass_canary(tmp_path: Path) -> None:
     assert result.observed["canary_passed"] is False
 
 
+def test_b6_hand_authored_committed_json_cannot_pass_official_mode(
+    tmp_path: Path,
+) -> None:
+    path = _sealed(
+        tmp_path,
+        "native-canary.json",
+        {
+            "publisher_component": "MESA_Data",
+            "publish_route": "/v4/memory/insert",
+            "diagnostic_bridge_used": False,
+            "mutation_state": "COMMITTED",
+            "source_chunk_id": "source-1",
+            "search_source_chunk_id": "source-1",
+            "logical_count_before_retry": 1,
+            "logical_count_after_retry": 1,
+        },
+    )
+
+    class RejectingAuthority:
+        def verify_derived_artifact(self, candidate: Path, artifact_type: str) -> None:
+            assert candidate == path
+            assert artifact_type == "native_canary"
+            raise ValueError("not registered to this execution")
+
+    official_ctx = replace(
+        _ctx(tmp_path),
+        execution_mode="official",
+        execution_session=RejectingAuthority(),
+    )
+    with pytest.raises(ProducerIntegrityError, match="not runner-owned"):
+        PRODUCTION_METRIC_PRODUCERS["B6"](official_ctx)
+
+
+def test_b6_authoritative_interface_receipt_allows_recomputed_observation(
+    tmp_path: Path,
+) -> None:
+    path = _sealed(
+        tmp_path,
+        "native-canary.json",
+        {
+            "publisher_component": "MESA_Data",
+            "publish_route": "/v4/memory/insert",
+            "diagnostic_bridge_used": False,
+            "mutation_state": "COMMITTED",
+            "source_chunk_id": "source-1",
+            "search_source_chunk_id": "source-1",
+            "logical_count_before_retry": 1,
+            "logical_count_after_retry": 1,
+        },
+    )
+
+    class FakeAuthoritativeInterface:
+        def verify_derived_artifact(self, candidate: Path, artifact_type: str) -> None:
+            assert candidate == path
+            assert artifact_type == "native_canary"
+
+    official_ctx = replace(
+        _ctx(tmp_path),
+        execution_mode="official",
+        execution_session=FakeAuthoritativeInterface(),
+    )
+    result = PRODUCTION_METRIC_PRODUCERS["B6"](official_ctx)
+
+    assert result.observed["canary_passed"] is True
+
+
 def test_b7_duplicate_planned_chunk_is_not_a_complete_mapping(tmp_path: Path) -> None:
     _sealed(
         tmp_path,
@@ -413,6 +480,65 @@ def test_b7_duplicate_planned_chunk_is_not_a_complete_mapping(tmp_path: Path) ->
 
     with pytest.raises(ProducerIntegrityError, match="duplicates"):
         PRODUCTION_METRIC_PRODUCERS["B7"](_ctx(tmp_path))
+
+
+@pytest.mark.parametrize(
+    ("gate_id", "name", "artifact_type", "payload"),
+    [
+        (
+            "B7",
+            "delivery-evidence.json",
+            "delivery_evidence",
+            {
+                "planned_source_chunk_ids": ["source-1"],
+                "deliveries": [
+                    {
+                        "source_chunk_id": "source-1",
+                        "terminal_state": "COMMITTED",
+                        "mesa_chunk_id": "mesa-1",
+                        "mutation_id": "mutation-1",
+                    }
+                ],
+            },
+        ),
+        (
+            "B8",
+            "restart-idempotency.json",
+            "restart_idempotency",
+            {
+                "before_restart_probe": {"fingerprint": "a" * 64},
+                "after_restart_probe": {"fingerprint": "a" * 64},
+                "restart_observed": True,
+                "logical_count_before_republish": 1,
+                "logical_count_after_republish": 1,
+                "stable_idempotency_key": True,
+                "republish_terminal_state": "ALREADY_COMMITTED",
+            },
+        ),
+    ],
+)
+def test_upstream_claims_require_current_runner_authority(
+    tmp_path: Path,
+    gate_id: str,
+    name: str,
+    artifact_type: str,
+    payload: dict,
+) -> None:
+    path = _sealed(tmp_path, name, payload)
+
+    class StaleOrForeignAuthority:
+        def verify_derived_artifact(self, candidate: Path, observed_type: str) -> None:
+            assert candidate == path
+            assert observed_type == artifact_type
+            raise ValueError("artifact belongs to another run")
+
+    official_ctx = replace(
+        _ctx(tmp_path),
+        execution_mode="official",
+        execution_session=StaleOrForeignAuthority(),
+    )
+    with pytest.raises(ProducerIntegrityError, match="not runner-owned"):
+        PRODUCTION_METRIC_PRODUCERS[gate_id](official_ctx)
 
 
 def test_b8_missing_counts_and_empty_probes_cannot_pass(tmp_path: Path) -> None:

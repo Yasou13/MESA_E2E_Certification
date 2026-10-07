@@ -1,5 +1,36 @@
 {
   "schema_version": "1.0",
+  "official_contract": {
+    "resources": {
+      "ram_min_gib": 8,
+      "ram_recommended_gib": 12,
+      "disk_min_gib": 30
+    },
+    "retrieval": {
+      "top_k": 5,
+      "answer_context_policy": "sealed_retrieval_top_k"
+    },
+    "providers": {
+      "embedding": {
+        "provider": "openai_compatible",
+        "endpoint": "https://integrate.api.nvidia.com/v1",
+        "model": "nvidia/nemotron-3-embed-1b",
+        "dimension": 2048,
+        "document_input_type": "passage",
+        "query_input_type": "query"
+      },
+      "extraction": {
+        "provider": "openai_compatible",
+        "model": "openai/gpt-oss-20b",
+        "language": "tr",
+        "minimum_max_tokens": 4096
+      },
+      "answer": {
+        "provider": "openai_compatible",
+        "model": "openai/gpt-oss-20b"
+      }
+    }
+  },
   "mandatory_gate_ids": [
     "B0",
     "B1",
@@ -34,9 +65,9 @@
       "name": "VM resource minimum and clean isolated run storage",
       "hard": true,
       "requirements": {
-        "disk_min_gb": {"operator": "gte", "value": 50},
+        "disk_min_gb": {"operator": "gte", "value": 30},
         "isolated_storage_verified": {"operator": "eq", "value": true},
-        "ram_min_gb": {"operator": "gte", "value": 32}
+        "ram_min_gb": {"operator": "gte", "value": 8}
       }
     },
     "B2": {

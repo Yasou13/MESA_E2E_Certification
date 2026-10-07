@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,10 @@ class FrozenScoringAuthority:
     request_parameters_sha256: str
     context_contract_version: str
     source_context_contract: str
+    retrieval_top_k: int = 5
+    answer_context_policy: str = "sealed_retrieval_top_k"
+    official_provider_contract: dict[str, Any] = field(default_factory=dict)
+    profile_contract_sha256: str = ""
 
 
 def _sha256(path: Path) -> str:
@@ -177,6 +181,35 @@ def load_frozen_scoring_authority(
     normalization_path, normalization_sha = resolve(
         "normalization_path", "normalization"
     )
+    contract_rel = "config/profile-b-gates.json"
+    contract_row = frozen_by_path.get(contract_rel)
+    if contract_row is None or contract_row[0] != "thresholds":
+        raise ScoringAuthorityUnavailable(
+            "canonical Profile B contract is not frozen as thresholds"
+        )
+    contract_path = (root / contract_rel).resolve()
+    if not contract_path.is_file() or _sha256(contract_path) != contract_row[1]:
+        raise OfficialScoringError(
+            "canonical Profile B contract is missing or differs from freeze"
+        )
+    try:
+        profile_contract = json.loads(contract_path.read_text(encoding="utf-8"))[
+            "official_contract"
+        ]
+        retrieval_contract = profile_contract["retrieval"]
+        provider_contract = profile_contract["providers"]
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise OfficialScoringError(
+            f"canonical Profile B contract is malformed: {exc}"
+        ) from exc
+    if (
+        not isinstance(retrieval_contract.get("top_k"), int)
+        or retrieval_contract["top_k"] <= 0
+        or retrieval_contract.get("answer_context_policy")
+        != "sealed_retrieval_top_k"
+        or not isinstance(provider_contract, dict)
+    ):
+        raise OfficialScoringError("canonical Profile B retrieval/provider contract is invalid")
     scorer_paths = tuple(
         (root / item["path"]).resolve()
         for item in materials
@@ -217,6 +250,10 @@ def load_frozen_scoring_authority(
         request_parameters_sha256=answer_authority["request_parameters_sha256"],
         context_contract_version=answer_authority["context_contract_version"],
         source_context_contract=answer_authority["source_context_contract"],
+        retrieval_top_k=retrieval_contract["top_k"],
+        answer_context_policy=retrieval_contract["answer_context_policy"],
+        official_provider_contract=provider_contract,
+        profile_contract_sha256=contract_row[1],
     )
 
 
@@ -317,6 +354,8 @@ def score_run_from_frozen_authority(
     answer_scores: list[dict[str, Any]] = []
     retrieval_identities: dict[str, tuple[str, tuple[str, ...]]] = {}
     answer_identities: dict[str, tuple[str, tuple[str, ...]]] = {}
+    retrieval_context_authority: dict[str, dict[str, Any]] = {}
+    answer_context_claims: dict[str, dict[str, Any]] = {}
     raw_manifest = raw_manifest or store.compute_raw_manifest()
     provider_exchanges: dict[str, tuple[dict[str, Any], str]] = {}
     for entry in raw_manifest["entries"]:
@@ -395,9 +434,9 @@ def score_run_from_frozen_authority(
                 raise OfficialScoringError(
                     "retrieval query differs from frozen GT question"
                 )
-            if request_payload.get("limit") != 5:
+            if request_payload.get("limit") != authority.retrieval_top_k:
                 raise OfficialScoringError(
-                    "official retrieval request limit must equal 5"
+                    "official retrieval request limit must equal frozen top_k"
                 )
             request_datasets = request_payload.get("dataset_ids")
             if (
@@ -446,6 +485,27 @@ def score_run_from_frozen_authority(
                     for result in capture.results
                 ]
                 score = score_retrieval(gt, scorer_results, identity_map)
+                retrieval_context_authority[str(query_id)] = {
+                    "retrieval_response_sha256": capture.response_sha256,
+                    "allowed_retrieval_evidence_ids": [
+                        result.mesa_chunk_id for result in capture.results
+                    ],
+                    "candidate_bindings": [
+                        {
+                            "rank": result.rank,
+                            "candidate_id": result.public_result_id,
+                            "evidence_id": result.matched_evidence_id,
+                            "assertion_id": result.matched_evidence_id,
+                            "source_chunk_id": result.mesa_chunk_id,
+                            "document_id": result.document_id,
+                            "retrieval_origins": result.debug_provenance.get(
+                                "origins", []
+                            ),
+                            "evidence_text": result.evidence_text,
+                        }
+                        for result in capture.results
+                    ],
+                }
                 if retrieval_identities[str(query_id)] != (
                     capture.session_id,
                     tuple(capture.dataset_ids),
@@ -514,6 +574,14 @@ def score_run_from_frozen_authority(
                 capture.session_id,
                 tuple(capture.dataset_ids),
             )
+            answer_context_claims[str(query_id)] = {
+                "retrieval_response_sha256": capture.retrieval_response_sha256,
+                "allowed_retrieval_evidence_ids": list(
+                    capture.allowed_retrieval_evidence_ids
+                ),
+                "context_evidence_ids": list(capture.context_evidence_ids),
+                "candidate_bindings": list(capture.context_candidate_bindings),
+            }
             score = score_answer(
                 gt,
                 answer,
@@ -534,6 +602,44 @@ def score_run_from_frozen_authority(
         if retrieval_identities.get(query_id) != answer_identities.get(query_id):
             raise OfficialScoringError(
                 f"retrieval/answer session or dataset identity mismatch: {query_id}"
+            )
+        retrieval_authority = retrieval_context_authority.get(query_id)
+        answer_claim = answer_context_claims.get(query_id)
+        if retrieval_authority is None or answer_claim is None:
+            raise OfficialScoringError(
+                f"retrieval/answer context authority is missing: {query_id}"
+            )
+        if (
+            answer_claim["retrieval_response_sha256"]
+            != retrieval_authority["retrieval_response_sha256"]
+            or answer_claim["allowed_retrieval_evidence_ids"]
+            != retrieval_authority["allowed_retrieval_evidence_ids"]
+        ):
+            raise OfficialScoringError(
+                f"answer context differs from sealed retrieval candidate set: {query_id}"
+            )
+        expected_bindings = retrieval_authority["candidate_bindings"]
+        observed_bindings = answer_claim["candidate_bindings"]
+        if len(observed_bindings) != len(expected_bindings):
+            raise OfficialScoringError(
+                f"answer context candidate provenance is incomplete: {query_id}"
+            )
+        for expected, observed in zip(expected_bindings, observed_bindings, strict=True):
+            if any(observed.get(key) != value for key, value in expected.items()):
+                raise OfficialScoringError(
+                    f"answer context candidate provenance differs from sealed retrieval: {query_id}"
+                )
+            if observed.get("included") is not True and observed.get(
+                "rejection_reason"
+            ) != "token_budget":
+                raise OfficialScoringError(
+                    f"answer context candidate rejection is unexplained: {query_id}"
+                )
+        if not set(answer_claim["context_evidence_ids"]).issubset(
+            retrieval_authority["allowed_retrieval_evidence_ids"]
+        ):
+            raise OfficialScoringError(
+                f"answer context evidence is outside sealed retrieval set: {query_id}"
             )
     if len(retrieval_ids) != len(retrieval_scores) or len(answer_ids) != len(
         answer_scores
