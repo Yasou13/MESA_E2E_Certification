@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import http.server
 import json
@@ -15,9 +14,8 @@ import uuid
 
 import pytest
 
-from harness.answer_execution import OpenAICompatibleHTTPTransport
 from harness.artifacts import RunArtifactStore
-from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
+from harness.freeze import create_contract_freeze
 from harness.graph_collector import execute_paired_graph_ablation
 from harness.identity import IdentityMap
 from harness.mesa_adapters import MESAContractIntegrityError
@@ -29,17 +27,10 @@ from harness.mesa_transport import (
 from harness.models import EvidenceGroup, GroundTruthItem, RequiredFact
 from harness.qualification_runner import (
     QualificationConfig,
-    QualificationResult,
     QualificationRunnerError,
     QualificationScope,
-    ScopeTestAuthority,
     run_profile_b_qualification,
 )
-from harness.scope_collector import (
-    build_canonical_scope_test_matrix,
-    collect_phase7_scope_isolation,
-)
-from harness.state_proof import establish_paired_state_stability
 from tests.scope_fixture_support import frozen_scope_fixture_authority
 
 MESA_SHA = "a" * 40
@@ -1292,7 +1283,6 @@ def test_runner_fails_closed_when_frozen_scope_test_authority_missing(
 
 def test_fake_session_bootstrap_fails_manifest_validation(tmp_path: Path) -> None:
     """Proves fake session bootstrap injected into raw tree is rejected during sealing."""
-    from harness.artifacts import RunArtifactStore
     from harness.execution_provenance import _begin_official_execution
     from harness.mesa_transport import MESATransportConfig, TrustedMESATransport
 

@@ -118,16 +118,18 @@ def load_frozen_scoring_authority(
         for field in required_answer
     ):
         raise OfficialScoringError("answer authority fields must be non-empty strings")
-    for field in (
+    for field_name in (
         "system_prompt_sha256",
         "answer_instruction_sha256",
         "request_parameters_sha256",
     ):
-        value = answer_authority[field]
+        value = answer_authority[field_name]
         if len(value) != 64 or any(
             character not in "0123456789abcdef" for character in value
         ):
-            raise OfficialScoringError(f"answer authority has invalid {field}")
+            raise OfficialScoringError(
+                f"answer authority has invalid {field_name}"
+            )
     required = {
         "ground_truth_path",
         "qrels_path",

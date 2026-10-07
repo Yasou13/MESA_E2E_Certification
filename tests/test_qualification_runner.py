@@ -2,20 +2,20 @@
 
 from __future__ import annotations
 
-import json
 import hashlib
+import json
 from pathlib import Path
 
 import pytest
 
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
+from harness.official_scoring import load_frozen_scoring_authority
 from harness.qualification_runner import (
     QualificationConfig,
     QualificationRunnerError,
-    run_profile_b_qualification,
     _validate_official_provider_contract,
+    run_profile_b_qualification,
 )
-from harness.official_scoring import load_frozen_scoring_authority
 from harness.scope_collector import ScopeTestCase
 from tests.scope_fixture_support import frozen_scope_fixture_authority
 from tests.test_phase7_scope_collector import _mock_mesa_response

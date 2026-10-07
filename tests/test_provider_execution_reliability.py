@@ -23,34 +23,25 @@ from harness.answer_execution import (
     ProviderRetryPolicy,
     ProviderSchemaValidationError,
     ProviderTemporaryServerError,
-    ProviderTransportConnectionError,
-    ProviderTransportError,
     ProviderTransportExhaustionError,
     ProviderTransportTimeoutError,
     _parse_openai_compatible_response,
-    classify_provider_response,
     execute_answer_and_persist,
     parse_retry_after,
 )
 from harness.artifacts import (
-    CertifiedAnswerExecutionCapture,
     RunArtifactStore,
-    _sha256_bytes,
     canonical_json_bytes,
 )
 from harness.execution_provenance import _begin_official_execution
-from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
 from harness.mesa_adapters import NormalizedContextCapture, normalize_context_response
 from harness.mesa_transport import MESATransportConfig, TrustedMESATransport
-from harness.models import AnswerResponse
 from harness.official_scoring import FrozenScoringAuthority
 from harness.qualification_runner import (
     QualificationConfig,
     QualificationRunnerError,
     _trusted_answer_transport,
-    _validate_static_preconditions,
 )
-from harness.transaction import CertificationTransaction, TransactionPhase
 
 NOW = datetime(2026, 10, 1, 12, 0, 0, tzinfo=timezone.utc)
 REPO = Path(__file__).resolve().parents[1]
@@ -1158,7 +1149,6 @@ def test_official_execution_session_registers_attempt_lineage(tmp_path: Path):
     )
 
     # Mock HTTP transport complete to fail once on timeout then succeed
-    orig_complete = http_transport.complete
     calls = 0
 
     def mock_complete(req):

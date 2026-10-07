@@ -10,7 +10,6 @@ from harness.answer_scorer import score_answer
 from harness.artifacts import (
     ArtifactOrderError,
     ImmutableArtifactError,
-    RunArtifactStore,
 )
 from harness.evidence import build_evidence_index, validate_run_id_consistency
 from harness.finalizer import finalize_release, ReleaseFinalizationError
@@ -19,13 +18,9 @@ from harness.freeze import (
     verify_contract_freeze,
     FreezeStatus,
     MANDATORY_MATERIAL_CATEGORIES,
-    MANDATORY_REPOSITORIES,
 )
 from harness.gates import (
     GateConfig,
-    GateDefinition,
-    evaluate_threshold_gate,
-    load_gate_config,
 )
 from harness.models import (
     AnswerClaim,
@@ -47,7 +42,7 @@ from harness.transaction import (
     CertificationTransaction,
     TransactionError,
 )
-from harness.verdict import derive_production_verdict, evaluate_final_verdict
+from harness.verdict import evaluate_final_verdict
 
 
 RUN_ID = "RUN-20260925T150000Z-audit"

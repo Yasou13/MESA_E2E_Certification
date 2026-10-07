@@ -296,7 +296,7 @@ class _Transport:
 def test_phase10_exact_provider_boundary_capture_is_sealed(tmp_path) -> None:
     store = RunArtifactStore(tmp_path / RUN_ID, RUN_ID)
     store.initialize()
-    capture = execute_answer_and_persist(
+    execute_answer_and_persist(
         store=store,
         context=_context(),
         question="question",

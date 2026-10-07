@@ -37,3 +37,12 @@ See `../agent-pack/13_BENCHMARK_CONFIG_FREEZE.md` for the authoritative policy.
 from the agent pack and lists the complete mandatory B0–B14 gate set. B12
 remains hard under the current repository contract. Any future change to that
 methodology requires an explicit human decision and a new pre-run freeze.
+
+The same file is the canonical machine-readable Profile B contract for:
+
+- the 8 GiB hard RAM minimum, 12 GiB recommended RAM, and 30 GiB disk minimum;
+- the sealed top-5 retrieval set used to construct official answer context;
+- the selected embedding, extraction, and answer provider/model identities.
+
+The recommended RAM value is operational guidance, not a harder B1 threshold.
+Gate loading fails if B1 drifts from the canonical resource values.

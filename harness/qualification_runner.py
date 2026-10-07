@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import hashlib
 import json
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,14 +21,14 @@ from harness.freeze import FreezeStatus, verify_contract_freeze
 from harness.graph_collector import execute_paired_graph_ablation
 from harness.gt_governance import load_ground_truth, validate_ground_truth
 from harness.identity import IdentityMap, UnknownIdentityError
+from harness.mesa_adapters import (
+    build_sealed_retrieval_context,
+    normalize_search_response,
+)
 from harness.mesa_transport import (
     MESATransportConfig,
     MESATransportError,
     TrustedMESATransport,
-)
-from harness.mesa_adapters import (
-    build_sealed_retrieval_context,
-    normalize_search_response,
 )
 from harness.models import GroundTruthItem
 from harness.official_scoring import (
