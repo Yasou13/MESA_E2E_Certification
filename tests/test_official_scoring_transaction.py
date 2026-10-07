@@ -11,7 +11,11 @@ import pytest
 from harness.answer_execution import execute_answer_and_persist
 from harness.artifacts import RunArtifactStore
 from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
-from harness.mesa_adapters import normalize_context_response
+from harness.mesa_adapters import (
+    build_sealed_retrieval_context,
+    normalize_context_response,
+    normalize_search_response,
+)
 from harness.metric_producers import write_sealed_measurement
 from harness.models import GateStatus
 from harness.transaction import CertificationTransaction, TransactionError
@@ -225,8 +229,8 @@ def _authority_freeze(tmp_path: Path):
                         separators=(",", ":"),
                     ).encode("utf-8")
                 ).hexdigest(),
-                "context_contract_version": "mesa-e2e.context.v1",
-                "source_context_contract": "GET /v4/sessions/{session_id}/context",
+                "context_contract_version": "mesa-e2e.context.v2",
+                "source_context_contract": "mesa-e2e.sealed-retrieval-context.v1",
             },
             "scoring_authority": {
                 "ground_truth_path": gt.relative_to(repo).as_posix(),
@@ -289,6 +293,8 @@ def _run_to_scoring(
     answer_model="openai/gpt-oss-20b",
     retrieval_query="Question?",
     context_dataset="dataset-1",
+    retrieval_chunk="mesa-chunk-1",
+    independent_context=False,
 ):
     repo, freeze_path, checksum_path, shas, qrels = _authority_freeze(tmp_path)
     run_dir = tmp_path / RUN_ID
@@ -303,40 +309,56 @@ def _run_to_scoring(
 
     def raw_builder(path: Path):
         store = RunArtifactStore(path, RUN_ID)
+        retrieval_request = {
+            "session_id": "session-1",
+            "dataset_ids": ["dataset-1"],
+            "query": retrieval_query,
+            "limit": 5,
+        }
+        retrieval_response = _mesa_response(chunk_id=retrieval_chunk)
         store.persist_raw_retrieval(
             query_id="Q-1",
-            request={
-                "session_id": "session-1",
-                "dataset_ids": ["dataset-1"],
-                "query": retrieval_query,
-                "limit": 5,
-            },
-            response=_mesa_response(),
+            request=retrieval_request,
+            response=retrieval_response,
             transport_status=200,
             timestamp_utc=NOW,
             latency_ms=1,
             runtime_lock_sha256="0" * 64,
         )
         if answer:
-            context = normalize_context_response(
+            retrieval_capture = normalize_search_response(
                 run_id=RUN_ID,
                 query_id="Q-1",
-                response={
-                    "tenant_id": "tenant-1",
-                    "agent_id": "agent-1",
-                    "session_id": "session-1",
-                    "dataset_ids": [context_dataset],
-                    "context": "Exact legal fact",
-                    "canonical_memories": [
-                        {
-                            "source_chunk_id": "mesa-chunk-1",
-                            "evidence_id": "assertion-1",
-                        }
-                    ],
-                },
+                request=retrieval_request,
+                response=retrieval_response,
                 api_version="v4",
                 mesa_sha=MESA_SHA,
             )
+            context = build_sealed_retrieval_context(
+                retrieval_capture, token_budget=2048
+            )
+            if independent_context:
+                context = normalize_context_response(
+                    run_id=RUN_ID,
+                    query_id="Q-1",
+                    response={
+                        "tenant_id": "tenant-1",
+                        "agent_id": "agent-1",
+                        "session_id": "session-1",
+                        "dataset_ids": [context_dataset],
+                        "context": "Exact legal fact",
+                        "canonical_memories": [
+                            {
+                                "source_chunk_id": "mesa-chunk-1",
+                                "evidence_id": "assertion-1",
+                            }
+                        ],
+                    },
+                    api_version="v4",
+                    mesa_sha=MESA_SHA,
+                )
+            elif context_dataset != "dataset-1":
+                context = context.model_copy(update={"dataset_ids": [context_dataset]})
             execute_answer_and_persist(
                 store=store,
                 context=context,
@@ -421,6 +443,20 @@ def test_retrieval_query_must_equal_frozen_gt_question(tmp_path: Path) -> None:
 def test_answer_context_scope_must_match_retrieval_scope(tmp_path: Path) -> None:
     tx, _ = _run_to_scoring(tmp_path, context_dataset="other-dataset")
     with pytest.raises(TransactionError, match="session or dataset identity mismatch"):
+        tx.execute_scoring()
+
+
+def test_independent_context_cannot_rescue_a_sealed_top5_miss(tmp_path: Path) -> None:
+    tx, _ = _run_to_scoring(
+        tmp_path,
+        retrieval_chunk="mesa-chunk-2",
+        independent_context=True,
+    )
+
+    with pytest.raises(
+        TransactionError,
+        match="provider/prompt/context identity differs from freeze|sealed retrieval candidate set",
+    ):
         tx.execute_scoring()
 
 

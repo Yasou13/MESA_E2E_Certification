@@ -2,10 +2,10 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
 import hashlib
 import json
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -21,12 +21,15 @@ from harness.freeze import FreezeStatus, verify_contract_freeze
 from harness.graph_collector import execute_paired_graph_ablation
 from harness.gt_governance import load_ground_truth, validate_ground_truth
 from harness.identity import IdentityMap, UnknownIdentityError
+from harness.mesa_adapters import (
+    build_sealed_retrieval_context,
+    normalize_search_response,
+)
 from harness.mesa_transport import (
     MESATransportConfig,
     MESATransportError,
     TrustedMESATransport,
 )
-from harness.mesa_adapters import normalize_context_response
 from harness.models import GroundTruthItem
 from harness.official_scoring import (
     FrozenScoringAuthority,
@@ -392,6 +395,62 @@ def _trusted_answer_transport(
         ) from exc
 
 
+def _validate_official_provider_contract(
+    freeze: dict[str, Any],
+    authority: FrozenScoringAuthority,
+) -> None:
+    try:
+        provider_contract = authority.official_provider_contract
+        runtime = freeze["runtime_identities"]
+        embedding_runtime = runtime["embedding_authority"]
+        extraction_runtime = runtime["extraction_authority"]
+    except (KeyError, TypeError) as exc:
+        raise QualificationRunnerError(
+            f"official Profile B provider contract is incomplete: {exc}"
+        ) from exc
+
+    expected_answer = provider_contract["answer"]
+    if (
+        authority.answer_provider != expected_answer["provider"]
+        or authority.answer_model != expected_answer["model"]
+    ):
+        raise QualificationRunnerError(
+            "frozen answer provider/model differs from official Profile B contract"
+        )
+
+    expected_embedding = provider_contract["embedding"]
+    embedding_fields = {
+        "provider": expected_embedding["provider"],
+        "endpoint": expected_embedding["endpoint"],
+        "model": expected_embedding["model"],
+        "dimension": expected_embedding["dimension"],
+        "document_input_type": expected_embedding["document_input_type"],
+        "query_input_type": expected_embedding["query_input_type"],
+    }
+    if any(
+        embedding_runtime.get(key) != value
+        for key, value in embedding_fields.items()
+    ):
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract"
+        )
+
+    expected_extraction = provider_contract["extraction"]
+    extraction_fields = {
+        "provider": expected_extraction["provider"],
+        "model": expected_extraction["model"],
+        "language": expected_extraction["language"],
+        "minimum_max_tokens": expected_extraction["minimum_max_tokens"],
+    }
+    if any(
+        extraction_runtime.get(key) != value
+        for key, value in extraction_fields.items()
+    ):
+        raise QualificationRunnerError(
+            "frozen extraction provider/model contract differs from official Profile B contract"
+        )
+
+
 def _load_frozen_scope_authority(
     freeze: dict[str, Any],
     identity_map: IdentityMap,
@@ -740,6 +799,7 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
         identity_map,
     ) = _load_required_scoring_authority(config)
     scope, test_scope_authority = _load_frozen_scope_authority(freeze, identity_map)
+    _validate_official_provider_contract(freeze, authority)
     if config.qualification_scope is not None and config.qualification_scope != scope:
         raise QualificationRunnerError(
             "caller-provided qualification_scope contradicts frozen qualification authority"
@@ -855,7 +915,7 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                         "session_id": native_session_id,
                         "dataset_ids": [primary_dataset],
                         "query": item.question,
-                        "limit": 5,
+                        "limit": authority.retrieval_top_k,
                     }
                     receipt = transport.search(request)
                     raw_path = store.persist_raw_retrieval(
@@ -875,36 +935,38 @@ def run_profile_b_qualification(config: QualificationConfig) -> QualificationRes
                         response=receipt.payload,
                         collector="harness.qualification_runner.retrieval",
                     )
+                    retrieval_capture = normalize_search_response(
+                        run_id=config.run_id,
+                        query_id=item.query_id,
+                        request=request,
+                        response=receipt.payload,
+                        api_version=config.api_version,
+                        mesa_sha=mesa_sha,
+                    )
                     context_request = {
-                        "query": item.question,
+                        "retrieval_response_sha256": retrieval_capture.response_sha256,
+                        "allowed_policy": authority.answer_context_policy,
                         "token_budget": 2048,
                     }
-                    context_receipt = transport.call_endpoint(
-                        f"GET /v4/sessions/{native_session_id}/context",
-                        context_request,
+                    context_capture = build_sealed_retrieval_context(
+                        retrieval_capture,
+                        token_budget=context_request["token_budget"],
+                        tenant_id=scope.tenant_id,
+                        agent_id=scope.agent_id,
                     )
                     context_path = store.persist_raw_context(
                         query_id=item.query_id,
                         request=context_request,
-                        response=context_receipt.payload,
-                        transport_status=context_receipt.status_code,
+                        response=context_capture.model_dump(mode="json"),
+                        transport_status=200,
                         timestamp_utc=datetime.now(timezone.utc),
-                        latency_ms=context_receipt.latency_ms,
+                        latency_ms=0.0,
                         execution_id=execution_session.execution_id,
                     )
-                    execution_session.register_transport_artifact(
+                    execution_session.register_candidate_context_artifact(
                         context_path,
-                        receipt=context_receipt,
-                        request=context_request,
-                        response=context_receipt.payload,
-                        collector="harness.qualification_runner.context",
-                    )
-                    context_capture = normalize_context_response(
-                        run_id=config.run_id,
-                        query_id=item.query_id,
-                        response=context_receipt.payload,
-                        api_version=config.api_version,
-                        mesa_sha=mesa_sha,
+                        retrieval_raw_path=raw_path,
+                        collector="harness.mesa_adapters.build_sealed_retrieval_context",
                     )
                     execute_answer_and_persist(
                         store=store,

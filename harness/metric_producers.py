@@ -66,6 +66,19 @@ def _sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def _official_contract(ctx: ProducerContext) -> dict[str, Any]:
+    try:
+        payload = json.loads(ctx.gate_config_path.read_text(encoding="utf-8"))
+        contract = payload["official_contract"]
+    except (OSError, UnicodeError, json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise ProducerIntegrityError(
+            f"canonical Profile B contract is unavailable: {exc}"
+        ) from exc
+    if not isinstance(contract, dict):
+        raise ProducerIntegrityError("canonical Profile B contract must be an object")
+    return contract
+
+
 def _evidence(path: Path, run_dir: Path) -> str:
     return f"{path.relative_to(run_dir).as_posix()}#sha256={_sha256(path)}"
 
@@ -330,6 +343,23 @@ def _completed(
     )
 
 
+def _require_official_runner_owned(
+    ctx: ProducerContext, path: Path, artifact_type: str
+) -> None:
+    if ctx.execution_mode != "official":
+        return
+    if ctx.execution_session is None:
+        raise ProducerIntegrityError(
+            f"{artifact_type} lacks active official execution authority"
+        )
+    try:
+        ctx.execution_session.verify_derived_artifact(path, artifact_type)
+    except Exception as exc:
+        raise ProducerIntegrityError(
+            f"{artifact_type} is not runner-owned authoritative evidence: {exc}"
+        ) from exc
+
+
 def _b0(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "baseline-evidence.json")
     repositories = data.get("repositories")
@@ -422,6 +452,13 @@ def _b1(ctx: ProducerContext) -> ProducerObservation:
 
 def _b2(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "provider-canary.json")
+    providers = _official_contract(ctx).get("providers")
+    if not isinstance(providers, dict):
+        raise ProducerIntegrityError("canonical provider contract is missing")
+    embedding = providers.get("embedding")
+    extraction_contract = providers.get("extraction")
+    if not isinstance(embedding, dict) or not isinstance(extraction_contract, dict):
+        raise ProducerIntegrityError("canonical embedding/extraction contract is missing")
     document = data.get("document_embedding")
     query = data.get("query_embedding")
     if not isinstance(document, list) or not isinstance(query, list):
@@ -430,18 +467,18 @@ def _b2(ctx: ProducerContext) -> ProducerObservation:
         isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
         for v in [*document, *query]
     )
-    dim = len(document) == len(query) == 2048
+    dim = len(document) == len(query) == embedding.get("dimension")
     asymmetric = (
         document != query
-        and data.get("document_input_type") == "passage"
-        and data.get("query_input_type") == "query"
+        and data.get("document_input_type") == embedding.get("document_input_type")
+        and data.get("query_input_type") == embedding.get("query_input_type")
     )
     request_ids = data.get("provider_request_ids")
     real = (
-        data.get("provider") == "openai_compatible"
-        and data.get("endpoint") == "https://integrate.api.nvidia.com/v1"
-        and data.get("embedding_model") == "nvidia/nemotron-3-embed-1b"
-        and data.get("extraction_model") == "openai/gpt-oss-20b"
+        data.get("provider") == embedding.get("provider")
+        and data.get("endpoint") == embedding.get("endpoint")
+        and data.get("embedding_model") == embedding.get("model")
+        and data.get("extraction_model") == extraction_contract.get("model")
         and isinstance(request_ids, list)
         and bool(request_ids)
         and all(isinstance(item, str) and item for item in request_ids)
@@ -479,18 +516,22 @@ def _b3(ctx: ProducerContext) -> ProducerObservation:
     ):
         raise ProducerIntegrityError("B3 parity maps are missing")
     parity = intended == container == effective
+    providers = _official_contract(ctx)["providers"]
+    embedding = providers["embedding"]
+    extraction = providers["extraction"]
     canonical = {
         "MESA_MODEL_ENABLED": True,
         "MESA_TIER3_MODE": 0,
         "MESA_EXTERNAL_PROVIDER_ENABLED": True,
-        "MESA_EXTERNAL_EMBEDDING_MODEL": "nvidia/nemotron-3-embed-1b",
-        "MESA_EMBEDDING_DIMENSION": 2048,
-        "MESA_EXTRACTION_MODEL": "openai/gpt-oss-20b",
-        "MESA_EXTRACTION_LANG": "tr",
+        "MESA_EXTERNAL_EMBEDDING_MODEL": embedding["model"],
+        "MESA_EMBEDDING_DIMENSION": embedding["dimension"],
+        "MESA_EXTRACTION_MODEL": extraction["model"],
+        "MESA_EXTRACTION_LANG": extraction["language"],
     }
     frozen = (
         all(effective.get(key) == value for key, value in canonical.items())
-        and effective.get("MESA_EXTRACTION_MAX_TOKENS", 0) >= 4096
+        and effective.get("MESA_EXTRACTION_MAX_TOKENS", 0)
+        >= extraction["minimum_max_tokens"]
     )
     return _completed(
         "B3",
@@ -502,6 +543,7 @@ def _b3(ctx: ProducerContext) -> ProducerObservation:
 
 def _b4(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "corpus-integrity.json")
+    _require_official_runner_owned(ctx, path, "corpus_integrity")
     items = data.get("items")
     if not isinstance(items, list) or not items:
         raise ProducerIntegrityError("B4 corpus items are missing")
@@ -543,6 +585,26 @@ def _b4(ctx: ProducerContext) -> ProducerObservation:
 
 def _b5(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "human-approval.json")
+    if ctx.execution_mode == "official":
+        try:
+            freeze = json.loads(ctx.freeze_path.read_text(encoding="utf-8"))
+            expected_approval_hash = freeze["runtime_identities"][
+                "upstream_authority"
+            ]["human_approval_sha256"]
+        except (
+            OSError,
+            UnicodeError,
+            json.JSONDecodeError,
+            KeyError,
+            TypeError,
+        ) as exc:
+            raise ProducerIntegrityError(
+                "B5 frozen human-approval authority is unavailable"
+            ) from exc
+        if expected_approval_hash != _sha256(path):
+            raise ProducerIntegrityError(
+                "B5 human approval differs from frozen external authority"
+            )
     release_hash = data.get("release_manifest_sha256")
     selected_hash = data.get("selected_versions_manifest_sha256")
     h1a = data.get("h1a_literal_decision", "")
@@ -580,6 +642,7 @@ def _b5(ctx: ProducerContext) -> ProducerObservation:
 
 def _b6(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "native-canary.json")
+    _require_official_runner_owned(ctx, path, "native_canary")
     native = (
         data.get("publisher_component") == "MESA_Data"
         and data.get("publish_route") == "/v4/memory/insert"
@@ -606,6 +669,7 @@ def _b6(ctx: ProducerContext) -> ProducerObservation:
 
 def _b7(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "delivery-evidence.json")
+    _require_official_runner_owned(ctx, path, "delivery_evidence")
     planned, delivered = data.get("planned_source_chunk_ids"), data.get("deliveries")
     if not isinstance(planned, list) or not isinstance(delivered, list) or not planned:
         raise ProducerIntegrityError("B7 delivery populations are missing")
@@ -645,6 +709,7 @@ def _b7(ctx: ProducerContext) -> ProducerObservation:
 
 def _b8(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "restart-idempotency.json")
+    _require_official_runner_owned(ctx, path, "restart_idempotency")
     before, after = data.get("before_restart_probe"), data.get("after_restart_probe")
     persistence = (
         isinstance(before, dict)

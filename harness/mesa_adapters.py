@@ -18,8 +18,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 MESA_SEARCH_CONTRACT = "POST /v4/memory/search"
 MESA_CONTEXT_CONTRACT = "GET /v4/sessions/{session_id}/context"
+SEALED_RETRIEVAL_CONTEXT_CONTRACT = "mesa-e2e.sealed-retrieval-context.v1"
 NORMALIZED_RETRIEVAL_SCHEMA = "mesa-e2e.retrieval.v1"
 NORMALIZED_CONTEXT_SCHEMA = "mesa-e2e.context.v1"
+SEALED_RETRIEVAL_CONTEXT_SCHEMA = "mesa-e2e.context.v2"
 _GIT_SHA = re.compile(r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
 
 
@@ -152,6 +154,7 @@ class NormalizedRetrievalCapture(BaseModel):
     session_id: str
     dataset_ids: list[str]
     query: str
+    retrieval_limit: int = Field(gt=0)
     response_sha256: str
     results: list[NormalizedRetrievalResult]
     scope_audit: NormalizedScopeAudit | None = None
@@ -175,6 +178,9 @@ class NormalizedContextCapture(BaseModel):
     context_evidence_ids: list[str]
     context_sha256: str
     canonical_memories_sha256: str
+    retrieval_response_sha256: str
+    allowed_retrieval_evidence_ids: list[str]
+    candidate_bindings: list[dict[str, Any]]
 
 
 def _validate_contract_identity(*, api_version: str, mesa_sha: str) -> None:
@@ -308,6 +314,17 @@ def normalize_search_response(
     if request.get("session_id") != session_id:
         raise MESAContractIntegrityError("request/response session_id mismatch")
     query = _nonempty(request.get("query"), "request.query")
+    retrieval_limit = request.get("limit")
+    if (
+        isinstance(retrieval_limit, bool)
+        or not isinstance(retrieval_limit, int)
+        or retrieval_limit <= 0
+    ):
+        raise MESAContractIntegrityError("request.limit must be a positive integer")
+    if len(response["results"]) > retrieval_limit:
+        raise MESAContractIntegrityError(
+            "MESA search response exceeds the requested retrieval limit"
+        )
     response_datasets = response.get("dataset_ids")
     if not isinstance(response_datasets, list) or not response_datasets:
         raise MESAContractIntegrityError("response.dataset_ids must be non-empty")
@@ -515,6 +532,7 @@ def normalize_search_response(
         session_id=session_id,
         dataset_ids=list(response_datasets),
         query=query,
+        retrieval_limit=retrieval_limit,
         response_sha256=hashlib.sha256(_canonical_bytes(response)).hexdigest(),
         results=normalized,
         scope_audit=scope_audit_model,
@@ -625,4 +643,128 @@ def normalize_context_response(
         canonical_memories_sha256=hashlib.sha256(
             _canonical_bytes(memories)
         ).hexdigest(),
+        retrieval_response_sha256=hashlib.sha256(
+            _canonical_bytes(memories)
+        ).hexdigest(),
+        allowed_retrieval_evidence_ids=list(evidence_ids),
+        candidate_bindings=[
+            {
+                "rank": index,
+                "source_chunk_id": source_chunk_id,
+                "included": True,
+                "rejection_reason": None,
+            }
+            for index, source_chunk_id in enumerate(evidence_ids, start=1)
+        ],
+    )
+
+
+def build_sealed_retrieval_context(
+    capture: NormalizedRetrievalCapture,
+    *,
+    token_budget: int,
+    tenant_id: str | None = None,
+    agent_id: str | None = None,
+) -> NormalizedContextCapture:
+    """Build official answer context only from the sealed ranked retrieval capture.
+
+    The formatting is deterministic and the budget is enforced conservatively at
+    four UTF-8 bytes per token.  Every ranked candidate remains in the
+    provenance table even when the context budget rejects it.
+    """
+
+    if token_budget <= 0:
+        raise MESAContractIntegrityError("context token_budget must be positive")
+    result_tenants = {result.scope.tenant_id for result in capture.results}
+    result_agents = {
+        result.scope.agent_id
+        for result in capture.results
+        if result.scope.agent_id is not None
+    }
+    if len(result_tenants) > 1 or (
+        tenant_id is not None and result_tenants and result_tenants != {tenant_id}
+    ):
+        raise MESAContractIntegrityError(
+            "retrieval candidate tenant scope contradicts answer context scope"
+        )
+    if len(result_agents) > 1 or (
+        agent_id is not None and result_agents and result_agents != {agent_id}
+    ):
+        raise MESAContractIntegrityError(
+            "retrieval candidate agent scope contradicts answer context scope"
+        )
+    resolved_tenant = tenant_id or next(iter(result_tenants), None)
+    resolved_agent = agent_id or next(iter(result_agents), "NO_AGENT")
+    if not resolved_tenant:
+        raise MESAContractIntegrityError(
+            "answer context tenant scope must be explicit when retrieval has no candidates"
+        )
+    max_bytes = token_budget * 4
+    rendered: list[str] = []
+    bindings: list[dict[str, Any]] = []
+    included_ids: list[str] = []
+    used_bytes = 0
+
+    for result in capture.results:
+        origins = result.debug_provenance.get("origins", [])
+        if not isinstance(origins, list) or any(
+            not isinstance(origin, str) or not origin for origin in origins
+        ):
+            raise MESAContractIntegrityError(
+                f"retrieval candidate at rank {result.rank} has invalid origins"
+            )
+        block_payload = {
+            "rank": result.rank,
+            "candidate_id": result.public_result_id,
+            "evidence_id": result.matched_evidence_id,
+            "assertion_id": result.matched_evidence_id,
+            "source_chunk_id": result.mesa_chunk_id,
+            "document_id": result.document_id,
+            "retrieval_origins": origins,
+            "evidence_text": result.evidence_text,
+        }
+        block = json.dumps(
+            block_payload,
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+            allow_nan=False,
+        )
+        separator_bytes = 1 if rendered else 0
+        block_bytes = len(block.encode("utf-8")) + separator_bytes
+        included = used_bytes + block_bytes <= max_bytes
+        if included:
+            rendered.append(block)
+            included_ids.append(result.mesa_chunk_id)
+            used_bytes += block_bytes
+        bindings.append(
+            {
+                **block_payload,
+                "included": included,
+                "rejection_reason": None if included else "token_budget",
+            }
+        )
+
+    exact_context = "\n".join(rendered)
+    allowed_ids = [result.mesa_chunk_id for result in capture.results]
+    return NormalizedContextCapture(
+        schema_version=SEALED_RETRIEVAL_CONTEXT_SCHEMA,
+        run_id=capture.run_id,
+        query_id=capture.query_id,
+        source_contract=SEALED_RETRIEVAL_CONTEXT_CONTRACT,
+        source_api_version=capture.source_api_version,
+        mesa_sha=capture.mesa_sha,
+        tenant_id=resolved_tenant,
+        agent_id=resolved_agent,
+        session_id=capture.session_id,
+        dataset_ids=list(capture.dataset_ids),
+        exact_model_visible_context=exact_context,
+        context_evidence_ids=included_ids,
+        context_sha256=hashlib.sha256(exact_context.encode("utf-8")).hexdigest(),
+        canonical_memories_sha256=hashlib.sha256(
+            _canonical_bytes(bindings)
+        ).hexdigest(),
+        retrieval_response_sha256=capture.response_sha256,
+        allowed_retrieval_evidence_ids=allowed_ids,
+        candidate_bindings=bindings,
     )

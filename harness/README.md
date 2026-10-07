@@ -13,6 +13,12 @@ This directory owns deterministic certification code: runners, validators, score
 - The same LLM being tested must never be the sole judge of its own correctness.
 - Every scorer must have small deterministic unit tests before the final run.
 
+For the official Profile B path, the answer-visible context is built
+deterministically from the sealed top-5 retrieval response. Each candidate is
+bound by rank, candidate/evidence/chunk/document identity, origin, text, and a
+budget inclusion decision. An independent session-context lookup is not an
+allowed source for answer evidence.
+
 A harness/scorer change after a run starts invalidates that run.
 
 ## Reproducible developer entrypoints
@@ -33,6 +39,11 @@ New runs use separate `raw/retrieval`, `raw/answers`, `scored/retrieval`, and
 `scored/answers` lanes. Raw records and their SHA sidecars must exist and pass
 the sealed oracle audit before scored output can be written. Existing run
 directories without an E2E layout marker are treated as immutable/unowned.
+
+Official B4, B6, B7, and B8 inputs must also be registered as artifacts of the
+current trusted execution session. B5 approval must match the approval hash in
+the verified freeze. Hand-authored or stale JSON can be useful diagnostically,
+but cannot produce an official PASS.
 
 ## Operational evidence and release finalization
 

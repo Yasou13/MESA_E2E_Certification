@@ -55,10 +55,75 @@ class GateDefinition(BaseModel):
         return self
 
 
+class ResourceContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    ram_min_gib: int = Field(gt=0)
+    ram_recommended_gib: int = Field(gt=0)
+    disk_min_gib: int = Field(gt=0)
+
+    @model_validator(mode="after")
+    def recommendation_must_not_weaken_minimum(self) -> "ResourceContract":
+        if self.ram_recommended_gib < self.ram_min_gib:
+            raise ValueError("recommended RAM cannot be below the hard minimum")
+        return self
+
+
+class RetrievalContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    top_k: int = Field(gt=0)
+    answer_context_policy: Literal["sealed_retrieval_top_k"]
+
+
+class EmbeddingProviderContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: str = Field(min_length=1)
+    endpoint: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    dimension: int = Field(gt=0)
+    document_input_type: str = Field(min_length=1)
+    query_input_type: str = Field(min_length=1)
+
+
+class ExtractionProviderContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+    language: str = Field(min_length=1)
+    minimum_max_tokens: int = Field(gt=0)
+
+
+class AnswerProviderContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    provider: str = Field(min_length=1)
+    model: str = Field(min_length=1)
+
+
+class ProviderContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    embedding: EmbeddingProviderContract
+    extraction: ExtractionProviderContract
+    answer: AnswerProviderContract
+
+
+class OfficialProfileBContract(BaseModel):
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    resources: ResourceContract
+    retrieval: RetrievalContract
+    providers: ProviderContract
+
+
 class GateConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str
+    official_contract: OfficialProfileBContract
     mandatory_gate_ids: list[str] = Field(min_length=1)
     gates: dict[str, GateDefinition]
     methodology_note: str
@@ -77,6 +142,22 @@ class GateConfig(BaseModel):
             raise ValueError(
                 f"GATE_REGISTRY_INCOMPLETE: missing mandatory gate definitions: {sorted(missing_mandatory)}"
             )
+        b1 = self.gates.get("B1")
+        if b1 is not None:
+            expected_resources = {
+                "ram_min_gb": self.official_contract.resources.ram_min_gib,
+                "disk_min_gb": self.official_contract.resources.disk_min_gib,
+            }
+            for metric, expected in expected_resources.items():
+                requirement = b1.requirements.get(metric)
+                if (
+                    requirement is None
+                    or requirement.operator != "gte"
+                    or requirement.value != expected
+                ):
+                    raise ValueError(
+                        f"B1 {metric} must derive from official_contract.resources"
+                    )
         return self
 
 

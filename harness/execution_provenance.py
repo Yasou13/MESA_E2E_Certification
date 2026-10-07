@@ -423,6 +423,52 @@ class OfficialExecutionSession:
         record["capture_attestation"] = self._sign(record)
         self._raw_records[relative] = record
 
+    def register_candidate_context_artifact(
+        self,
+        path: Path,
+        *,
+        retrieval_raw_path: Path,
+        collector: str,
+    ) -> None:
+        """Register deterministic context derived from one trusted retrieval capture."""
+
+        if not self._capture_started or self._sealed:
+            raise ExecutionProvenanceError(
+                "context capture is outside the official capture window"
+            )
+        relative = self._relative_raw_path(path)
+        retrieval_relative = self._relative_raw_path(retrieval_raw_path)
+        retrieval_record = self._raw_records.get(retrieval_relative)
+        if retrieval_record is None or retrieval_record.get("source") != "trusted_mesa_transport":
+            raise ExecutionProvenanceError(
+                "candidate-bound context lacks trusted retrieval source evidence"
+            )
+        digest = _verify_sidecar(path)
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        if (
+            payload.get("run_id") != self.run_id
+            or payload.get("execution_id") != self.execution_id
+        ):
+            raise ExecutionProvenanceError("context capture execution identity mismatch")
+        source_row = {
+            "path": retrieval_relative,
+            "sha256": retrieval_record["sha256"],
+        }
+        source_hash = hashlib.sha256(_canonical_bytes(source_row)).hexdigest()
+        record = {
+            "path": relative,
+            "sha256": digest,
+            "capture_id": source_hash,
+            "collector": collector,
+            "source": "sealed_retrieval_context_builder",
+            "request_sha256": source_hash,
+            "response_sha256": digest,
+            "source_raw_paths": [retrieval_relative],
+            **self.public_binding(),
+        }
+        record["capture_attestation"] = self._sign(record)
+        self._raw_records[relative] = record
+
     def register_derived_artifact(
         self, path: Path, *, artifact_type: str, source_raw_paths: list[str]
     ) -> None:

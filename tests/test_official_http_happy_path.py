@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import http.server
 import json
@@ -15,9 +14,8 @@ import uuid
 
 import pytest
 
-from harness.answer_execution import OpenAICompatibleHTTPTransport
 from harness.artifacts import RunArtifactStore
-from harness.freeze import MANDATORY_MATERIAL_CATEGORIES, create_contract_freeze
+from harness.freeze import create_contract_freeze
 from harness.graph_collector import execute_paired_graph_ablation
 from harness.identity import IdentityMap
 from harness.mesa_adapters import MESAContractIntegrityError
@@ -29,17 +27,10 @@ from harness.mesa_transport import (
 from harness.models import EvidenceGroup, GroundTruthItem, RequiredFact
 from harness.qualification_runner import (
     QualificationConfig,
-    QualificationResult,
     QualificationRunnerError,
     QualificationScope,
-    ScopeTestAuthority,
     run_profile_b_qualification,
 )
-from harness.scope_collector import (
-    build_canonical_scope_test_matrix,
-    collect_phase7_scope_isolation,
-)
-from harness.state_proof import establish_paired_state_stability
 from tests.scope_fixture_support import frozen_scope_fixture_authority
 
 MESA_SHA = "a" * 40
@@ -574,6 +565,20 @@ def _setup_happy_path_repo(
         material_paths=materials,
         runtime_identities={
             "python": "3.13.12",
+            "embedding_authority": {
+                "provider": "openai_compatible",
+                "endpoint": "https://integrate.api.nvidia.com/v1",
+                "model": "nvidia/nemotron-3-embed-1b",
+                "dimension": 2048,
+                "document_input_type": "passage",
+                "query_input_type": "query",
+            },
+            "extraction_authority": {
+                "provider": "openai_compatible",
+                "model": "openai/gpt-oss-20b",
+                "language": "tr",
+                "minimum_max_tokens": 4096,
+            },
             "answer_authority": {
                 "provider": "openai_compatible",
                 "model": "openai/gpt-oss-20b",
@@ -584,8 +589,8 @@ def _setup_happy_path_repo(
                     ANSWER_INSTRUCTION.encode("utf-8")
                 ).hexdigest(),
                 "request_parameters_sha256": hashlib.sha256(b"{}").hexdigest(),
-                "context_contract_version": "mesa-e2e.context.v1",
-                "source_context_contract": "GET /v4/sessions/{session_id}/context",
+                "context_contract_version": "mesa-e2e.context.v2",
+                "source_context_contract": "mesa-e2e.sealed-retrieval-context.v1",
             },
             "scoring_authority": {
                 "ground_truth_path": gt.relative_to(repo).as_posix(),
@@ -725,10 +730,10 @@ def test_official_runner_http_happy_path(
         assert req["session_id"] == native_session_id
         assert not req["session_id"].startswith("session-")
 
-    # 4. Context requests must have used the native session ID
-    assert len(server.context_requests) > 0
-    for req in server.context_requests:
-        assert req["session_id"] == native_session_id
+    # 4. Official answer context is derived locally from each sealed top-5.
+    # Only the two Phase-7 isolation probes may touch the independent context
+    # endpoint; the ten answer queries must not add a second retrieval chain.
+    assert len(server.context_requests) == 2
 
     # 5. Session was properly cleaned up via end_session
     assert native_session_id in server.ended_sessions
@@ -1278,7 +1283,6 @@ def test_runner_fails_closed_when_frozen_scope_test_authority_missing(
 
 def test_fake_session_bootstrap_fails_manifest_validation(tmp_path: Path) -> None:
     """Proves fake session bootstrap injected into raw tree is rejected during sealing."""
-    from harness.artifacts import RunArtifactStore
     from harness.execution_provenance import _begin_official_execution
     from harness.mesa_transport import MESATransportConfig, TrustedMESATransport
 

@@ -10,7 +10,6 @@ from harness.answer_scorer import score_answer
 from harness.artifacts import (
     ArtifactOrderError,
     ImmutableArtifactError,
-    RunArtifactStore,
 )
 from harness.evidence import build_evidence_index, validate_run_id_consistency
 from harness.finalizer import finalize_release, ReleaseFinalizationError
@@ -19,13 +18,9 @@ from harness.freeze import (
     verify_contract_freeze,
     FreezeStatus,
     MANDATORY_MATERIAL_CATEGORIES,
-    MANDATORY_REPOSITORIES,
 )
 from harness.gates import (
     GateConfig,
-    GateDefinition,
-    evaluate_threshold_gate,
-    load_gate_config,
 )
 from harness.models import (
     AnswerClaim,
@@ -47,7 +42,7 @@ from harness.transaction import (
     CertificationTransaction,
     TransactionError,
 )
-from harness.verdict import derive_production_verdict, evaluate_final_verdict
+from harness.verdict import evaluate_final_verdict
 
 
 RUN_ID = "RUN-20260925T150000Z-audit"
@@ -633,8 +628,14 @@ def test_a14_one_wrong_jsonl_row_among_valid_rows(tmp_path: Path) -> None:
 # A15: Missing mandatory gate definition
 # =========================================================================
 def test_a15_missing_mandatory_gate_definition() -> None:
+    canonical = json.loads(
+        (Path(__file__).resolve().parents[1] / "config" / "profile-b-gates.json").read_text(
+            encoding="utf-8"
+        )
+    )
     raw = {
         "schema_version": "1.0",
+        "official_contract": canonical["official_contract"],
         "mandatory_gate_ids": ["B0", "B10", "B99_UNREGISTERED"],
         "gates": {
             "B0": {"gate_id": "B0", "hard": True, "requirements": {"m": {"operator": "eq", "value": True}}},

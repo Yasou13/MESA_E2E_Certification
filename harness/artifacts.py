@@ -108,8 +108,11 @@ class CertifiedAnswerExecutionCapture(BaseModel):
     query_id: str = Field(min_length=1)
     timestamp_utc: datetime
     capture_origin: Literal["harness.answer_execution.provider_boundary"]
-    source_context_contract: Literal["GET /v4/sessions/{session_id}/context"]
-    context_contract_version: Literal["mesa-e2e.context.v1"]
+    source_context_contract: Literal[
+        "GET /v4/sessions/{session_id}/context",
+        "mesa-e2e.sealed-retrieval-context.v1",
+    ]
+    context_contract_version: Literal["mesa-e2e.context.v1", "mesa-e2e.context.v2"]
     mesa_sha: str = Field(pattern=r"^[0-9a-f]{40}(?:[0-9a-f]{24})?$")
     tenant_id: str = Field(min_length=1)
     agent_id: str = Field(min_length=1)
@@ -117,6 +120,9 @@ class CertifiedAnswerExecutionCapture(BaseModel):
     dataset_ids: list[str] = Field(min_length=1)
     exact_model_visible_context: str
     context_evidence_ids: list[str]
+    allowed_retrieval_evidence_ids: list[str]
+    retrieval_response_sha256: str = Field(pattern=SHA256_PATTERN)
+    context_candidate_bindings: list[dict[str, Any]]
     context_sha256: str = Field(pattern=SHA256_PATTERN)
     system_prompt: str
     system_prompt_sha256: str = Field(pattern=SHA256_PATTERN)
@@ -190,6 +196,34 @@ class CertifiedAnswerExecutionCapture(BaseModel):
             )
         if len(self.context_evidence_ids) != len(set(self.context_evidence_ids)):
             raise ValueError("context_evidence_ids contains duplicates")
+        if len(self.allowed_retrieval_evidence_ids) != len(
+            set(self.allowed_retrieval_evidence_ids)
+        ):
+            raise ValueError("allowed_retrieval_evidence_ids contains duplicates")
+        if not set(self.context_evidence_ids).issubset(
+            self.allowed_retrieval_evidence_ids
+        ):
+            raise ValueError(
+                "context evidence is outside the allowed sealed retrieval set"
+            )
+        binding_ids = [
+            row.get("source_chunk_id")
+            for row in self.context_candidate_bindings
+            if isinstance(row, dict)
+        ]
+        if binding_ids != self.allowed_retrieval_evidence_ids:
+            raise ValueError(
+                "context candidate bindings do not match allowed sealed retrieval order"
+            )
+        included_ids = [
+            row.get("source_chunk_id")
+            for row in self.context_candidate_bindings
+            if isinstance(row, dict) and row.get("included") is True
+        ]
+        if included_ids != self.context_evidence_ids:
+            raise ValueError(
+                "included context bindings do not match context_evidence_ids"
+            )
         if len(self.dataset_ids) != len(set(self.dataset_ids)) or any(
             not dataset_id for dataset_id in self.dataset_ids
         ):

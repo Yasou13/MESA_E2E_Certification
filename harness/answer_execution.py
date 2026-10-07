@@ -8,7 +8,7 @@ import socket
 import time
 import urllib.error
 import urllib.request
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
 from email.utils import parsedate_to_datetime
 from pathlib import Path
@@ -1057,6 +1057,9 @@ def execute_answer_and_persist(
         dataset_ids=context.dataset_ids,
         exact_model_visible_context=context.exact_model_visible_context,
         context_evidence_ids=context.context_evidence_ids,
+        allowed_retrieval_evidence_ids=context.allowed_retrieval_evidence_ids,
+        retrieval_response_sha256=context.retrieval_response_sha256,
+        context_candidate_bindings=context.candidate_bindings,
         context_sha256=context_sha256,
         system_prompt=system_prompt,
         system_prompt_sha256=_sha256_bytes(system_prompt.encode("utf-8")),
