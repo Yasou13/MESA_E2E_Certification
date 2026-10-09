@@ -190,22 +190,23 @@ def _setup_test_repo(
         runtime_identities={
             "python": "3.13.12",
             "embedding_authority": {
-                "provider": "openai_compatible",
-                "endpoint": "https://integrate.api.nvidia.com/v1",
-                "model": "nvidia/nemotron-3-embed-1b",
-                "dimension": 2048,
-                "document_input_type": "passage",
-                "query_input_type": "query",
+                "provider": "Ollama",
+                "endpoint": "http://127.0.0.1:11434",
+                "model": "alibayram/embeddingmagibu-200m:latest",
+                "dimension": 768,
+                "normalization": "l2",
             },
             "extraction_authority": {
-                "provider": "openai_compatible",
-                "model": "openai/gpt-oss-20b",
+                "provider": "Ollama",
+                "model": "qwen3.5:9b-q4_K_M",
                 "language": "tr",
                 "minimum_max_tokens": 4096,
+                "quantization": "Q4_K_M",
             },
             "answer_authority": {
-                "provider": "openai_compatible",
-                "model": "openai/gpt-oss-20b",
+                "provider": "Ollama",
+                "model": "qwen3.5:9b-q4_K_M",
+                "quantization": "Q4_K_M",
                 "system_prompt_sha256": "0" * 64,
                 "answer_instruction_sha256": "0" * 64,
                 "request_parameters_sha256": "0" * 64,
@@ -227,8 +228,8 @@ def _setup_test_repo(
                 "runtime_profile": "combined",
             },
             "answer_transport": {
-                "base_url": "https://provider.invalid/v1",
-                "provider": "openai_compatible",
+                "base_url": "http://127.0.0.1:11434",
+                "provider": "Ollama",
                 "implementation": "harness.answer_execution.urllib-openai-compatible.v1",
             },
             "qualification_scope": {
@@ -523,7 +524,8 @@ def test_official_provider_contract_matches_canonical_config(tmp_path: Path) -> 
         ("dimension", 1024),
         ("document_input_type", "query"),
         ("query_input_type", "passage"),
-        ("endpoint", "https://wrong-provider.invalid/v1"),
+        ("normalization", "wrong-norm"),
+        ("endpoint", ""),
     ],
 )
 def test_official_embedding_contract_drift_fails_closed(

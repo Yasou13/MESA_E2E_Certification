@@ -566,22 +566,23 @@ def _setup_happy_path_repo(
         runtime_identities={
             "python": "3.13.12",
             "embedding_authority": {
-                "provider": "openai_compatible",
-                "endpoint": "https://integrate.api.nvidia.com/v1",
-                "model": "nvidia/nemotron-3-embed-1b",
-                "dimension": 2048,
-                "document_input_type": "passage",
-                "query_input_type": "query",
+                "provider": "Ollama",
+                "endpoint": "http://127.0.0.1:11434",
+                "model": "alibayram/embeddingmagibu-200m:latest",
+                "dimension": 768,
+                "normalization": "l2",
             },
             "extraction_authority": {
-                "provider": "openai_compatible",
-                "model": "openai/gpt-oss-20b",
+                "provider": "Ollama",
+                "model": "qwen3.5:9b-q4_K_M",
                 "language": "tr",
                 "minimum_max_tokens": 4096,
+                "quantization": "Q4_K_M",
             },
             "answer_authority": {
-                "provider": "openai_compatible",
-                "model": "openai/gpt-oss-20b",
+                "provider": "Ollama",
+                "model": "qwen3.5:9b-q4_K_M",
+                "quantization": "Q4_K_M",
                 "system_prompt_sha256": hashlib.sha256(
                     SYSTEM_PROMPT.encode("utf-8")
                 ).hexdigest(),
@@ -608,7 +609,7 @@ def _setup_happy_path_repo(
             },
             "answer_transport": {
                 "base_url": "https://provider.invalid/v1",
-                "provider": "openai_compatible",
+                "provider": "Ollama",
                 "implementation": "harness.answer_execution.urllib-openai-compatible.v1",
             },
             "qualification_scope": {
@@ -648,7 +649,7 @@ class _MockAnswerResponse:
                         }
                     }
                 ],
-                "model": "openai/gpt-oss-20b",
+                "model": "qwen3.5:9b-q4_K_M",
             }
         ).encode("utf-8")
 
