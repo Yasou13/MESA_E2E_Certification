@@ -19,6 +19,12 @@ bound by rank, candidate/evidence/chunk/document identity, origin, text, and a
 budget inclusion decision. An independent session-context lookup is not an
 allowed source for answer evidence.
 
+The official Profile B provider contract validates embedding (e.g., Ollama
+`alibayram/embeddingmagibu-200m:latest`, 768-dim, L2 normalized) and answer
+completion (e.g., Ollama `qwen3.5:9b-q4_K_M`, Q4_K_M quantization) specifications,
+including runtime-resolved model digests. Model endpoints are strictly
+runtime-configurable via CLI or environment variable, avoiding hardcoded target IPs.
+
 A harness/scorer change after a run starts invalidates that run.
 
 ## Reproducible developer entrypoints

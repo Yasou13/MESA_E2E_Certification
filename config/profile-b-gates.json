@@ -12,22 +12,22 @@
     },
     "providers": {
       "embedding": {
-        "provider": "openai_compatible",
-        "endpoint": "https://integrate.api.nvidia.com/v1",
-        "model": "nvidia/nemotron-3-embed-1b",
-        "dimension": 2048,
-        "document_input_type": "passage",
-        "query_input_type": "query"
+        "provider": "Ollama",
+        "model": "alibayram/embeddingmagibu-200m:latest",
+        "dimension": 768,
+        "normalization": "l2"
       },
       "extraction": {
-        "provider": "openai_compatible",
-        "model": "openai/gpt-oss-20b",
+        "provider": "Ollama",
+        "model": "qwen3.5:9b-q4_K_M",
         "language": "tr",
-        "minimum_max_tokens": 4096
+        "minimum_max_tokens": 4096,
+        "quantization": "Q4_K_M"
       },
       "answer": {
-        "provider": "openai_compatible",
-        "model": "openai/gpt-oss-20b"
+        "provider": "Ollama",
+        "model": "qwen3.5:9b-q4_K_M",
+        "quantization": "Q4_K_M"
       }
     }
   },
@@ -72,11 +72,11 @@
     },
     "B2": {
       "gate_id": "B2",
-      "name": "Real NVIDIA provider contract",
+      "name": "Real Profile B provider contract (Ollama Magibu/Qwen)",
       "hard": true,
       "requirements": {
-        "gpt_oss_completion_verified": {"operator": "eq", "value": true},
-        "nemotron_dim_verified": {"operator": "eq", "value": true},
+        "completion_verified": {"operator": "eq", "value": true},
+        "embedding_dim_verified": {"operator": "eq", "value": true},
         "real_provider_contract_verified": {"operator": "eq", "value": true}
       }
     },

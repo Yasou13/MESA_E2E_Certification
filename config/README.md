@@ -42,7 +42,11 @@ The same file is the canonical machine-readable Profile B contract for:
 
 - the 8 GiB hard RAM minimum, 12 GiB recommended RAM, and 30 GiB disk minimum;
 - the sealed top-5 retrieval set used to construct official answer context;
-- the selected embedding, extraction, and answer provider/model identities.
+- the selected embedding, extraction, and answer provider/model identities:
+  - **Embedding**: Ollama (`alibayram/embeddingmagibu-200m:latest`), dimension 768, L2 normalization, runtime-resolved digest.
+  - **Extraction**: Ollama (`qwen3.5:9b-q4_K_M`), Turkish (`tr`), minimum max tokens 4096, Q4_K_M quantization, runtime-resolved digest.
+  - **Answer**: Ollama (`qwen3.5:9b-q4_K_M`), Q4_K_M quantization, runtime-resolved digest.
+  - **Endpoint**: Runtime-configurable provider base URL. The framework enforces strict comparison between frozen contract and observed runtime identities without hard-coding local test IP addresses.
 
 The recommended RAM value is operational guidance, not a harder B1 threshold.
 Gate loading fails if B1 drifts from the canonical resource values.

@@ -468,21 +468,54 @@ def _b2(ctx: ProducerContext) -> ProducerObservation:
         for v in [*document, *query]
     )
     dim = len(document) == len(query) == embedding.get("dimension")
-    asymmetric = (
-        document != query
-        and data.get("document_input_type") == embedding.get("document_input_type")
-        and data.get("query_input_type") == embedding.get("query_input_type")
-    )
+
+    norm_ok = True
+    if embedding.get("normalization") == "l2":
+        norm_doc = math.sqrt(sum(v * v for v in document))
+        norm_query = math.sqrt(sum(v * v for v in query))
+        norm_ok = math.isclose(norm_doc, 1.0, abs_tol=0.05) and math.isclose(norm_query, 1.0, abs_tol=0.05)
+
+    role_ok = True
+    if embedding.get("document_input_type") or embedding.get("query_input_type"):
+        role_ok = (
+            data.get("document_input_type") == embedding.get("document_input_type")
+            and data.get("query_input_type") == embedding.get("query_input_type")
+        )
+
+    dim_verified = dim and finite and (document != query) and norm_ok and role_ok
+
     request_ids = data.get("provider_request_ids")
+    provider_match = (
+        str(data.get("provider", "")).strip().lower()
+        == str(embedding.get("provider", "")).strip().lower()
+    )
+    endpoint_ok = (
+        data.get("endpoint") == embedding.get("endpoint")
+        if embedding.get("endpoint")
+        else bool(data.get("endpoint"))
+    )
+
+    digest_ok = True
+    if embedding.get("resolved_digest"):
+        digest_ok = digest_ok and data.get("embedding_digest") == embedding.get("resolved_digest")
+    if extraction_contract.get("resolved_digest"):
+        digest_ok = digest_ok and data.get("extraction_digest") == extraction_contract.get("resolved_digest")
+
+    quant_ok = True
+    if extraction_contract.get("quantization"):
+        quant_ok = quant_ok and data.get("extraction_quantization") == extraction_contract.get("quantization")
+
     real = (
-        data.get("provider") == embedding.get("provider")
-        and data.get("endpoint") == embedding.get("endpoint")
+        provider_match
+        and endpoint_ok
         and data.get("embedding_model") == embedding.get("model")
         and data.get("extraction_model") == extraction_contract.get("model")
         and isinstance(request_ids, list)
         and bool(request_ids)
         and all(isinstance(item, str) and item for item in request_ids)
         and len(request_ids) == len(set(request_ids))
+        and digest_ok
+        and quant_ok
     )
     expected_marker = data.get("completion_marker_expected")
     observed_marker = data.get("completion_marker_observed")
@@ -494,11 +527,15 @@ def _b2(ctx: ProducerContext) -> ProducerObservation:
     extraction = isinstance(data.get("structured_extraction"), dict) and bool(
         data["structured_extraction"].get("facts")
     )
+    completion_verified = completion and extraction
+
     return _completed(
         "B2",
         {
-            "nemotron_dim_verified": dim and finite and asymmetric,
-            "gpt_oss_completion_verified": completion and extraction,
+            "embedding_dim_verified": dim_verified,
+            "nemotron_dim_verified": dim_verified,
+            "completion_verified": completion_verified,
+            "gpt_oss_completion_verified": completion_verified,
             "real_provider_contract_verified": real,
         },
         [path],
@@ -670,6 +707,12 @@ def _b6(ctx: ProducerContext) -> ProducerObservation:
 def _b7(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "delivery-evidence.json")
     _require_official_runner_owned(ctx, path, "delivery_evidence")
+    dataset = data.get("dataset")
+    if dataset is not None and (not isinstance(dataset, str) or not dataset.strip()):
+        raise ProducerIntegrityError("B7 dataset identity is empty or invalid")
+    delivery_identity = data.get("delivery_identity") or data.get("delivery_id")
+    if delivery_identity is not None and (not isinstance(delivery_identity, str) or not delivery_identity.strip()):
+        raise ProducerIntegrityError("B7 delivery identity is empty or invalid")
     planned, delivered = data.get("planned_source_chunk_ids"), data.get("deliveries")
     if not isinstance(planned, list) or not isinstance(delivered, list) or not planned:
         raise ProducerIntegrityError("B7 delivery populations are missing")
@@ -711,12 +754,19 @@ def _b8(ctx: ProducerContext) -> ProducerObservation:
     data, path = _json(ctx, "restart-idempotency.json")
     _require_official_runner_owned(ctx, path, "restart_idempotency")
     before, after = data.get("before_restart_probe"), data.get("after_restart_probe")
+    chronology = True
+    before_ts = data.get("before_restart_ts") or (before.get("timestamp") if isinstance(before, dict) else None)
+    after_ts = data.get("after_restart_ts") or (after.get("timestamp") if isinstance(after, dict) else None)
+    if before_ts is not None and after_ts is not None:
+        chronology = before_ts < after_ts
+
     persistence = (
         isinstance(before, dict)
         and bool(before)
         and isinstance(after, dict)
         and before == after
         and data.get("restart_observed") is True
+        and chronology
     )
     before_count = data.get("logical_count_before_republish")
     after_count = data.get("logical_count_after_republish")

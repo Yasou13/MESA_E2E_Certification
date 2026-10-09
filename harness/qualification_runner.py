@@ -299,7 +299,8 @@ def _trusted_answer_transport(
     freeze: dict[str, Any],
     authority: FrozenScoringAuthority,
 ) -> OpenAICompatibleHTTPTransport:
-    if authority.answer_provider != "openai_compatible":
+    allowed_providers = {"openai_compatible", "ollama"}
+    if authority.answer_provider.strip().lower() not in allowed_providers:
         raise QualificationRunnerError(
             f"unsupported frozen answer provider: {authority.answer_provider!r}"
         )
@@ -315,7 +316,12 @@ def _trusted_answer_transport(
         "provider": authority.answer_provider,
     }
     for field_name, actual in expected_transport.items():
-        if transport_authority.get(field_name) != actual:
+        if field_name == "provider":
+            if transport_authority.get(field_name, "").strip().lower() != actual.strip().lower():
+                raise QualificationRunnerError(
+                    f"answer transport {field_name} differs from frozen authority"
+                )
+        elif transport_authority.get(field_name) != actual:
             raise QualificationRunnerError(
                 f"answer transport {field_name} differs from frozen authority"
             )
@@ -388,6 +394,7 @@ def _trusted_answer_transport(
             api_key=config.answer_provider_api_key,
             timeout_seconds=config.answer_provider_timeout_seconds,
             retry_policy=policy,
+            provider=authority.answer_provider,
         )
     except ValueError as exc:
         raise QualificationRunnerError(
@@ -411,43 +418,95 @@ def _validate_official_provider_contract(
 
     expected_answer = provider_contract["answer"]
     if (
-        authority.answer_provider != expected_answer["provider"]
-        or authority.answer_model != expected_answer["model"]
+        authority.answer_provider.strip().lower() != str(expected_answer.get("provider", "")).strip().lower()
+        or authority.answer_model != expected_answer.get("model")
     ):
         raise QualificationRunnerError(
             "frozen answer provider/model differs from official Profile B contract"
         )
+    answer_runtime = runtime.get("answer_authority")
+    if isinstance(answer_runtime, dict):
+        if expected_answer.get("resolved_digest") and answer_runtime.get("resolved_digest") != expected_answer["resolved_digest"]:
+            raise QualificationRunnerError(
+                "frozen answer provider/model contract differs from official Profile B contract: digest differs"
+            )
+        if expected_answer.get("quantization") and answer_runtime.get("quantization") != expected_answer["quantization"]:
+            raise QualificationRunnerError(
+                "frozen answer provider/model contract differs from official Profile B contract: quantization differs"
+            )
 
     expected_embedding = provider_contract["embedding"]
-    embedding_fields = {
-        "provider": expected_embedding["provider"],
-        "endpoint": expected_embedding["endpoint"],
-        "model": expected_embedding["model"],
-        "dimension": expected_embedding["dimension"],
-        "document_input_type": expected_embedding["document_input_type"],
-        "query_input_type": expected_embedding["query_input_type"],
-    }
-    if any(
-        embedding_runtime.get(key) != value
-        for key, value in embedding_fields.items()
+    if (
+        str(embedding_runtime.get("provider", "")).strip().lower()
+        != str(expected_embedding.get("provider", "")).strip().lower()
     ):
         raise QualificationRunnerError(
-            "frozen embedding provider/model contract differs from official Profile B contract"
+            "frozen embedding provider/model contract differs from official Profile B contract: provider differs"
+        )
+    if not embedding_runtime.get("model") or embedding_runtime.get("model") != expected_embedding.get("model"):
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: model differs"
+        )
+    if not isinstance(embedding_runtime.get("dimension"), int) or embedding_runtime.get("dimension") != expected_embedding.get("dimension"):
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: dimension differs"
+        )
+    if expected_embedding.get("endpoint"):
+        if embedding_runtime.get("endpoint") != expected_embedding["endpoint"]:
+            raise QualificationRunnerError(
+                "frozen embedding provider/model contract differs from official Profile B contract: endpoint differs"
+            )
+    elif not embedding_runtime.get("endpoint"):
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: endpoint is missing from runtime authority"
+        )
+    if expected_embedding.get("resolved_digest") and embedding_runtime.get("resolved_digest") != expected_embedding["resolved_digest"]:
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: digest differs"
+        )
+    if expected_embedding.get("normalization") and embedding_runtime.get("normalization") != expected_embedding["normalization"]:
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: normalization differs"
+        )
+    if expected_embedding.get("document_input_type") != embedding_runtime.get("document_input_type"):
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: document_input_type differs"
+        )
+    if expected_embedding.get("query_input_type") != embedding_runtime.get("query_input_type"):
+        raise QualificationRunnerError(
+            "frozen embedding provider/model contract differs from official Profile B contract: query_input_type differs"
         )
 
     expected_extraction = provider_contract["extraction"]
-    extraction_fields = {
-        "provider": expected_extraction["provider"],
-        "model": expected_extraction["model"],
-        "language": expected_extraction["language"],
-        "minimum_max_tokens": expected_extraction["minimum_max_tokens"],
-    }
-    if any(
-        extraction_runtime.get(key) != value
-        for key, value in extraction_fields.items()
+    if (
+        str(extraction_runtime.get("provider", "")).strip().lower()
+        != str(expected_extraction.get("provider", "")).strip().lower()
     ):
         raise QualificationRunnerError(
-            "frozen extraction provider/model contract differs from official Profile B contract"
+            "frozen extraction provider/model contract differs from official Profile B contract: provider differs"
+        )
+    if extraction_runtime.get("model") != expected_extraction.get("model"):
+        raise QualificationRunnerError(
+            "frozen extraction provider/model contract differs from official Profile B contract: model differs"
+        )
+    if extraction_runtime.get("language") != expected_extraction.get("language"):
+        raise QualificationRunnerError(
+            "frozen extraction provider/model contract differs from official Profile B contract: language differs"
+        )
+    if (
+        extraction_runtime.get("minimum_max_tokens", 0)
+        < expected_extraction.get("minimum_max_tokens", 0)
+    ):
+        raise QualificationRunnerError(
+            "frozen extraction provider/model contract differs from official Profile B contract: minimum_max_tokens is below official contract"
+        )
+    if expected_extraction.get("resolved_digest") and extraction_runtime.get("resolved_digest") != expected_extraction["resolved_digest"]:
+        raise QualificationRunnerError(
+            "frozen extraction provider/model contract action differs from official Profile B contract: digest differs"
+        )
+    if expected_extraction.get("quantization") and extraction_runtime.get("quantization") != expected_extraction["quantization"]:
+        raise QualificationRunnerError(
+            "frozen extraction provider/model contract differs from official Profile B contract: quantization differs"
         )
 
 
