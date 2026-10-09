@@ -80,11 +80,13 @@ class EmbeddingProviderContract(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     provider: str = Field(min_length=1)
-    endpoint: str = Field(min_length=1)
     model: str = Field(min_length=1)
     dimension: int = Field(gt=0)
-    document_input_type: str = Field(min_length=1)
-    query_input_type: str = Field(min_length=1)
+    endpoint: str | None = None
+    resolved_digest: str | None = None
+    normalization: str | None = None
+    document_input_type: str | None = None
+    query_input_type: str | None = None
 
 
 class ExtractionProviderContract(BaseModel):
@@ -94,6 +96,9 @@ class ExtractionProviderContract(BaseModel):
     model: str = Field(min_length=1)
     language: str = Field(min_length=1)
     minimum_max_tokens: int = Field(gt=0)
+    endpoint: str | None = None
+    resolved_digest: str | None = None
+    quantization: str | None = None
 
 
 class AnswerProviderContract(BaseModel):
@@ -101,6 +106,9 @@ class AnswerProviderContract(BaseModel):
 
     provider: str = Field(min_length=1)
     model: str = Field(min_length=1)
+    endpoint: str | None = None
+    resolved_digest: str | None = None
+    quantization: str | None = None
 
 
 class ProviderContract(BaseModel):
@@ -231,7 +239,22 @@ def evaluate_threshold_gate(
             reason="missing_gate_evidence",
             evidence=[],
         )
-    missing = sorted(set(definition.requirements) - observed.keys())
+    _METRIC_ALIASES: dict[str, str] = {
+        "embedding_dim_verified": "nemotron_dim_verified",
+        "nemotron_dim_verified": "embedding_dim_verified",
+        "completion_verified": "gpt_oss_completion_verified",
+        "gpt_oss_completion_verified": "completion_verified",
+    }
+    resolved_observed = dict(observed)
+    for target_key, alias_key in _METRIC_ALIASES.items():
+        if (
+            target_key in definition.requirements
+            and target_key not in resolved_observed
+            and alias_key in resolved_observed
+        ):
+            resolved_observed[target_key] = resolved_observed[alias_key]
+
+    missing = sorted(set(definition.requirements) - resolved_observed.keys())
     if missing:
         return GateResult(
             gate_id=definition.gate_id,
@@ -239,14 +262,14 @@ def evaluate_threshold_gate(
             execution_status=execution_status,
             status=GateStatus.FAIL,
             required=required,
-            observed=observed,
+            observed=resolved_observed,
             reason=f"missing_observed_metrics:{','.join(missing)}",
             evidence=evidence,
         )
     failed = sorted(
         metric
         for metric, requirement in definition.requirements.items()
-        if not _comparison_passes(observed[metric], requirement)
+        if not _comparison_passes(resolved_observed[metric], requirement)
     )
     return GateResult(
         gate_id=definition.gate_id,
@@ -254,7 +277,7 @@ def evaluate_threshold_gate(
         execution_status=execution_status,
         status=GateStatus.FAIL if failed else GateStatus.PASS,
         required=required,
-        observed=dict(sorted(observed.items())),
+        observed=dict(sorted(resolved_observed.items())),
         reason=(
             f"threshold_not_met:{','.join(failed)}" if failed else "thresholds_met"
         ),

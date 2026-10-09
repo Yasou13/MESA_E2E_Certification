@@ -432,23 +432,22 @@ class ProviderTransport(Protocol):
 class OpenAICompatibleHTTPTransport:
     """Minimal production transport with explicit bounded timeout and robust error classification."""
 
-    provider_name = "openai_compatible"
     implementation_id = "harness.answer_execution.urllib-openai-compatible.v1"
 
     def __init__(
         self,
         *,
         base_url: str,
-        api_key: str,
+        api_key: str = "",
         timeout_seconds: float,
         retry_policy: ProviderRetryPolicy | None = None,
+        provider: str = "openai_compatible",
     ):
-        if not base_url.startswith("https://"):
-            raise ValueError("provider base_url must use HTTPS")
-        if not api_key:
-            raise ValueError("provider API key is required")
+        if not (base_url.startswith("https://") or base_url.startswith("http://")):
+            raise ValueError("provider base_url must use HTTP or HTTPS")
         if timeout_seconds <= 0:
             raise ValueError("timeout_seconds must be positive")
+        self.provider_name = provider
         self._base_url = base_url.rstrip("/")
         self._url = self._base_url + "/chat/completions"
         self._api_key = api_key
@@ -479,13 +478,15 @@ class OpenAICompatibleHTTPTransport:
 
     def complete(self, request_payload: dict[str, Any]) -> dict[str, Any]:
         body = canonical_json_bytes(request_payload)
+        headers = {
+            "Content-Type": "application/json",
+        }
+        if self._api_key:
+            headers["Authorization"] = f"Bearer {self._api_key}"
         request = urllib.request.Request(
             self._url,
             data=body,
-            headers={
-                "Authorization": f"Bearer {self._api_key}",
-                "Content-Type": "application/json",
-            },
+            headers=headers,
             method="POST",
         )
         status_code: int | None = None
