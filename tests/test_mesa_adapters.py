@@ -361,6 +361,7 @@ def test_phase10_rejects_fact_id_prompt_before_provider_call(tmp_path) -> None:
     [
         {"messages": [{"role": "user", "content": "forged"}]},
         {"model": "forged-model"},
+        {"response_schema": {"fact_ids": ["hidden"]}},
         {"metadata": {"required-facts": ["secret"]}},
     ],
 )

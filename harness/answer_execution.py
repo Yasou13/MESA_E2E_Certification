@@ -602,6 +602,8 @@ def execute_answer_and_persist(
         "expectedanswers",
         "expectedlabel",
         "expectedstatus",
+        "factid",
+        "factids",
         "requiredfact",
         "requiredfacts",
         "forbiddenclaim",
