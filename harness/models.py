@@ -227,7 +227,10 @@ class RetrievalScore(VersionedRecord):
 
 
 class AnswerClaim(HarnessModel):
-    fact_ids: list[str] = Field(min_length=1)
+    # ``fact_ids`` was exposed in the first response schema even though those
+    # identifiers belong to the sealed oracle.  Keep the field readable for
+    # historical captures, but never require or trust it during scoring.
+    fact_ids: list[str] = Field(default_factory=list)
     text: str = Field(min_length=1)
     evidence_chunk_ids: list[str] = Field(min_length=1)
 

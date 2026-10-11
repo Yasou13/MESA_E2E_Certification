@@ -22,6 +22,7 @@ from harness.artifacts import (
 )
 from harness.mesa_adapters import NormalizedContextCapture
 from harness.models import AnswerResponse
+from harness.oracle import audit_oracle_surfaces
 
 
 class AnswerExecutionError(RuntimeError):
@@ -636,6 +637,16 @@ def execute_answer_and_persist(
             "model/messages cannot be overridden by request parameters"
         )
     validate_request_value(request_parameters, "request_parameters")
+    prompt_audit = audit_oracle_surfaces(
+        {
+            "system_prompt": system_prompt,
+            "answer_instruction": answer_instruction,
+        }
+    )
+    if prompt_audit["status"] != "PASS":
+        raise AnswerExecutionError(
+            "oracle/grader token is forbidden from provider prompts"
+        )
 
     policy = retry_policy or getattr(transport, "retry_policy", None) or ProviderRetryPolicy()
 

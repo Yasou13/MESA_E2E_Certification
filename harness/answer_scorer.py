@@ -250,29 +250,18 @@ def score_answer(
     if not answer_obj.claims:
         unresolved.append("answer has no structured material claims")
 
-    unknown_claim_facts = sorted(
-        {
-            fact_id
-            for claim in answer_obj.claims
-            for fact_id in claim.fact_ids
-            if fact_id not in required_by_id
-        }
-    )
-    if unknown_claim_facts:
-        unresolved.append(f"claims reference unknown fact IDs: {unknown_claim_facts}")
-
     all_claim_evidence_supported = True
-    for claim, claim_evidence in zip(
-        answer_obj.claims, normalized_claim_evidence, strict=True
+    for index, (claim, claim_evidence) in enumerate(
+        zip(answer_obj.claims, normalized_claim_evidence, strict=True)
     ):
         if not claim_evidence.issubset(normalized_retrieved):
             reasons.append(
-                f"claim evidence is outside retrieved context: {claim.fact_ids}"
+                f"claim {index} evidence is outside retrieved context"
             )
             all_claim_evidence_supported = False
         if not claim_evidence.issubset(normalized_cited):
             reasons.append(
-                f"claim evidence is absent from answer citations: {claim.fact_ids}"
+                f"claim {index} evidence is absent from answer citations"
             )
             all_claim_evidence_supported = False
 
@@ -291,11 +280,10 @@ def score_answer(
         if not fact_source_ids:
             unresolved.append(f"required fact {fact_id} has no frozen evidence link")
             continue
-        candidate_indexes = [
-            index
-            for index, claim in enumerate(answer_obj.claims)
-            if fact_id in claim.fact_ids
-        ]
+        # Oracle fact IDs are intentionally unavailable to the answer model.
+        # Match each ordinary atomic claim to the sealed proposition and its
+        # source span after capture instead of trusting model-supplied labels.
+        candidate_indexes = list(range(len(answer_obj.claims)))
         if not candidate_indexes:
             reasons.append(f"required fact {fact_id} is missing")
             continue
@@ -320,7 +308,7 @@ def score_answer(
             }
             if proposition(claim.text) not in supported_texts:
                 unresolved.append(
-                    f"claim {claim.fact_ids} contains unsupported material or unresolved paraphrase"
+                    f"claim {index} contains unsupported material or unresolved paraphrase"
                 )
                 continue
 
