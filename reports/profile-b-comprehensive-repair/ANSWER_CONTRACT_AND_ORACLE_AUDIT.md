@@ -40,4 +40,3 @@ GREEN kapsamı:
 - sıfır required-fact answerable item PASS olamaz; çoklu fact'te hepsi gerekir.
 
 İlgili commitler: `5cbb51e`, `4fd2e56`, `985089a`, test paketi `fd018dc`.
-

@@ -30,4 +30,3 @@ Sonuç kodları: **REJECT** = exception/transaction failure, **FAIL** = hard gat
 | A24 | unsupported extra claim / negation | FAIL veya UNRESOLVED | `test_final_integrity_adversarial_audit.py::test_a15_unsupported_one_token_material_claim`, `test_a16_unsupported_monetary_hallucination`, `test_a17_negated_required_fact` |
 
 Tam attack seti ayrıca `tests/test_final_integrity_adversarial_audit.py` A01–A20, `tests/test_independent_attack_matrix.py`, `tests/test_pre_vm_adversarial.py` ve `tests/test_b4_b8_attack_matrix.py` içinde çalıştırılmıştır.
-

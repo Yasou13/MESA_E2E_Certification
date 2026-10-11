@@ -28,4 +28,3 @@
 - ikinci retrieval, replay/mock veya external citation resmi context'e giremez.
 
 Regresyonlar: `tests/test_b10_b12_context_invariants.py`, `tests/test_comprehensive_repair_regressions.py`, `tests/test_official_scoring_transaction.py`. İlgili commit: `e8b673d`; test commit: `fd018dc`.
-

@@ -1,8 +1,8 @@
 # MESA_E2E_Certification — Comprehensive Audit, Repair, and Independent Verification Loop
 
-> **Execution scope:** `MESA_E2E_Certification` repository only.  
-> **Goal:** Identify and repair verified certification correctness, integrity, reliability, and integration defects without weakening the official Profile B contract or fabricating PASS results.  
-> **Working language:** English for code and technical analysis; prepare final human-readable findings in Turkish.  
+> **Execution scope:** `MESA_E2E_Certification` repository only.
+> **Goal:** Identify and repair verified certification correctness, integrity, reliability, and integration defects without weakening the official Profile B contract or fabricating PASS results.
+> **Working language:** English for code and technical analysis; prepare final human-readable findings in Turkish.
 > **Operational model:** An external development agent repairs/pushes the repository. The certification VM is a separate environment and must not be modified by this agent.
 
 ## 0. Non-negotiable mission

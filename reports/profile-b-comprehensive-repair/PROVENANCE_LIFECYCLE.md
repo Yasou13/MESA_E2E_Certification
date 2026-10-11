@@ -27,4 +27,3 @@ Gerekli dış sözleşmeler:
 Bu arayüzler freeze'de kimliklendirilip exact raw exchanges olarak runner tarafından capture edilene kadar B4/B6/B7/B8 `UNVERIFIED` kalmalıdır. Bu, sonuç manipülasyonu değil güvenli blokajdır.
 
 Mevcut adversarial testler: `tests/test_b4_b8_attack_matrix.py`, `tests/test_metric_producers.py`, `tests/test_trust_root_closure.py`. False session, mutated bytes, stale/wrong RUN_ID, missing producer ve forged provenance PASS olamaz.
-

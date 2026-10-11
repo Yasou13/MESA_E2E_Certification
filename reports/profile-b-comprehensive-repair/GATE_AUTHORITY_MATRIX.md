@@ -23,4 +23,3 @@ Bu matris `config/profile-b-gates.json` ile `harness/metric_producers.py` kaynak
 ## Yetki zinciri
 
 Kanonik akış `CertificationTransaction.PHASE_SEQUENCE` içinde `BOOTSTRAP → FREEZE → RAW_EXECUTION → RAW_SEALING → ORACLE_AUDIT → SCORING → GATE_EVALUATION → VERDICT_DERIVATION → EVIDENCE_INDEX → RUN_ID_CONSISTENCY → HEALTH_VERIFICATION → RELEASE_FINALIZATION` sırasındadır (`harness/transaction.py:50-76`). Resmi ağ ve derived artifact kayıtları `OfficialExecutionSession` HMAC-attestation ile bağlanır (`harness/execution_provenance.py:470-594`). Nihai PASS ancak B0–B14'ün tamamı PASS ve resmi execution doğrulanmışsa mümkündür (`harness/verdict.py:152-239`).
-
