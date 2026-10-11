@@ -2,7 +2,7 @@
 
 ## Yönetici özeti
 
-Repository-wide kaynak→runtime incelemesi tamamlandı. Dört doğrulanmış ölçüm doğruluğu/bütünlük kümesi onarıldı: (1) answer modelinin gizli oracle `fact_id` tahminine bağımlılığı ve fact-ID leakage yüzeyi, (2) boolean/sayısal gate type confusion false-PASS'i, (3) sealed retrieval context'te rank/population/duplicate/render bağlama boşlukları, (4) mutable model tag'lerinin çözülmüş digest olmadan freeze'e girebilmesi. Başlangıçtaki sentetik reproducer seti `10 failed`; onarım sonrası tam suite `565 passed`, skip yoktur.
+Repository-wide kaynak→runtime incelemesi tamamlandı. Dört doğrulanmış ölçüm doğruluğu/bütünlük kümesi onarıldı: (1) answer modelinin gizli oracle `fact_id` tahminine bağımlılığı ve fact-ID leakage yüzeyi, (2) boolean/sayısal gate type confusion false-PASS'i, (3) sealed retrieval context'te rank/population/duplicate/render bağlama boşlukları, (4) mutable model tag'lerinin çözülmüş digest olmadan freeze'e girebilmesi. Başlangıçtaki sentetik reproducer seti `10 failed`; onarım sonrası bağımsız clean-export tam suite `567 passed`, skip yoktur.
 
 Kanonik gate eşikleri, qrels, ground truth, normalization contract, frozen historical run, historical verdict ve sealed evidence değiştirilmedi. Official Profile B ve hidden holdout çalıştırılmadı. Bu çalışma yeni bir sertifikasyon sonucu değildir; referans tarihsel sonuç `PROFILE_B_FAIL` olarak değişmez.
 
@@ -88,7 +88,7 @@ Owner/action ayrıntısı `PROVENANCE_LIFECYCLE.md` içindedir. Bu bağımlılı
 ## Test ve verification
 
 - İlk baseline sandbox run: `543 passed, 11 errors`; errorların tamamı localhost socket permission kaynaklı environment block.
-- Yetkili tam run: `565 passed in 13.05s`, `0 failed`, `0 errors`, `0 skipped`.
+- Yetkili final tam run: çalışma ağacında `567 passed in 13.01s`; bağımsız clean export'ta `567 passed in 13.77s`, `0 failed`, `0 errors`, `0 skipped`.
 - Optimized self-test: `17/17`.
 - Compile, agent-pack checksum, secret scan, tracked JSON/JSONL validation: PASS.
 - Locked dependency sync: PASS.
@@ -117,4 +117,3 @@ VM operatörü için talimat:
 5. Ancak bundan sonra tamamen yeni run ID/storage ile fresh official Profile B çalıştır. Eski run'ı resume/rewrite etme.
 
 Makine verdict'i, push/CI ve clean-export doğrulaması tamamlandıktan sonra final handoff mesajında tek değer olarak verilecektir. Bu rapor hiçbir şekilde official Profile B certification PASS iddiası değildir.
-
