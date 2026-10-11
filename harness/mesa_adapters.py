@@ -19,6 +19,17 @@ from pydantic import BaseModel, ConfigDict, Field
 MESA_SEARCH_CONTRACT = "POST /v4/memory/search"
 MESA_CONTEXT_CONTRACT = "GET /v4/sessions/{session_id}/context"
 SEALED_RETRIEVAL_CONTEXT_CONTRACT = "mesa-e2e.sealed-retrieval-context.v1"
+
+_SEALED_CONTEXT_BLOCK_FIELDS = (
+    "rank",
+    "candidate_id",
+    "evidence_id",
+    "assertion_id",
+    "source_chunk_id",
+    "document_id",
+    "retrieval_origins",
+    "evidence_text",
+)
 NORMALIZED_RETRIEVAL_SCHEMA = "mesa-e2e.retrieval.v1"
 NORMALIZED_CONTEXT_SCHEMA = "mesa-e2e.context.v1"
 SEALED_RETRIEVAL_CONTEXT_SCHEMA = "mesa-e2e.context.v2"
@@ -181,6 +192,59 @@ class NormalizedContextCapture(BaseModel):
     retrieval_response_sha256: str
     allowed_retrieval_evidence_ids: list[str]
     candidate_bindings: list[dict[str, Any]]
+
+
+def render_sealed_context_from_bindings(
+    bindings: list[dict[str, Any]],
+) -> str:
+    """Rebuild the only model-visible string authorized by candidate bindings."""
+
+    rendered: list[str] = []
+    for index, binding in enumerate(bindings, start=1):
+        if not isinstance(binding, dict):
+            raise MESAContractIntegrityError(
+                f"context candidate binding {index} is malformed"
+            )
+        if binding.get("included") is not True:
+            continue
+        missing = [key for key in _SEALED_CONTEXT_BLOCK_FIELDS if key not in binding]
+        if missing:
+            raise MESAContractIntegrityError(
+                f"included context binding {index} is missing fields: {missing}"
+            )
+        block = {key: binding[key] for key in _SEALED_CONTEXT_BLOCK_FIELDS}
+        rendered.append(
+            json.dumps(
+                block,
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+                allow_nan=False,
+            )
+        )
+    return "\n".join(rendered)
+
+
+def verify_sealed_context_render(
+    *,
+    exact_model_visible_context: str,
+    context_evidence_ids: list[str],
+    candidate_bindings: list[dict[str, Any]],
+) -> None:
+    expected_context = render_sealed_context_from_bindings(candidate_bindings)
+    if exact_model_visible_context != expected_context:
+        raise MESAContractIntegrityError(
+            "model-visible context differs from sealed candidate rendering"
+        )
+    included_ids = [
+        binding.get("source_chunk_id")
+        for binding in candidate_bindings
+        if binding.get("included") is True
+    ]
+    if included_ids != context_evidence_ids:
+        raise MESAContractIntegrityError(
+            "model-visible context IDs differ from included candidate bindings"
+        )
 
 
 def _validate_contract_identity(*, api_version: str, mesa_sha: str) -> None:
@@ -675,6 +739,21 @@ def build_sealed_retrieval_context(
 
     if token_budget <= 0:
         raise MESAContractIntegrityError("context token_budget must be positive")
+    if len(capture.results) > capture.retrieval_limit:
+        raise MESAContractIntegrityError(
+            "retrieval result population exceeds the sealed retrieval limit"
+        )
+    observed_ranks = [result.rank for result in capture.results]
+    expected_ranks = list(range(1, len(capture.results) + 1))
+    if observed_ranks != expected_ranks:
+        raise MESAContractIntegrityError(
+            "retrieval candidate ranks are not contiguous sealed order"
+        )
+    source_chunk_ids = [result.mesa_chunk_id for result in capture.results]
+    if len(source_chunk_ids) != len(set(source_chunk_ids)):
+        raise MESAContractIntegrityError(
+            "duplicate source chunk identity in sealed retrieval candidates"
+        )
     result_tenants = {result.scope.tenant_id for result in capture.results}
     result_agents = {
         result.scope.agent_id
@@ -745,7 +824,11 @@ def build_sealed_retrieval_context(
             }
         )
 
-    exact_context = "\n".join(rendered)
+    exact_context = render_sealed_context_from_bindings(bindings)
+    if exact_context != "\n".join(rendered):
+        raise MESAContractIntegrityError(
+            "internal sealed context rendering is non-deterministic"
+        )
     allowed_ids = [result.mesa_chunk_id for result in capture.results]
     return NormalizedContextCapture(
         schema_version=SEALED_RETRIEVAL_CONTEXT_SCHEMA,
