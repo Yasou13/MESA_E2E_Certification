@@ -417,6 +417,21 @@ def _validate_official_provider_contract(
         ) from exc
 
     expected_answer = provider_contract["answer"]
+    answer_runtime = runtime.get("answer_authority")
+    if not isinstance(answer_runtime, dict):
+        raise QualificationRunnerError(
+            "official Profile B answer runtime authority is missing"
+        )
+    embedding_digest = embedding_runtime.get("resolved_digest")
+    answer_digest = answer_runtime.get("resolved_digest")
+    if not isinstance(embedding_digest, str) or not embedding_digest.strip():
+        raise QualificationRunnerError(
+            "frozen embedding authority resolved_digest is missing"
+        )
+    if not isinstance(answer_digest, str) or not answer_digest.strip():
+        raise QualificationRunnerError(
+            "frozen answer authority resolved_digest is missing"
+        )
     if (
         authority.answer_provider.strip().lower() != str(expected_answer.get("provider", "")).strip().lower()
         or authority.answer_model != expected_answer.get("model")
@@ -424,16 +439,14 @@ def _validate_official_provider_contract(
         raise QualificationRunnerError(
             "frozen answer provider/model differs from official Profile B contract"
         )
-    answer_runtime = runtime.get("answer_authority")
-    if isinstance(answer_runtime, dict):
-        if expected_answer.get("resolved_digest") and answer_runtime.get("resolved_digest") != expected_answer["resolved_digest"]:
-            raise QualificationRunnerError(
-                "frozen answer provider/model contract differs from official Profile B contract: digest differs"
-            )
-        if expected_answer.get("quantization") and answer_runtime.get("quantization") != expected_answer["quantization"]:
-            raise QualificationRunnerError(
-                "frozen answer provider/model contract differs from official Profile B contract: quantization differs"
-            )
+    if expected_answer.get("resolved_digest") and answer_runtime.get("resolved_digest") != expected_answer["resolved_digest"]:
+        raise QualificationRunnerError(
+            "frozen answer provider/model contract differs from official Profile B contract: digest differs"
+        )
+    if expected_answer.get("quantization") and answer_runtime.get("quantization") != expected_answer["quantization"]:
+        raise QualificationRunnerError(
+            "frozen answer provider/model contract differs from official Profile B contract: quantization differs"
+        )
 
     expected_embedding = provider_contract["embedding"]
     if (
@@ -488,6 +501,19 @@ def _validate_official_provider_contract(
     if extraction_runtime.get("model") != expected_extraction.get("model"):
         raise QualificationRunnerError(
             "frozen extraction provider/model contract differs from official Profile B contract: model differs"
+        )
+    extraction_digest = extraction_runtime.get("resolved_digest")
+    if (
+        extraction_runtime.get("provider") == answer_runtime.get("provider")
+        and extraction_runtime.get("model") == answer_runtime.get("model")
+    ):
+        if extraction_digest is not None and extraction_digest != answer_digest:
+            raise QualificationRunnerError(
+                "frozen extraction/answer authorities resolve the same model to different digests"
+            )
+    elif not isinstance(extraction_digest, str) or not extraction_digest.strip():
+        raise QualificationRunnerError(
+            "frozen extraction authority resolved_digest is missing"
         )
     if extraction_runtime.get("language") != expected_extraction.get("language"):
         raise QualificationRunnerError(

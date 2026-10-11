@@ -570,6 +570,7 @@ def _setup_happy_path_repo(
                 "endpoint": "http://127.0.0.1:11434",
                 "model": "alibayram/embeddingmagibu-200m:latest",
                 "dimension": 768,
+                "resolved_digest": "sha256:synthetic-magibu-digest",
                 "normalization": "l2",
             },
             "extraction_authority": {
@@ -582,6 +583,7 @@ def _setup_happy_path_repo(
             "answer_authority": {
                 "provider": "Ollama",
                 "model": "qwen3.5:9b-q4_K_M",
+                "resolved_digest": "sha256:synthetic-qwen-digest",
                 "quantization": "Q4_K_M",
                 "system_prompt_sha256": hashlib.sha256(
                     SYSTEM_PROMPT.encode("utf-8")
