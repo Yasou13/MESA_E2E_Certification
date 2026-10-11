@@ -16,7 +16,11 @@ from harness.artifacts import (
 )
 from harness.gt_governance import load_ground_truth, validate_ground_truth
 from harness.identity import IdentityMap
-from harness.mesa_adapters import normalize_search_response
+from harness.mesa_adapters import (
+    MESAContractIntegrityError,
+    normalize_search_response,
+    verify_sealed_context_render,
+)
 from harness.models import AnswerResponse, GroundTruthItem, ScoringStatus
 from harness.normalizer import DEFAULT_NORMALIZATION_PATH, load_normalization_authority
 from harness.retrieval_scorer import score_retrieval
@@ -583,6 +587,7 @@ def score_run_from_frozen_authority(
                 ),
                 "context_evidence_ids": list(capture.context_evidence_ids),
                 "candidate_bindings": list(capture.context_candidate_bindings),
+                "exact_model_visible_context": capture.exact_model_visible_context,
             }
             score = score_answer(
                 gt,
@@ -627,7 +632,15 @@ def score_run_from_frozen_authority(
                 f"answer context candidate provenance is incomplete: {query_id}"
             )
         for expected, observed in zip(expected_bindings, observed_bindings, strict=True):
-            if any(observed.get(key) != value for key, value in expected.items()):
+            allowed_observed_keys = {
+                *expected.keys(),
+                "included",
+                "rejection_reason",
+            }
+            if (
+                set(observed) != allowed_observed_keys
+                or any(observed.get(key) != value for key, value in expected.items())
+            ):
                 raise OfficialScoringError(
                     f"answer context candidate provenance differs from sealed retrieval: {query_id}"
                 )
@@ -643,6 +656,18 @@ def score_run_from_frozen_authority(
             raise OfficialScoringError(
                 f"answer context evidence is outside sealed retrieval set: {query_id}"
             )
+        try:
+            verify_sealed_context_render(
+                exact_model_visible_context=answer_claim[
+                    "exact_model_visible_context"
+                ],
+                context_evidence_ids=answer_claim["context_evidence_ids"],
+                candidate_bindings=observed_bindings,
+            )
+        except MESAContractIntegrityError as exc:
+            raise OfficialScoringError(
+                f"answer model-visible context is not the sealed rendering: {query_id}"
+            ) from exc
     if len(retrieval_ids) != len(retrieval_scores) or len(answer_ids) != len(
         answer_scores
     ):

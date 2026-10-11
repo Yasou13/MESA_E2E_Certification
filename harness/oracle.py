@@ -15,6 +15,8 @@ FORBIDDEN_FIELD_NAMES = {
     "expectedlabel",
     "expectedstatus",
     "forbiddenclaims",
+    "factid",
+    "factids",
     "goldevidenceid",
     "goldevidenceids",
     "qrel",
@@ -23,6 +25,7 @@ FORBIDDEN_FIELD_NAMES = {
     "requiredfacts",
 }
 FORBIDDEN_TEXT_PATTERNS = (
+    ("fact_ids", re.compile(r"\bfact[ _-]+ids?\b", re.IGNORECASE)),
     ("expected_answer", re.compile(r"\bexpected[ _-]+answers?\b", re.IGNORECASE)),
     ("required_facts", re.compile(r"\brequired[ _-]+facts?\b", re.IGNORECASE)),
     (

@@ -335,11 +335,33 @@ def test_phase10_rejects_oracle_fields_before_provider_call(tmp_path) -> None:
     assert transport.calls == 0
 
 
+def test_phase10_rejects_fact_id_prompt_before_provider_call(tmp_path) -> None:
+    store = RunArtifactStore(tmp_path / RUN_ID, RUN_ID)
+    store.initialize()
+    transport = _Transport()
+
+    with pytest.raises(AnswerExecutionError, match="oracle"):
+        execute_answer_and_persist(
+            store=store,
+            context=_context(),
+            question="question",
+            system_prompt="Return claims with fact_ids.",
+            answer_instruction="Use only visible evidence.",
+            model="openai/gpt-oss-20b",
+            request_parameters={},
+            transport=transport,
+            timestamp_utc=NOW,
+        )
+
+    assert transport.calls == 0
+
+
 @pytest.mark.parametrize(
     "parameters",
     [
         {"messages": [{"role": "user", "content": "forged"}]},
         {"model": "forged-model"},
+        {"response_schema": {"fact_ids": ["hidden"]}},
         {"metadata": {"required-facts": ["secret"]}},
     ],
 )

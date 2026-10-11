@@ -174,7 +174,17 @@ def load_gate_config(path: str | Path) -> GateConfig:
 
 
 def _comparison_passes(observed: Any, requirement: MetricRequirement) -> bool:
-    if not isinstance(observed, (int, float, bool)):
+    required_value = requirement.value
+    if isinstance(required_value, bool):
+        # Python considers bool a subclass of int (``True == 1``).  Gate
+        # evidence must not exploit that coercion across boolean/numeric
+        # contracts.
+        return (
+            requirement.operator == "eq"
+            and isinstance(observed, bool)
+            and observed is required_value
+        )
+    if isinstance(observed, bool) or not isinstance(observed, (int, float)):
         return False
     if isinstance(observed, float) and not math.isfinite(observed):
         return False
